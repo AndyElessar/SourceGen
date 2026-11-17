@@ -70,3 +70,129 @@ public sealed partial class ExplicitCollectionSwitchContainer;
 [IocImportModule<ExplicitCollectionContainer>]
 [IocContainer(ExplicitOnly = true)]
 public sealed partial class ExplicitCollectionImporter;
+
+/// <summary>Explicitly registered collections of <c>Lazy&lt;T&gt;</c>, <c>Func&lt;T&gt;</c> and <c>KeyValuePair&lt;K, V&gt;</c> elements.</summary>
+public static class ExplicitWrapperCollections
+{
+    public static readonly LazyList Lazies = new();
+
+    public static readonly FuncList Funcs = new();
+
+    public static readonly PairList Pairs = new();
+
+    public static readonly HandlerDictionary Dictionary = new();
+
+    public sealed class LazyList : List<Lazy<IExplicitCollectionHandler>>;
+
+    public sealed class FuncList : List<Func<IExplicitCollectionHandler>>;
+
+    public sealed class PairList : List<KeyValuePair<string, IExplicitCollectionHandler>>;
+
+    public sealed class HandlerDictionary : Dictionary<string, IExplicitCollectionHandler>;
+}
+
+/// <summary>Consumer of the wrapper collections, which makes the container generate their collection resolvers.</summary>
+public sealed class ExplicitWrapperCollectionConsumer(
+    IEnumerable<Lazy<IExplicitCollectionHandler>> lazies,
+    IEnumerable<Func<IExplicitCollectionHandler>> funcs,
+    IEnumerable<KeyValuePair<string, IExplicitCollectionHandler>> pairs,
+    IReadOnlyDictionary<string, IExplicitCollectionHandler> dictionary,
+    Lazy<IExplicitCollectionHandler>[] lazyArray,
+    Lazy<IReadOnlyDictionary<string, IExplicitCollectionHandler>> lazyDictionary,
+    Func<IReadOnlyDictionary<string, IExplicitCollectionHandler>> dictionaryFactory)
+{
+    public Lazy<IReadOnlyDictionary<string, IExplicitCollectionHandler>> LazyDictionary { get; } = lazyDictionary;
+    public Func<IReadOnlyDictionary<string, IExplicitCollectionHandler>> DictionaryFactory { get; } = dictionaryFactory;
+    public IEnumerable<Lazy<IExplicitCollectionHandler>> Lazies { get; } = lazies;
+    public IEnumerable<Func<IExplicitCollectionHandler>> Funcs { get; } = funcs;
+    public IEnumerable<KeyValuePair<string, IExplicitCollectionHandler>> Pairs { get; } = pairs;
+    public IReadOnlyDictionary<string, IExplicitCollectionHandler> Dictionary { get; } = dictionary;
+    public Lazy<IExplicitCollectionHandler>[] LazyArray { get; } = lazyArray;
+}
+
+[IocRegisterFor<FirstExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)])]
+[IocRegisterFor<SecondExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)])]
+[IocRegisterFor<FirstExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)], Key = "a")]
+[IocRegisterFor<SecondExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)], Key = "b")]
+[IocRegisterFor<ExplicitWrapperCollections.LazyList>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<Lazy<IExplicitCollectionHandler>>)], Instance = "ExplicitWrapperCollections.Lazies")]
+[IocRegisterFor<ExplicitWrapperCollections.FuncList>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<Func<IExplicitCollectionHandler>>)], Instance = "ExplicitWrapperCollections.Funcs")]
+[IocRegisterFor<ExplicitWrapperCollections.PairList>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<KeyValuePair<string, IExplicitCollectionHandler>>)], Instance = "ExplicitWrapperCollections.Pairs")]
+[IocRegisterFor<ExplicitWrapperCollections.HandlerDictionary>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IReadOnlyDictionary<string, IExplicitCollectionHandler>)], Instance = "ExplicitWrapperCollections.Dictionary")]
+[IocRegisterFor<ExplicitWrapperCollectionConsumer>(ServiceLifetime.Transient)]
+[IocContainer(ExplicitOnly = true)]
+public sealed partial class ExplicitWrapperCollectionContainer;
+
+[IocRegisterFor<FirstExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)])]
+[IocRegisterFor<SecondExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)])]
+[IocRegisterFor<FirstExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)], Key = "a")]
+[IocRegisterFor<SecondExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)], Key = "b")]
+[IocRegisterFor<ExplicitWrapperCollections.LazyList>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<Lazy<IExplicitCollectionHandler>>)], Instance = "ExplicitWrapperCollections.Lazies")]
+[IocRegisterFor<ExplicitWrapperCollections.FuncList>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<Func<IExplicitCollectionHandler>>)], Instance = "ExplicitWrapperCollections.Funcs")]
+[IocRegisterFor<ExplicitWrapperCollections.PairList>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<KeyValuePair<string, IExplicitCollectionHandler>>)], Instance = "ExplicitWrapperCollections.Pairs")]
+[IocRegisterFor<ExplicitWrapperCollections.HandlerDictionary>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IReadOnlyDictionary<string, IExplicitCollectionHandler>)], Instance = "ExplicitWrapperCollections.Dictionary")]
+[IocRegisterFor<ExplicitWrapperCollectionConsumer>(ServiceLifetime.Transient)]
+[IocContainer(ExplicitOnly = true, UseSwitchStatement = true)]
+public sealed partial class ExplicitWrapperCollectionSwitchContainer;
+
+/// <summary>Explicitly registered single <c>Lazy&lt;T&gt;</c> and <c>Func&lt;T&gt;</c> of <see cref="IExplicitCollectionHandler"/>.</summary>
+public static class ExplicitWrappers
+{
+    public static readonly Lazy<IExplicitCollectionHandler> Lazy = new(static () => new FirstExplicitCollectionHandler());
+
+    public static readonly Func<IExplicitCollectionHandler> Func = static () => new FirstExplicitCollectionHandler();
+}
+
+/// <summary>
+/// Consumer of the explicitly registered wrappers, directly, inside another wrapper, and as collection elements: like
+/// <c>MS.DI</c>, a collection of a wrapper type registered explicitly contains the explicit registrations only.
+/// </summary>
+public sealed class ExplicitWrapperConsumer(
+    Lazy<IExplicitCollectionHandler> lazy,
+    Func<IExplicitCollectionHandler> func,
+    Lazy<Func<IExplicitCollectionHandler>> lazyFunc,
+    IEnumerable<Lazy<IExplicitCollectionHandler>> lazies,
+    Lazy<IExplicitCollectionHandler>[] lazyArray,
+    IEnumerable<Func<IExplicitCollectionHandler>> funcs)
+{
+    public Lazy<IExplicitCollectionHandler> Lazy { get; } = lazy;
+    public Func<IExplicitCollectionHandler> Func { get; } = func;
+    public Lazy<Func<IExplicitCollectionHandler>> LazyFunc { get; } = lazyFunc;
+    public IEnumerable<Lazy<IExplicitCollectionHandler>> Lazies { get; } = lazies;
+    public Lazy<IExplicitCollectionHandler>[] LazyArray { get; } = lazyArray;
+    public IEnumerable<Func<IExplicitCollectionHandler>> Funcs { get; } = funcs;
+}
+
+[IocRegisterFor<SecondExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)])]
+[IocRegisterFor<Lazy<IExplicitCollectionHandler>>(ServiceLifetime.Singleton, Instance = "ExplicitWrappers.Lazy")]
+[IocRegisterFor<Func<IExplicitCollectionHandler>>(ServiceLifetime.Singleton, Instance = "ExplicitWrappers.Func")]
+[IocRegisterFor<ExplicitWrapperConsumer>(ServiceLifetime.Transient)]
+[IocContainer(ExplicitOnly = true)]
+public sealed partial class ExplicitWrapperContainer;
+
+[IocRegisterFor<SecondExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)])]
+[IocRegisterFor<Lazy<IExplicitCollectionHandler>>(ServiceLifetime.Singleton, Instance = "ExplicitWrappers.Lazy")]
+[IocRegisterFor<Func<IExplicitCollectionHandler>>(ServiceLifetime.Singleton, Instance = "ExplicitWrappers.Func")]
+[IocRegisterFor<ExplicitWrapperConsumer>(ServiceLifetime.Transient)]
+[IocContainer(ExplicitOnly = true, UseSwitchStatement = true)]
+public sealed partial class ExplicitWrapperSwitchContainer;
+
+/// <summary>Consumer of the explicitly registered wrappers only, so no collection of them is requested at compile time.</summary>
+public sealed class ExplicitSingleWrapperConsumer(Lazy<IExplicitCollectionHandler> lazy, Func<IExplicitCollectionHandler> func)
+{
+    public Lazy<IExplicitCollectionHandler> Lazy { get; } = lazy;
+    public Func<IExplicitCollectionHandler> Func { get; } = func;
+}
+
+[IocRegisterFor<SecondExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)])]
+[IocRegisterFor<Lazy<IExplicitCollectionHandler>>(ServiceLifetime.Singleton, Instance = "ExplicitWrappers.Lazy")]
+[IocRegisterFor<Func<IExplicitCollectionHandler>>(ServiceLifetime.Singleton, Instance = "ExplicitWrappers.Func")]
+[IocRegisterFor<ExplicitSingleWrapperConsumer>(ServiceLifetime.Transient)]
+[IocContainer(ExplicitOnly = true)]
+public sealed partial class ExplicitSingleWrapperContainer;
+
+[IocRegisterFor<SecondExplicitCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitCollectionHandler)])]
+[IocRegisterFor<Lazy<IExplicitCollectionHandler>>(ServiceLifetime.Singleton, Instance = "ExplicitWrappers.Lazy")]
+[IocRegisterFor<Func<IExplicitCollectionHandler>>(ServiceLifetime.Singleton, Instance = "ExplicitWrappers.Func")]
+[IocRegisterFor<ExplicitSingleWrapperConsumer>(ServiceLifetime.Transient)]
+[IocContainer(ExplicitOnly = true, UseSwitchStatement = true)]
+public sealed partial class ExplicitSingleWrapperSwitchContainer;

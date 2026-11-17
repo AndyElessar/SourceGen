@@ -403,10 +403,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Dependency), static c => c.GetDependency()),
-        __Resolver(typeof(global::TestNamespace.IDependency), static c => c.GetDependency()),
-        __Resolver(typeof(global::TestNamespace.SingletonConsumer), static c => c.GetSingletonConsumer()),
-        __Resolver(typeof(global::TestNamespace.ScopedConsumer), static c => c.GetScopedConsumer()),
 
         // Lazy wrapper resolvers
         __Resolver(typeof(global::System.Lazy<global::TestNamespace.IDependency>), static c => c._lazy_IDependency_dependency),
@@ -415,6 +411,10 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         // Func wrapper resolvers
         __Resolver(typeof(global::System.Func<global::TestNamespace.IDependency>), static c => c._func_IDependency_dependency),
         ..__CollectionResolvers<global::System.Func<global::TestNamespace.IDependency>>(static c => c.GetAllFunc_IDependency_Array()),
+        __Resolver(typeof(global::TestNamespace.Dependency), static c => c.GetDependency()),
+        __Resolver(typeof(global::TestNamespace.IDependency), static c => c.GetDependency()),
+        __Resolver(typeof(global::TestNamespace.SingletonConsumer), static c => c.GetSingletonConsumer()),
+        __Resolver(typeof(global::TestNamespace.ScopedConsumer), static c => c.GetScopedConsumer()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

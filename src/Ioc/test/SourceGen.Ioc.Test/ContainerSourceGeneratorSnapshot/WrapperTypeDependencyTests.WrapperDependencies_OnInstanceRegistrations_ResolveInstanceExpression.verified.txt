@@ -387,13 +387,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
-        __Resolver(typeof(global::TestNamespace.Configuration), static _ => global::TestNamespace.Configuration.Default),
-        __Resolver(typeof(global::TestNamespace.IConfiguration), static _ => global::TestNamespace.Configuration.Default),
-        __KeyedResolver(typeof(global::TestNamespace.Configuration), "backup", static _ => global::TestNamespace.Configuration.Backup),
-        __KeyedResolver(typeof(global::TestNamespace.IConfiguration), "backup", static _ => global::TestNamespace.Configuration.Backup),
-        __EnumerableResolver<global::TestNamespace.Configuration>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.Configuration[] { global::TestNamespace.Configuration.Backup }),
-        __EnumerableResolver<global::TestNamespace.IConfiguration>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IConfiguration[] { global::TestNamespace.Configuration.Backup }),
 
         // KeyValuePair resolvers
         __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IConfiguration>>), static c => c.GetAllKvp_string_IConfiguration_Dictionary()),
@@ -413,6 +406,13 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         // Func wrapper resolvers
         __Resolver(typeof(global::System.Func<global::TestNamespace.IConfiguration>), static c => c._func_IConfiguration_configuration_TestNamespace_Configuration_Default),
         ..__CollectionResolvers<global::System.Func<global::TestNamespace.IConfiguration>>(static c => c.GetAllFunc_IConfiguration_Array()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
+        __Resolver(typeof(global::TestNamespace.Configuration), static _ => global::TestNamespace.Configuration.Default),
+        __Resolver(typeof(global::TestNamespace.IConfiguration), static _ => global::TestNamespace.Configuration.Default),
+        __KeyedResolver(typeof(global::TestNamespace.Configuration), "backup", static _ => global::TestNamespace.Configuration.Backup),
+        __KeyedResolver(typeof(global::TestNamespace.IConfiguration), "backup", static _ => global::TestNamespace.Configuration.Backup),
+        __EnumerableResolver<global::TestNamespace.Configuration>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.Configuration[] { global::TestNamespace.Configuration.Backup }),
+        __EnumerableResolver<global::TestNamespace.IConfiguration>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IConfiguration[] { global::TestNamespace.Configuration.Backup }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

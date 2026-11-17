@@ -421,18 +421,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __KeyedResolver(typeof(global::TestNamespace.Keyed), "Key", static c => c.GetKeyed__Key_()),
-        __KeyedResolver(typeof(global::TestNamespace.IKeyed), "Key", static c => c.GetKeyed__Key_()),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedEnum), global::TestNamespace.KeyEnum.Key0, static c => c.GetKeyedEnum_TestNamespace_KeyEnum_Key0()),
-        __KeyedResolver(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyEnum.Key0, static c => c.GetKeyedEnum_TestNamespace_KeyEnum_Key0()),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedCsharp), global::TestNamespace.KeyedExtensions.Key, static c => c.GetKeyedCsharp_TestNamespace_KeyedExtensions_Key()),
-        __KeyedResolver(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyedExtensions.Key, static c => c.GetKeyedCsharp_TestNamespace_KeyedExtensions_Key()),
-        __Resolver(typeof(global::TestNamespace.StringConsumer), static c => c.GetStringConsumer()),
-        __Resolver(typeof(global::TestNamespace.EnumConsumer), static c => c.GetEnumConsumer()),
-        __EnumerableResolver<global::TestNamespace.Keyed>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.Keyed[] { c.GetKeyed__Key_() }),
-        __EnumerableResolver<global::TestNamespace.IKeyed>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIKeyedArray_AnyKey()),
-        __EnumerableResolver<global::TestNamespace.KeyedEnum>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedEnum[] { c.GetKeyedEnum_TestNamespace_KeyEnum_Key0() }),
-        __EnumerableResolver<global::TestNamespace.KeyedCsharp>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedCsharp[] { c.GetKeyedCsharp_TestNamespace_KeyedExtensions_Key() }),
 
         // KeyValuePair resolvers
         __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
@@ -453,6 +441,18 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>), static c => c.GetAllKvp_KeyEnum_IKeyed_Dictionary()),
         __Resolver(typeof(global::System.Collections.Generic.IDictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>), static c => c.GetAllKvp_KeyEnum_IKeyed_Dictionary()),
         __Resolver(typeof(global::System.Collections.Generic.Dictionary<global::TestNamespace.KeyEnum, global::TestNamespace.IKeyed>), static c => c.GetAllKvp_KeyEnum_IKeyed_Dictionary()),
+        __KeyedResolver(typeof(global::TestNamespace.Keyed), "Key", static c => c.GetKeyed__Key_()),
+        __KeyedResolver(typeof(global::TestNamespace.IKeyed), "Key", static c => c.GetKeyed__Key_()),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedEnum), global::TestNamespace.KeyEnum.Key0, static c => c.GetKeyedEnum_TestNamespace_KeyEnum_Key0()),
+        __KeyedResolver(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyEnum.Key0, static c => c.GetKeyedEnum_TestNamespace_KeyEnum_Key0()),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedCsharp), global::TestNamespace.KeyedExtensions.Key, static c => c.GetKeyedCsharp_TestNamespace_KeyedExtensions_Key()),
+        __KeyedResolver(typeof(global::TestNamespace.IKeyed), global::TestNamespace.KeyedExtensions.Key, static c => c.GetKeyedCsharp_TestNamespace_KeyedExtensions_Key()),
+        __Resolver(typeof(global::TestNamespace.StringConsumer), static c => c.GetStringConsumer()),
+        __Resolver(typeof(global::TestNamespace.EnumConsumer), static c => c.GetEnumConsumer()),
+        __EnumerableResolver<global::TestNamespace.Keyed>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.Keyed[] { c.GetKeyed__Key_() }),
+        __EnumerableResolver<global::TestNamespace.IKeyed>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIKeyedArray_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.KeyedEnum>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedEnum[] { c.GetKeyedEnum_TestNamespace_KeyEnum_Key0() }),
+        __EnumerableResolver<global::TestNamespace.KeyedCsharp>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedCsharp[] { c.GetKeyedCsharp_TestNamespace_KeyedExtensions_Key() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

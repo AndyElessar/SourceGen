@@ -97,6 +97,10 @@ partial class IocSourceGenerator
         writer.WriteLine($"{ResolverEntryMethodName}(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),");
         writer.WriteLine($"{ResolverEntryMethodName}(typeof({container.ContainerTypeName}), static c => c),");
 
+        // Wrapper entries (KVP, then Lazy, then Func) come before the registrations: ToFrozenDictionary keeps the last entry,
+        // so a wrapper type registered explicitly (e.g. IEnumerable<Lazy<T>>) wins over the generated one, like MS.DI
+        WriteWrapperLocalResolverEntries(writer, groups);
+
         // Use service type resolver mappings (already filtered for non-open-generics)
         foreach(var kvp in groups.LastWinsByServiceType)
         {
@@ -114,9 +118,6 @@ partial class IocSourceGenerator
                 WriteCollectionResolverEntries(writer, collection);
             }
         }
-
-        // Add local resolvers for wrapper entries (KVP first, then Lazy, then Func)
-        WriteWrapperLocalResolverEntries(writer, groups);
 
         writer.Indentation--;
         writer.WriteLine("];");

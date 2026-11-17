@@ -396,13 +396,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetMyService()),
-        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetMyService()),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
-        __KeyedResolver(typeof(global::TestNamespace.MyService), "keyed", static c => c.GetMyService__keyed_()),
-        __KeyedResolver(typeof(global::TestNamespace.IMyService), "keyed", static c => c.GetMyService__keyed_()),
-        __EnumerableResolver<global::TestNamespace.MyService>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.MyService[] { c.GetMyService__keyed_() }),
-        __EnumerableResolver<global::TestNamespace.IMyService>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IMyService[] { c.GetMyService__keyed_() }),
 
         // Lazy wrapper resolvers
         __Resolver(typeof(global::System.Lazy<global::TestNamespace.IMyService>), static c => c._lazy_IMyService_myService),
@@ -411,6 +404,13 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         // Func wrapper resolvers
         __Resolver(typeof(global::System.Func<global::TestNamespace.IMyService>), static c => c._func_IMyService_myService),
         ..__CollectionResolvers<global::System.Func<global::TestNamespace.IMyService>>(static c => c.GetAllFunc_IMyService_Array()),
+        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
+        __KeyedResolver(typeof(global::TestNamespace.MyService), "keyed", static c => c.GetMyService__keyed_()),
+        __KeyedResolver(typeof(global::TestNamespace.IMyService), "keyed", static c => c.GetMyService__keyed_()),
+        __EnumerableResolver<global::TestNamespace.MyService>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.MyService[] { c.GetMyService__keyed_() }),
+        __EnumerableResolver<global::TestNamespace.IMyService>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IMyService[] { c.GetMyService__keyed_() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

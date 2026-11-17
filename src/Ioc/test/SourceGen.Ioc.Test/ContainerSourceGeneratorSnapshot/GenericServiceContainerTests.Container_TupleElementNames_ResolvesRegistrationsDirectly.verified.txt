@@ -377,13 +377,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.NamedHandler), static c => c.GetNamedHandler()),
-        __Resolver(typeof(global::TestNamespace.IHandler<(global::TestNamespace.Entity X, string Y)>), static c => c.GetUnnamedHandler()),
-        __Resolver(typeof(global::TestNamespace.UnnamedHandler), static c => c.GetUnnamedHandler()),
-        __Resolver(typeof(global::TestNamespace.NestedHandler), static c => c.GetNestedHandler()),
-        __Resolver(typeof(global::TestNamespace.IHandler<((global::TestNamespace.Entity A, int B) Inner, global::System.Collections.Generic.Dictionary<int, string> Map)>), static c => c.GetNestedHandler()),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
-        ..__CollectionResolvers<global::TestNamespace.IHandler<(global::TestNamespace.Entity X, string Y)>>(static c => c.GetAllIHandler_Entity_stringArray()),
 
         // Lazy wrapper resolvers
         __Resolver(typeof(global::System.Lazy<global::TestNamespace.IHandler<(global::TestNamespace.Entity X, string Y)>>), static c => new global::System.Lazy<global::TestNamespace.IHandler<(global::TestNamespace.Entity X, string Y)>>(() => c.GetUnnamedHandler(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),
@@ -392,6 +385,13 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         // Func wrapper resolvers
         __Resolver(typeof(global::System.Func<global::TestNamespace.IHandler<(global::TestNamespace.Entity X, string Y)>>), static c => c._func_IHandler_Entity_string_unnamedHandler),
         ..__CollectionResolvers<global::System.Func<global::TestNamespace.IHandler<(global::TestNamespace.Entity X, string Y)>>>(static c => c.GetAllFunc_IHandler_Entity_string_Array()),
+        __Resolver(typeof(global::TestNamespace.NamedHandler), static c => c.GetNamedHandler()),
+        __Resolver(typeof(global::TestNamespace.IHandler<(global::TestNamespace.Entity X, string Y)>), static c => c.GetUnnamedHandler()),
+        __Resolver(typeof(global::TestNamespace.UnnamedHandler), static c => c.GetUnnamedHandler()),
+        __Resolver(typeof(global::TestNamespace.NestedHandler), static c => c.GetNestedHandler()),
+        __Resolver(typeof(global::TestNamespace.IHandler<((global::TestNamespace.Entity A, int B) Inner, global::System.Collections.Generic.Dictionary<int, string> Map)>), static c => c.GetNestedHandler()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
+        ..__CollectionResolvers<global::TestNamespace.IHandler<(global::TestNamespace.Entity X, string Y)>>(static c => c.GetAllIHandler_Entity_stringArray()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

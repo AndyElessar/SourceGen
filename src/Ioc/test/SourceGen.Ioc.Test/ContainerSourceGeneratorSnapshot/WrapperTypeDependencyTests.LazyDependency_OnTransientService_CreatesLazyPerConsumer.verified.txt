@@ -371,17 +371,17 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetMyService()),
-        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetSingletonService()),
-        __Resolver(typeof(global::TestNamespace.SingletonService), static c => c.GetSingletonService()),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
-        ..__CollectionResolvers<global::TestNamespace.IMyService>(static c => c.GetAllIMyServiceArray()),
 
         // Lazy wrapper resolvers
         __Resolver(typeof(global::System.Lazy<global::TestNamespace.MyService>), static c => new global::System.Lazy<global::TestNamespace.MyService>(() => c.GetMyService(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),
         ..__CollectionResolvers<global::System.Lazy<global::TestNamespace.MyService>>(static c => c.GetAllLazy_MyService_Array()),
         __Resolver(typeof(global::System.Lazy<global::TestNamespace.IMyService>), static c => c._lazy_IMyService_singletonService),
         ..__CollectionResolvers<global::System.Lazy<global::TestNamespace.IMyService>>(static c => c.GetAllLazy_IMyService_Array()),
+        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetSingletonService()),
+        __Resolver(typeof(global::TestNamespace.SingletonService), static c => c.GetSingletonService()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
+        ..__CollectionResolvers<global::TestNamespace.IMyService>(static c => c.GetAllIMyServiceArray()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

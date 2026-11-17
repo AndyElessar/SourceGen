@@ -11,6 +11,56 @@ namespace SourceGen.Ioc.Test.ContainerSourceGeneratorSnapshot;
 public class WrapperTypeDependencyTests
 {
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task ExplicitlyRegisteredLazyAndFunc_GenerateNoWrapperCollections(bool useSwitchStatement)
+    {
+        // Like MS.DI, a collection of Lazy<T> / Func<T> registered explicitly contains the explicit registrations only, so the
+        // wrapper collections over the registrations of T are not generated: a runtime request (e.g. from another assembly)
+        // gets the explicit registration through the single-service collection fallback
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { }
+
+            public sealed class Handler : IHandler { }
+
+            public static class Wrappers
+            {
+                public static readonly Lazy<IHandler> Lazy = new(static () => new Handler());
+                public static readonly Func<IHandler> Func = static () => new Handler();
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)])]
+            public class FirstHandler : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Lazy<IHandler> lazy, Func<IHandler> func) { }
+
+            [IocRegisterFor<Lazy<IHandler>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Lazy")]
+            [IocRegisterFor<Func<IHandler>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Func")]
+            [IocContainer(UseSwitchStatement = {{(useSwitchStatement ? "true" : "false")}})]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("new global::TestNamespace.Consumer(global::TestNamespace.Wrappers.Lazy, global::TestNamespace.Wrappers.Func)");
+        await Assert.That(generatedSource).DoesNotContain("GetAllLazy_IHandler_Array");
+        await Assert.That(generatedSource).DoesNotContain("GetAllFunc_IHandler_Array");
+
+        // The generated wrappers would not be used: no field is created for them
+        await Assert.That(generatedSource).DoesNotContain("_lazy_IHandler_");
+        await Assert.That(generatedSource).DoesNotContain("_func_IHandler_");
+    }
+
+    [Test]
     public async Task LazyDependency_GeneratesLazyResolution()
     {
         const string source = """

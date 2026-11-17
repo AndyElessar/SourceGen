@@ -280,6 +280,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
+
+        // Lazy wrapper resolvers
+        __Resolver(typeof(global::System.Lazy<global::TestNamespace.IRepo<string>>), static c => new global::System.Lazy<global::TestNamespace.IRepo<string>>(() => c.GetRepo_string(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),
+        ..__CollectionResolvers<global::System.Lazy<global::TestNamespace.IRepo<string>>>(static c => c.GetAllLazy_IRepo_string_Array()),
+
+        // Func wrapper resolvers
+        __Resolver(typeof(global::System.Func<global::TestNamespace.ILogger<global::TestNamespace.Outer<string>>>), static c => c._func_ILogger_Outer_string_logger_Outer_string),
+        ..__CollectionResolvers<global::System.Func<global::TestNamespace.ILogger<global::TestNamespace.Outer<string>>>>(static c => c.GetAllFunc_ILogger_Outer_string_Array()),
         __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
         __Resolver(typeof(global::TestNamespace.Outer<string>), static c => c.GetOuter_string()),
         __Resolver(typeof(global::TestNamespace.IOuter<string>), static c => c.GetOuter_string()),
@@ -290,14 +298,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::TestNamespace.Logger<global::TestNamespace.Outer<string>>), static c => c.GetLogger_Outer_string()),
         __Resolver(typeof(global::TestNamespace.ILogger<global::TestNamespace.Outer<string>>), static c => c.GetLogger_Outer_string()),
         ..__CollectionResolvers<global::TestNamespace.IValidator<string>>(static c => c.GetAllIValidator_stringArray()),
-
-        // Lazy wrapper resolvers
-        __Resolver(typeof(global::System.Lazy<global::TestNamespace.IRepo<string>>), static c => new global::System.Lazy<global::TestNamespace.IRepo<string>>(() => c.GetRepo_string(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),
-        ..__CollectionResolvers<global::System.Lazy<global::TestNamespace.IRepo<string>>>(static c => c.GetAllLazy_IRepo_string_Array()),
-
-        // Func wrapper resolvers
-        __Resolver(typeof(global::System.Func<global::TestNamespace.ILogger<global::TestNamespace.Outer<string>>>), static c => c._func_ILogger_Outer_string_logger_Outer_string),
-        ..__CollectionResolvers<global::System.Func<global::TestNamespace.ILogger<global::TestNamespace.Outer<string>>>>(static c => c.GetAllFunc_ILogger_Outer_string_Array()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

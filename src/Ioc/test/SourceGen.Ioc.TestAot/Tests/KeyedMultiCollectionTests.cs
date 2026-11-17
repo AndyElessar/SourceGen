@@ -157,6 +157,7 @@ public sealed class KeyedMultiCollectionTests
         await Assert.That(Names(consumer.ReadOnlyList)).IsEqualTo("Alpha1,Alpha2");
         await Assert.That(Names(consumer.Array)).IsEqualTo("Alpha1,Alpha2");
         await Assert.That(Names(consumer.Single)).IsEqualTo("Beta");
+        await Assert.That(Names(consumer.AllKeyed)).IsEqualTo(AllKeyed);
         await Assert.That(consumer.Enumerable.Last()).IsSameReferenceAs(scope.ServiceProvider.GetRequiredKeyedService<IKeyedMultiService>("alpha"));
     }
 
@@ -175,6 +176,7 @@ public sealed class KeyedMultiCollectionTests
         await Assert.That(Names(scope.ServiceProvider.GetKeyedServices<IKeyedMultiService>("gamma"))).IsEqualTo("FallbackGamma");
         await Assert.That(Names(scope.ServiceProvider.GetRequiredService<KeyedMultiCollectionConsumer>().Enumerable)).IsEqualTo("FallbackAlpha,Alpha1,Alpha2");
         await Assert.That(Names(scope.ServiceProvider.GetRequiredService<KeyedMultiCollectionConsumer>().Array)).IsEqualTo("FallbackAlpha,Alpha1,Alpha2");
+        await Assert.That(Names(scope.ServiceProvider.GetRequiredService<KeyedMultiCollectionConsumer>().AllKeyed)).IsEqualTo($"FallbackAlpha,FallbackGamma,{AllKeyed}");
 
         // Other collection types are not served by MS.DI and stay container-only, like the non-keyed collections
         await Assert.That(Names(((IKeyedServiceProvider)scope.ServiceProvider).GetKeyedService(typeof(IReadOnlyList<IKeyedMultiService>), "alpha"))).IsEqualTo("Alpha1,Alpha2");

@@ -462,18 +462,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::Services.Dependency), static c => c.GetDependency()),
-        __Resolver(typeof(global::Services.IDependency), static c => c.GetDependency()),
-        __KeyedResolver(typeof(global::Services.KeyedDependency), "keyed", static c => c.GetKeyedDependency__keyed_()),
-        __KeyedResolver(typeof(global::Services.IDependency), "keyed", static c => c.GetKeyedDependency__keyed_()),
-        __Resolver(typeof(global::Services.Scoped), static c => c.GetScoped()),
-        __Resolver(typeof(global::Services.IScoped), static c => c.GetScoped()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::Services.AsyncService>), static c => c.GetAsyncServiceAsync()),
-        __Resolver(typeof(global::System.Threading.Tasks.Task<global::Services.IAsyncService>), static c => c.GetAsyncServiceAsync_As_IAsyncService()),
-        __Resolver(typeof(global::Services.Consumer), static c => c.GetConsumer()),
-        ..__CollectionResolvers<global::Services.IDependency>(static c => c.GetAllIDependencyArray()),
-        __EnumerableResolver<global::Services.KeyedDependency>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::Services.KeyedDependency[] { c.GetKeyedDependency__keyed_() }),
-        __EnumerableResolver<global::Services.IDependency>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::Services.IDependency[] { c.GetKeyedDependency__keyed_() }),
 
         // KeyValuePair resolvers
         __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::Services.IDependency>>), static c => c.GetAllKvp_string_IDependency_Dictionary()),
@@ -493,6 +481,18 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         // Func wrapper resolvers
         __Resolver(typeof(global::System.Func<global::Services.IDependency>), static c => c._func_IDependency_dependency),
         ..__CollectionResolvers<global::System.Func<global::Services.IDependency>>(static c => c.GetAllFunc_IDependency_Array()),
+        __Resolver(typeof(global::Services.Dependency), static c => c.GetDependency()),
+        __Resolver(typeof(global::Services.IDependency), static c => c.GetDependency()),
+        __KeyedResolver(typeof(global::Services.KeyedDependency), "keyed", static c => c.GetKeyedDependency__keyed_()),
+        __KeyedResolver(typeof(global::Services.IDependency), "keyed", static c => c.GetKeyedDependency__keyed_()),
+        __Resolver(typeof(global::Services.Scoped), static c => c.GetScoped()),
+        __Resolver(typeof(global::Services.IScoped), static c => c.GetScoped()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::Services.AsyncService>), static c => c.GetAsyncServiceAsync()),
+        __Resolver(typeof(global::System.Threading.Tasks.Task<global::Services.IAsyncService>), static c => c.GetAsyncServiceAsync_As_IAsyncService()),
+        __Resolver(typeof(global::Services.Consumer), static c => c.GetConsumer()),
+        ..__CollectionResolvers<global::Services.IDependency>(static c => c.GetAllIDependencyArray()),
+        __EnumerableResolver<global::Services.KeyedDependency>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::Services.KeyedDependency[] { c.GetKeyedDependency__keyed_() }),
+        __EnumerableResolver<global::Services.IDependency>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::Services.IDependency[] { c.GetKeyedDependency__keyed_() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>
