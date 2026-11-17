@@ -49,7 +49,7 @@ When a generator change regenerates `samples/**/Generated/*.g.cs`, commit the re
 
 ### Checks and merging
 
-- CI (build, AOT tests, CodeQL, generator and NativeAOT benchmarks) runs on PRs, including stacked PRs, and reruns when a PR is retargeted. Benchmarks take about 25 minutes.
+- CI (build, AOT tests, CodeQL, generator and NativeAOT benchmarks) runs on PRs, including stacked PRs, and reruns when a PR is retargeted. Benchmarks take about 10 minutes.
 - Benchmark timings on shared runners swing by 5–20% with unchanged allocations. Judge a change by allocations; the benchmark check fails on allocation increases (above 5%, 10% for `AnalyzerBenchmarks`) and only reports time changes.
 - CI does not rerun when `main` moves. If `main` changed since the last run in a way that can interact with the PR, merge `main` into the branch to rerun CI before merging.
 - The repository allows merge commits and squash merges (not rebase merges), both titled by the PR title (Conventional Commits, see above). Choose per PR, and ask the user which one when they have not said:
