@@ -206,11 +206,12 @@ partial class Module : IIocContainer<global::IocSample.Module>, IServiceProvider
         _iocSample_Shared_SharedModule = (global::IocSample.Shared.SharedModule)((IIocFallbackScopeOwner)parent._iocSample_Shared_SharedModule).CreateScope(this).ServiceProvider;
     }
 
-    // Imported resolvers first, local resolvers last
-    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::IocSample.Module, object>> _serviceResolvers =
-        __ImportModuleResolvers(global::IocSample.Shared.SharedModule.Resolvers, static c => c._iocSample_Shared_SharedModule) // resolves with the module instance; merges its collections once
-            .Concat(_localResolvers)
-            .ToFrozenDictionary();
+    // Imported resolvers first, local resolvers last: single services are last-wins, IEnumerable<T> collections are combined
+    private static readonly FrozenDictionary<ServiceIdentifier, Func<global::IocSample.Module, object>> _serviceResolvers = __CombineResolvers(
+    [
+        __ImportModuleResolvers(global::IocSample.Shared.SharedModule.Resolvers, static c => c._iocSample_Shared_SharedModule), // resolves with the module instance
+        _localResolvers,
+    ]);
 
     public void Dispose()
     {
@@ -239,6 +240,24 @@ When the same service type and key is registered in more than one place, the **l
 
 1. Modules in the order of their `[IocImportModule]` attributes — a later module overrides an earlier one.
 2. Local registrations — always override imported ones.
+
+Collections are not last-wins: like `MS.E.DI`, `GetServices<T>()`, `GetKeyedServices<T>(key)` (also with `KeyedService.AnyKey`) and every injected collection of the importing container contain the services of all sources, in this order:
+
+1. The fallback provider's services (with `IntegrateServiceProvider = true`), once.
+2. Each module's services, in the order of the `[IocImportModule]` attributes (a module that imports modules contributes its own combined collection).
+3. The importing container's own services.
+
+```csharp
+// Module:            [IocRegister<IHandler>(Key = "a")] HandlerA
+// Importing container: [IocRegister<IHandler>(Key = "x")] HandlerX
+container.GetKeyedServices<IHandler>(KeyedService.AnyKey); // [HandlerA, HandlerX], like MS.E.DI
+container.GetRequiredKeyedService<IHandler>("x");          // HandlerX
+```
+
+> [!NOTE]
+> - An `IEnumerable<T>` registered explicitly (in a module or in the importing container) wins over the combined collection.
+> - Only `IEnumerable<T>` is combined: other collection types (`IReadOnlyList<T>`, `T[]`, …) requested from the container stay last-wins. Injected collections of any type are combined.
+> - A module reached twice (imported directly and through another module) contributes its services twice.
 
 ### Limitations
 

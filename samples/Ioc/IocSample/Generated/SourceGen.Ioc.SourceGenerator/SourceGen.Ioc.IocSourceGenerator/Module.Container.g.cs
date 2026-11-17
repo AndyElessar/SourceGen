@@ -118,7 +118,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
     private global::IocSample.Consumer CreateConsumer()
     {
-        var instance = new global::IocSample.Consumer(new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication), _func_IWrapperService_string_wrapperService_string, new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", GetKeyed__Key_()), GetAllKvp_object_IKeyed_Dictionary(), GetAllKvp_object_IKeyed_Dictionary(), __MergeFallbackServices(GetAllLazy_IWrapperService_string_Array(), null));
+        var instance = new global::IocSample.Consumer(new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication), _func_IWrapperService_string_wrapperService_string, new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", GetKeyed__Key_()), GetAllKvp_object_IKeyed_Dictionary(), GetAllKvp_object_IKeyed_Dictionary(), GetServices<global::System.Lazy<global::IocSample.IWrapperService<string>>>());
 
         _consumer = instance;
         return instance;
@@ -670,8 +670,18 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         if(__FindCollectionElementResolver(serviceType, serviceKey) is not { } resolver)
             return null;
 
-        var services = global::System.Array.CreateInstance(serviceType.GenericTypeArguments[0], 1);
-        services.SetValue(resolver(this), 0);
+        var elementType = serviceType.GenericTypeArguments[0];
+        global::System.Array services;
+        if(resolver.Target is global::SourceGen.Ioc.IocCollectionResolver<global::IocSample.Module> collection && !__IsEnumerableType(elementType))
+        {
+            services = (global::System.Array)collection.ArrayResolver(this);
+        }
+        else
+        {
+            services = global::System.Array.CreateInstance(elementType, 1);
+            services.SetValue(resolver(this), 0);
+        }
+
         return __MergeFallbackServices(serviceType, services, serviceKey);
     }
 
@@ -839,7 +849,7 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         && !typeof(T).IsValueType
         && !(typeof(T).IsConstructedGenericType && typeof(T).GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>))
         && _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), serviceKey ?? global::SourceGen.Ioc.ServiceIdentifier.NonKeyed), out var resolver)
-            ? __MergeFallbackServices<T>([(T)resolver(this)], serviceKey)
+            ? __MergeFallbackServices<T>((resolver.Target is global::SourceGen.Ioc.IocCollectionResolver<global::IocSample.Module> collection && !__IsEnumerableType(typeof(T)) ? (T[])collection.ArrayResolver(this) : [(T)resolver(this)]), serviceKey)
             : null;
 
     #endregion
@@ -1031,10 +1041,11 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         __Resolver(typeof(T[]), resolver),
     ];
 
-    private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocSample.Module, object>> _serviceResolvers =
-        __ImportModuleResolvers(global::IocSample.Shared.SharedModule.Resolvers, static c => c._iocSample_Shared_SharedModule)
-        .Concat(_localResolvers)
-        .ToFrozenDictionary();
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocSample.Module, object>> _serviceResolvers = __CombineResolvers(
+    [
+        __ImportModuleResolvers(global::IocSample.Shared.SharedModule.Resolvers, static c => c._iocSample_Shared_SharedModule),
+        _localResolvers,
+    ]);
 
     private static global::System.Collections.Generic.IEnumerable<__IocResolver> __ImportModuleResolvers<TModule>(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<TModule, object>>> resolvers, global::System.Func<global::IocSample.Module, TModule> module)
     {
@@ -1047,13 +1058,137 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
                 global::System.Func<global::IocSample.Module, object> array = c => arrayResolver(module(c));
                 var serviceType = entry.Key.ServiceType;
                 var serviceKey = entry.Key.Key == global::SourceGen.Ioc.ServiceIdentifier.NonKeyed ? null : entry.Key.Key;
-                yield return new(entry.Key, new global::SourceGen.Ioc.IocCollectionResolver<global::IocSample.Module>(array, c => c.__MergeFallbackServices(serviceType, (global::System.Array)array(c), serviceKey)).Resolve);
+                global::System.Func<global::IocSample.Module, object> resolve = __IsEnumerableType(serviceType)
+                    ? c => c.__MergeFallbackServices(serviceType, (global::System.Array)array(c), serviceKey)
+                    : c => resolver(module(c));
+                yield return new(entry.Key, new global::SourceGen.Ioc.IocCollectionResolver<global::IocSample.Module>(array, resolve).Resolve);
             }
             else
             {
                 yield return new(entry.Key, c => resolver(module(c)));
             }
         }
+    }
+
+    private static global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocSample.Module, object>> __CombineResolvers(global::System.Collections.Generic.IEnumerable<__IocResolver>[] sources)
+    {
+        var resolvers = new global::System.Collections.Generic.Dictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocSample.Module, object>>();
+        var sourceResolvers = new global::System.Collections.Generic.Dictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocSample.Module, object>>[sources.Length];
+        var collectionElements = new global::System.Collections.Generic.HashSet<global::SourceGen.Ioc.ServiceIdentifier>();
+        for(var i = 0; i < sources.Length; i++)
+        {
+            var source = sourceResolvers[i] = new global::System.Collections.Generic.Dictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<global::IocSample.Module, object>>();
+            foreach(var entry in sources[i])
+            {
+                source[entry.Key] = entry.Value;
+                resolvers[entry.Key] = entry.Value;
+                if(__IsEnumerableType(entry.Key.ServiceType))
+                    collectionElements.Add(new global::SourceGen.Ioc.ServiceIdentifier(entry.Key.ServiceType.GenericTypeArguments[0], entry.Key.Key));
+            }
+        }
+
+        var parts = new global::System.Collections.Generic.List<(global::System.Func<global::IocSample.Module, object> Resolver, bool IsArray)>();
+        global::SourceGen.Ioc.ServiceIdentifier[] ids = [.. resolvers.Keys];
+        foreach(var id in ids)
+        {
+            var isCollection = __IsEnumerableType(id.ServiceType);
+            var elementType = isCollection ? id.ServiceType.GenericTypeArguments[0] : id.ServiceType;
+            var elementId = new global::SourceGen.Ioc.ServiceIdentifier(elementType, id.Key);
+            var isElement = __IsCombinedElement(elementId);
+            if(elementType.IsValueType || (!isCollection && (!isElement || collectionElements.Contains(id))))
+                continue;
+
+            parts.Clear();
+            global::System.Func<global::IocSample.Module, object>? explicitResolver = null;
+            foreach(var source in sourceResolvers)
+            {
+                if(isCollection && source.TryGetValue(id, out var resolver))
+                {
+                    if(resolver.Target is global::SourceGen.Ioc.IocCollectionResolver<global::IocSample.Module> collection)
+                        parts.Add((collection.ArrayResolver, true));
+                    else
+                        explicitResolver = resolver;
+                }
+                else if(isElement && source.TryGetValue(elementId, out var element))
+                {
+                    parts.Add(element.Target is global::SourceGen.Ioc.IocCollectionResolver<global::IocSample.Module> combined ? (combined.ArrayResolver, true) : (element, false));
+                }
+            }
+
+            if(explicitResolver is not null)
+            {
+                resolvers[id] = explicitResolver;
+                continue;
+            }
+
+            if(parts.Count < 2)
+                continue;
+
+            var combinedParts = parts.ToArray();
+            global::System.Func<global::IocSample.Module, object> array = c => __CombineCollection(elementType, combinedParts, c);
+            global::System.Func<global::IocSample.Module, object> resolve = resolvers[id];
+            if(isCollection)
+            {
+                var serviceType = id.ServiceType;
+                var serviceKey = id.Key == global::SourceGen.Ioc.ServiceIdentifier.NonKeyed ? null : id.Key;
+                resolve = c => c.__MergeFallbackServices(serviceType, (global::System.Array)array(c), serviceKey);
+            }
+
+            resolvers[id] = new global::SourceGen.Ioc.IocCollectionResolver<global::IocSample.Module>(array, resolve).Resolve;
+        }
+
+        return resolvers.ToFrozenDictionary();
+    }
+
+    [global::System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AotAnalysis", "IL3050:RequiresDynamicCode", Justification = "Arrays are only created for reference element types.")]
+    private static global::System.Array __CombineCollection(global::System.Type elementType, (global::System.Func<global::IocSample.Module, object> Resolver, bool IsArray)[] parts, global::IocSample.Module container)
+    {
+        var values = new object[parts.Length];
+        var length = 0;
+        for(var i = 0; i < parts.Length; i++)
+        {
+            values[i] = parts[i].Resolver(container);
+            length += parts[i].IsArray ? ((global::System.Array)values[i]).Length : 1;
+        }
+
+        var services = global::System.Array.CreateInstance(elementType, length);
+        var index = 0;
+        for(var i = 0; i < parts.Length; i++)
+        {
+            if(parts[i].IsArray)
+            {
+                var array = (global::System.Array)values[i];
+                array.CopyTo(services, index);
+                index += array.Length;
+            }
+            else
+            {
+                services.SetValue(values[i], index++);
+            }
+        }
+
+        return services;
+    }
+
+    private static bool __IsEnumerableType(global::System.Type type) =>
+        type.IsConstructedGenericType && type.GetGenericTypeDefinition() == typeof(global::System.Collections.Generic.IEnumerable<>);
+
+    private static bool __IsCombinedElement(global::SourceGen.Ioc.ServiceIdentifier id)
+    {
+        var type = id.ServiceType;
+        if(id.Key == global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey || type.IsValueType || type.IsArray || type == typeof(global::System.IServiceProvider) || type == typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory))
+            return false;
+
+        if(!type.IsConstructedGenericType)
+            return true;
+
+        var definition = type.GetGenericTypeDefinition();
+        return definition != typeof(global::System.Threading.Tasks.Task<>)
+            && definition != typeof(global::System.Collections.Generic.IEnumerable<>)
+            && definition != typeof(global::System.Collections.Generic.IReadOnlyCollection<>)
+            && definition != typeof(global::System.Collections.Generic.ICollection<>)
+            && definition != typeof(global::System.Collections.Generic.IReadOnlyList<>)
+            && definition != typeof(global::System.Collections.Generic.IList<>);
     }
 
     #endregion

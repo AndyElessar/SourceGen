@@ -47,6 +47,10 @@ partial class IocSourceGenerator
     private const string GetFallbackServicesMethodName = "__GetFallbackServices";
     private const string MergeFallbackServicesMethodName = "__MergeFallbackServices";
     private const string ImportModuleResolversMethodName = "__ImportModuleResolvers";
+    private const string CombineResolversMethodName = "__CombineResolvers";
+    private const string CombineCollectionMethodName = "__CombineCollection";
+    private const string IsEnumerableTypeMethodName = "__IsEnumerableType";
+    private const string IsCombinedElementMethodName = "__IsCombinedElement";
 
     /// <summary>
     /// Writes the <c>_localResolvers</c> entry resolving <paramref name="serviceType"/> (with <paramref name="key"/> when keyed) through <paramref name="entry"/>.

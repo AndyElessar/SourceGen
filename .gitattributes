@@ -4,11 +4,9 @@
 ###############################################################################
 * text=auto eol=lf
 
-# Written by tools with the platform's or the upstream's line endings, so these keep the platform default (CRLF on Windows with core.autocrlf):
-# the generator writes samples' Generated files with the OS newline, and apm copies the external TUnit skill as published (CRLF).
+# Written by tools with the platform's line endings, so these keep the platform default (CRLF on Windows with core.autocrlf):
+# the generator writes samples' Generated files with the OS newline.
 samples/**/Generated/** !eol
-.agents/skills/tunit/** !eol
-.claude/skills/tunit/** !eol
 
 ###############################################################################
 # Set default behavior for command prompt diff.
