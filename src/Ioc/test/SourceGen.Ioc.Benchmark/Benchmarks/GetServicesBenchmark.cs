@@ -9,6 +9,10 @@ namespace SourceGen.Ioc.Benchmark.Benchmarks;
 /// Compares collection resolution (<c>GetServices</c>, <c>GetKeyedServices</c> and injected <c>IEnumerable&lt;T&gt;</c>)
 /// between <c>Microsoft.Extensions.DependencyInjection</c> (MSDI) and <see cref="CollectionContainer"/>.
 /// Each collection has three implementations.
+/// <para>
+/// Both containers return materialized arrays. The collection benchmarks return <see cref="object"/>,
+/// because BenchmarkDotNet rejects methods declared to return a deferred <c>IEnumerable&lt;T&gt;</c>.
+/// </para>
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -39,13 +43,13 @@ public class GetServicesBenchmark
     #region Transient - GetServices<T>()
 
     [BenchmarkCategory("Transient"), Benchmark(Baseline = true)]
-    public IEnumerable<ITransientHandler> Transient_MSDI()
+    public object Transient_MSDI()
     {
         return _msdiProvider.GetServices<ITransientHandler>();
     }
 
     [BenchmarkCategory("Transient"), Benchmark]
-    public IEnumerable<ITransientHandler> Transient_SourceGenIoc()
+    public object Transient_SourceGenIoc()
     {
         return _container.GetServices<ITransientHandler>();
     }
@@ -55,13 +59,13 @@ public class GetServicesBenchmark
     #region Singleton - GetServices<T>() of already-created singletons
 
     [BenchmarkCategory("Singleton"), Benchmark(Baseline = true)]
-    public IEnumerable<ISingletonHandler> Singleton_MSDI()
+    public object Singleton_MSDI()
     {
         return _msdiProvider.GetServices<ISingletonHandler>();
     }
 
     [BenchmarkCategory("Singleton"), Benchmark]
-    public IEnumerable<ISingletonHandler> Singleton_SourceGenIoc()
+    public object Singleton_SourceGenIoc()
     {
         return _container.GetServices<ISingletonHandler>();
     }
@@ -71,13 +75,13 @@ public class GetServicesBenchmark
     #region Keyed - GetKeyedServices<T>(key)
 
     [BenchmarkCategory("Keyed"), Benchmark(Baseline = true)]
-    public IEnumerable<IKeyedHandler> Keyed_MSDI()
+    public object Keyed_MSDI()
     {
         return _msdiProvider.GetKeyedServices<IKeyedHandler>("keyed");
     }
 
     [BenchmarkCategory("Keyed"), Benchmark]
-    public IEnumerable<IKeyedHandler> Keyed_SourceGenIoc()
+    public object Keyed_SourceGenIoc()
     {
         return _container.GetKeyedServices<IKeyedHandler>("keyed");
     }
