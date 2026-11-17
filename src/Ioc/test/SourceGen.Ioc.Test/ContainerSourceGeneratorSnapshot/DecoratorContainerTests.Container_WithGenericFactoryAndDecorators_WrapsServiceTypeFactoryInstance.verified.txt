@@ -382,13 +382,13 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
-        __Resolver(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>), static c => c.GetHandler_Entity()),
-        __Resolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>), static c => c.GetHandler_Entity_TestNamespace_FactoryContainer_Create_As_IRequestHandler_Task_Entity()),
 
         // Lazy wrapper resolvers
         __Resolver(typeof(global::System.Lazy<global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>>), static c => c._lazy_IRequestHandler_Task_Entity_handler_Entity_TestNamespace_FactoryContainer_Create_As_IRequestHandler_Task_Entity),
         ..__CollectionResolvers<global::System.Lazy<global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>>>(static c => c.GetAllLazy_IRequestHandler_Task_Entity_Array()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
+        __Resolver(typeof(global::TestNamespace.Handler<global::TestNamespace.Entity>), static c => c.GetHandler_Entity()),
+        __Resolver(typeof(global::TestNamespace.IRequestHandler<global::System.Threading.Tasks.Task<global::TestNamespace.Entity>>), static c => c.GetHandler_Entity_TestNamespace_FactoryContainer_Create_As_IRequestHandler_Task_Entity()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

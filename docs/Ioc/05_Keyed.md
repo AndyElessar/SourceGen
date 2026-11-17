@@ -343,8 +343,9 @@ container.GetKeyedServices<IHandler>(KeyedService.AnyKey);  // [FirstHandler, Ot
 - A key with two or more registrations gets a generated keyed collection resolver for `IEnumerable<T>`, `IReadOnlyCollection<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IList<T>` and `T[]`, in registration order. It is generated whether or not the container's project requests the collection, so requests from other projects are served too.
 - A key with a single registration is served at runtime as a one-element `IEnumerable<T>`.
 - `KeyedService.AnyKey` returns every keyed registration of `T`, under any key, like `MS.E.DI`. It does not return the non-keyed registrations (use `GetServices<T>()` or a `null` key for those). `GetKeyedService<T>(KeyedService.AnyKey)` is not a single service: the container asks the fallback provider, where `MS.E.DI` throws.
+- A collection dependency under `KeyedService.AnyKey` (`[IocInject("KeyedService.AnyKey", KeyType = KeyType.Csharp)] IEnumerable<T>`) calls the generated `AnyKey` collection directly.
 - With `IntegrateServiceProvider = true`, `IEnumerable<T>` and keyed collection dependencies also contain the fallback provider's services under the same key, first.
-- A collection type you register explicitly (e.g. your own `IEnumerable<T>` implementation under the same key) wins over the generated collection, like `MS.E.DI`.
+- A collection type you register explicitly (e.g. your own `IEnumerable<T>` implementation under the same key) wins over the generated collection, like `MS.E.DI`. This also applies to collections of `Lazy<T>`, `Func<T>` and `KeyValuePair<K, V>`, to dictionary types, and to a `Lazy<T>` or `Func<T>` you register yourself.
 
 <details>
 <summary>Generated Code</summary>

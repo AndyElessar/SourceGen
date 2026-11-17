@@ -148,6 +148,49 @@ public class KeyedServiceTests
     }
 
     [Test]
+    [Arguments(false, false)]
+    [Arguments(false, true)]
+    [Arguments(true, false)]
+    [Arguments(true, true)]
+    public async Task Container_WithInjectedAnyKeyCollection_CallsAnyKeyArrayResolver(bool useSwitchStatement, bool integrateServiceProvider)
+    {
+        // A collection dependency under KeyedService.AnyKey (any expression of it) calls the AnyKey array resolver directly,
+        // like a collection dependency under another key, instead of GetKeyedServices<T>(KeyedService.AnyKey)
+        var source = $$"""
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "a")]
+            public class FirstHandler : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "b")]
+            public class SecondHandler : IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(
+                [IocInject("global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey", KeyType = KeyType.Csharp)] IEnumerable<IHandler> all,
+                [IocInject("KeyedService.AnyKey", KeyType = KeyType.Csharp)] IReadOnlyList<IHandler> allList) { }
+
+            [IocContainer(UseSwitchStatement = {{(useSwitchStatement ? "true" : "false")}}, IntegrateServiceProvider = {{(integrateServiceProvider ? "true" : "false")}})]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).DoesNotContain("GetKeyedServices<global::TestNamespace.IHandler>(");
+        await Assert.That(generatedSource).Contains(integrateServiceProvider
+            ? "new global::TestNamespace.Consumer(__MergeFallbackServices(GetAllIHandlerArray_AnyKey(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), __MergeFallbackServices(GetAllIHandlerArray_AnyKey(), KeyedService.AnyKey))"
+            : "new global::TestNamespace.Consumer(GetAllIHandlerArray_AnyKey(), GetAllIHandlerArray_AnyKey())");
+    }
+
+    [Test]
     [Arguments(false, true)]
     [Arguments(true, true)]
     [Arguments(false, false)]

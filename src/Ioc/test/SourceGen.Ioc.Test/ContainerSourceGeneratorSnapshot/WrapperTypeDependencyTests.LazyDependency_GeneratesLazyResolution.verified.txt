@@ -362,13 +362,13 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetMyService()),
-        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetMyService()),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
 
         // Lazy wrapper resolvers
         __Resolver(typeof(global::System.Lazy<global::TestNamespace.IMyService>), static c => c._lazy_IMyService_myService),
         ..__CollectionResolvers<global::System.Lazy<global::TestNamespace.IMyService>>(static c => c.GetAllLazy_IMyService_Array()),
+        __Resolver(typeof(global::TestNamespace.MyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::TestNamespace.IMyService), static c => c.GetMyService()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

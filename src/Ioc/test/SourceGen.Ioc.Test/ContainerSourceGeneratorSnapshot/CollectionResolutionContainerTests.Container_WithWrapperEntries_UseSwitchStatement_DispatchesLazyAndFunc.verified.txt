@@ -362,9 +362,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Plugin1), static c => c.GetPlugin1()),
-        __Resolver(typeof(global::TestNamespace.IPlugin), static c => c.GetPlugin1()),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
 
         // Lazy wrapper resolvers
         __Resolver(typeof(global::System.Lazy<global::TestNamespace.IPlugin>), static c => c._lazy_IPlugin_plugin1),
@@ -373,6 +370,9 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         // Func wrapper resolvers
         __Resolver(typeof(global::System.Func<global::TestNamespace.IPlugin>), static c => c._func_IPlugin_plugin1),
         ..__CollectionResolvers<global::System.Func<global::TestNamespace.IPlugin>>(static c => c.GetAllFunc_IPlugin_Array()),
+        __Resolver(typeof(global::TestNamespace.Plugin1), static c => c.GetPlugin1()),
+        __Resolver(typeof(global::TestNamespace.IPlugin), static c => c.GetPlugin1()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

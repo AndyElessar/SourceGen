@@ -30,6 +30,11 @@ partial class IocSourceGenerator
                 if(!addedKeys.Add(entryKey))
                     continue;
 
+                // A Lazy<T> registered explicitly under the same key replaces the wrappers, single and in collections, like
+                // MS.DI (see Container.Collections)
+                if(IsWrapperRegisteredExplicitly(serviceLookup, $"global::System.Lazy<{serviceType}>", reg.Key))
+                    continue;
+
                 var fieldName = $"_lazy_{names.Get(serviceType)}{cached.FieldName}";
 
                 entries.Add((serviceType, reg.ImplementationType.Name, fieldName, cached.ResolverMethodName, reg.Instance, reg.Key, reg.Lifetime != ServiceLifetime.Transient));
@@ -86,6 +91,17 @@ partial class IocSourceGenerator
         return wrapperEntries.ToImmutableEquatableArray();
     }
 
+    /// <summary>
+    /// Gets whether <paramref name="wrapperTypeName"/> (<c>Lazy&lt;T&gt;</c> or <c>Func&lt;T&gt;</c>) is registered explicitly under
+    /// <paramref name="key"/>, so its dependencies and collections resolve that registration instead of the generated wrappers.
+    /// An async-init registration does not count: its dependencies keep the generated wrappers.
+    /// </summary>
+    private static bool IsWrapperRegisteredExplicitly(
+        IReadOnlyDictionary<ServiceTypeKey, ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
+        string wrapperTypeName,
+        string? key) =>
+        serviceLookup.TryGetValue(new(wrapperTypeName, key), out var registrations) && !registrations[^1].IsAsyncInit;
+
     private static ImmutableEquatableArray<FuncWrapperContainerEntry> CreateFuncWrapperContainerEntries(
         HashSet<string> neededTypes,
         IReadOnlyDictionary<ServiceTypeKey, ImmutableEquatableArray<ServiceLookupEntry>> serviceLookup,
@@ -112,6 +128,11 @@ partial class IocSourceGenerator
                 // One wrapper per resolver: keyed, factory and instance registrations of one implementation have their own resolvers
                 var entryKey = $"{serviceType}|{cached.ResolverMethodName}";
                 if(!addedKeys.Add(entryKey))
+                    continue;
+
+                // A Func<T> registered explicitly under the same key replaces the wrappers, single and in collections, like
+                // MS.DI (see Container.Collections)
+                if(IsWrapperRegisteredExplicitly(serviceLookup, $"global::System.Func<{serviceType}>", reg.Key))
                     continue;
 
                 var fieldName = $"_func_{names.Get(serviceType)}{cached.FieldName}";

@@ -385,14 +385,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __KeyedResolver(typeof(global::TestNamespace.Handler1), "handler1", static c => c.GetHandler1__handler1_()),
-        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler1", static c => c.GetHandler1__handler1_()),
-        __KeyedResolver(typeof(global::TestNamespace.Handler2), "handler2", static c => c.GetHandler2__handler2_()),
-        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler2", static c => c.GetHandler2__handler2_()),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
-        __EnumerableResolver<global::TestNamespace.Handler1>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.Handler1[] { c.GetHandler1__handler1_() }),
-        __EnumerableResolver<global::TestNamespace.IHandler>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIHandlerArray_AnyKey()),
-        __EnumerableResolver<global::TestNamespace.Handler2>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.Handler2[] { c.GetHandler2__handler2_() }),
 
         // KeyValuePair resolvers
         __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
@@ -404,6 +396,14 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IHandler>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
         __Resolver(typeof(global::System.Collections.Generic.IDictionary<string, global::TestNamespace.IHandler>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
         __Resolver(typeof(global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IHandler>), static c => c.GetAllKvp_string_IHandler_Dictionary()),
+        __KeyedResolver(typeof(global::TestNamespace.Handler1), "handler1", static c => c.GetHandler1__handler1_()),
+        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler1", static c => c.GetHandler1__handler1_()),
+        __KeyedResolver(typeof(global::TestNamespace.Handler2), "handler2", static c => c.GetHandler2__handler2_()),
+        __KeyedResolver(typeof(global::TestNamespace.IHandler), "handler2", static c => c.GetHandler2__handler2_()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
+        __EnumerableResolver<global::TestNamespace.Handler1>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.Handler1[] { c.GetHandler1__handler1_() }),
+        __EnumerableResolver<global::TestNamespace.IHandler>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => c.GetAllIHandlerArray_AnyKey()),
+        __EnumerableResolver<global::TestNamespace.Handler2>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.Handler2[] { c.GetHandler2__handler2_() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

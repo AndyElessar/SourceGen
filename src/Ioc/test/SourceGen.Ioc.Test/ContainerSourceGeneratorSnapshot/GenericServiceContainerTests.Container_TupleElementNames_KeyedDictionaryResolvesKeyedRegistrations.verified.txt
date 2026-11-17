@@ -349,12 +349,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedHandler), "a", static c => c.GetKeyedHandler__a_()),
-        __KeyedResolver(typeof(global::TestNamespace.IHandler<(global::TestNamespace.Entity, string)>), "a", static c => c.GetKeyedHandler__a_()),
-        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
-        __Resolver(typeof(global::TestNamespace.OtherConsumer), static c => c.GetOtherConsumer()),
-        __EnumerableResolver<global::TestNamespace.KeyedHandler>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedHandler[] { c.GetKeyedHandler__a_() }),
-        __EnumerableResolver<global::TestNamespace.IHandler<(global::TestNamespace.Entity, string)>>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IHandler<(global::TestNamespace.Entity, string)>[] { c.GetKeyedHandler__a_() }),
 
         // KeyValuePair resolvers
         __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler<(global::TestNamespace.Entity A, string B)>>>), static c => c.GetAllKvp_string_IHandler_Entity_string_Dictionary()),
@@ -366,6 +360,12 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IHandler<(global::TestNamespace.Entity A, string B)>>), static c => c.GetAllKvp_string_IHandler_Entity_string_Dictionary()),
         __Resolver(typeof(global::System.Collections.Generic.IDictionary<string, global::TestNamespace.IHandler<(global::TestNamespace.Entity A, string B)>>), static c => c.GetAllKvp_string_IHandler_Entity_string_Dictionary()),
         __Resolver(typeof(global::System.Collections.Generic.Dictionary<string, global::TestNamespace.IHandler<(global::TestNamespace.Entity A, string B)>>), static c => c.GetAllKvp_string_IHandler_Entity_string_Dictionary()),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedHandler), "a", static c => c.GetKeyedHandler__a_()),
+        __KeyedResolver(typeof(global::TestNamespace.IHandler<(global::TestNamespace.Entity, string)>), "a", static c => c.GetKeyedHandler__a_()),
+        __Resolver(typeof(global::TestNamespace.Consumer), static c => c.GetConsumer()),
+        __Resolver(typeof(global::TestNamespace.OtherConsumer), static c => c.GetOtherConsumer()),
+        __EnumerableResolver<global::TestNamespace.KeyedHandler>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedHandler[] { c.GetKeyedHandler__a_() }),
+        __EnumerableResolver<global::TestNamespace.IHandler<(global::TestNamespace.Entity, string)>>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IHandler<(global::TestNamespace.Entity, string)>[] { c.GetKeyedHandler__a_() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

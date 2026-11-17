@@ -69,8 +69,10 @@ public sealed class KeyedMultiCollectionConsumer(
     [IocInject(Key = "alpha")] IEnumerable<IKeyedMultiService> enumerable,
     [IocInject(Key = "alpha")] IReadOnlyList<IKeyedMultiService> readOnlyList,
     [IocInject(Key = "alpha")] IKeyedMultiService[] array,
-    [IocInject(Key = "beta")] IEnumerable<IKeyedMultiService> single)
+    [IocInject(Key = "beta")] IEnumerable<IKeyedMultiService> single,
+    [IocInject("global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey", KeyType = KeyType.Csharp)] IEnumerable<IKeyedMultiService> allKeyed)
 {
+    public IEnumerable<IKeyedMultiService> AllKeyed { get; } = allKeyed;
     public IEnumerable<IKeyedMultiService> Enumerable { get; } = enumerable;
     public IReadOnlyList<IKeyedMultiService> ReadOnlyList { get; } = readOnlyList;
     public IKeyedMultiService[] Array { get; } = array;

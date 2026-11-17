@@ -321,16 +321,16 @@ partial class IocSourceGenerator
             ? null
             : CreateKeyedCollections(serviceLookup, keyedEntriesByServiceType, explicitCollectionTypes, collectionServiceTypes, reservedNames, names);
 
-        // Most containers have no key with several registrations
+        // Most containers have no key with several registrations. The AnyKey collection is stored under KeyedServiceAnyKey
         Dictionary<ServiceTypeKey, string>? keyedCollectionResolvers = null;
         if(keyedCollections is not null)
         {
             foreach(var keyedCollection in keyedCollections)
             {
-                if(keyedCollection is { Key: { } collectionKey, ArrayMethodName: not null })
+                if(keyedCollection.ArrayMethodName is { } arrayMethodName)
                 {
                     keyedCollectionResolvers ??= [];
-                    keyedCollectionResolvers[new ServiceTypeKey(keyedCollection.ServiceType, collectionKey)] = keyedCollection.ArrayMethodName!;
+                    keyedCollectionResolvers[new ServiceTypeKey(keyedCollection.ServiceType, keyedCollection.Key ?? Constants.KeyedServiceAnyKey)] = arrayMethodName;
                 }
             }
         }

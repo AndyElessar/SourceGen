@@ -903,6 +903,36 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::IocSample.Module), static c => c),
+
+        // KeyValuePair resolvers
+        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>[]), static c => c.GetAllKvp_string_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<string, global::IocSample.IKeyed>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IDictionary<string, global::IocSample.IKeyed>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.Dictionary<string, global::IocSample.IKeyed>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>), static c => c.GetAllKvp_object_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>), static c => c.GetAllKvp_object_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>[]), static c => c.GetAllKvp_object_IKeyed_Array()),
+        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<object, global::IocSample.IKeyed>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.IDictionary<object, global::IocSample.IKeyed>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
+        __Resolver(typeof(global::System.Collections.Generic.Dictionary<object, global::IocSample.IKeyed>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
+
+        // Lazy wrapper resolvers
+        __Resolver(typeof(global::System.Lazy<global::IocSample.IWrapperService<int>>), static c => new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => c.GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),
+        ..__CollectionResolvers<global::System.Lazy<global::IocSample.IWrapperService<int>>>(static c => c.GetAllLazy_IWrapperService_int_Array()),
+        __Resolver(typeof(global::System.Lazy<global::IocSample.IWrapperService<string>>), static c => new global::System.Lazy<global::IocSample.IWrapperService<string>>(() => c.GetWrapperService_string(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),
+        ..__CollectionResolvers<global::System.Lazy<global::IocSample.IWrapperService<string>>>(static c => c.GetAllLazy_IWrapperService_string_Array()),
+
+        // Func wrapper resolvers
+        __Resolver(typeof(global::System.Func<global::IocSample.IWrapperService<string>>), static c => c._func_IWrapperService_string_wrapperService_string),
+        ..__CollectionResolvers<global::System.Func<global::IocSample.IWrapperService<string>>>(static c => c.GetAllFunc_IWrapperService_string_Array()),
         __Resolver(typeof(global::IocSample.AsyncDependentClass), static c => c.GetAsyncDependentClass()),
         __Resolver(typeof(global::IocSample.Basic2), static c => c.GetBasic2()),
         __Resolver(typeof(global::IocSample.IBasic), static c => c.GetBasic_Resolve()),
@@ -977,36 +1007,6 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         __EnumerableResolver<global::IocSample.KeyedCsharp>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::IocSample.KeyedCsharp[] { c.GetKeyedCsharp_IocSample_KeyedExtensions_Key() }),
         __EnumerableResolver<global::IocSample.TestNest.TestNestClass.NestClassImpl>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::IocSample.TestNest.TestNestClass.NestClassImpl[] { c.GetNestClassImpl_IocSample_TestNest_TestNestClass_NestClassImpl_Key() }),
         __EnumerableResolver<global::IocSample.TestNest.TestNestClass.INestInterface>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::IocSample.TestNest.TestNestClass.INestInterface[] { c.GetNestClassImpl_IocSample_TestNest_TestNestClass_NestClassImpl_Key() }),
-
-        // KeyValuePair resolvers
-        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>>), static c => c.GetAllKvp_string_IKeyed_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>[]), static c => c.GetAllKvp_string_IKeyed_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<string, global::IocSample.IKeyed>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IDictionary<string, global::IocSample.IKeyed>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.Dictionary<string, global::IocSample.IKeyed>), static c => c.GetAllKvp_string_IKeyed_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.ICollection<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyList<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>), static c => c.GetAllKvp_object_IKeyed_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.IList<global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>>), static c => c.GetAllKvp_object_IKeyed_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.KeyValuePair<object, global::IocSample.IKeyed>[]), static c => c.GetAllKvp_object_IKeyed_Array()),
-        __Resolver(typeof(global::System.Collections.Generic.IReadOnlyDictionary<object, global::IocSample.IKeyed>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.IDictionary<object, global::IocSample.IKeyed>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
-        __Resolver(typeof(global::System.Collections.Generic.Dictionary<object, global::IocSample.IKeyed>), static c => c.GetAllKvp_object_IKeyed_Dictionary()),
-
-        // Lazy wrapper resolvers
-        __Resolver(typeof(global::System.Lazy<global::IocSample.IWrapperService<int>>), static c => new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => c.GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),
-        ..__CollectionResolvers<global::System.Lazy<global::IocSample.IWrapperService<int>>>(static c => c.GetAllLazy_IWrapperService_int_Array()),
-        __Resolver(typeof(global::System.Lazy<global::IocSample.IWrapperService<string>>), static c => new global::System.Lazy<global::IocSample.IWrapperService<string>>(() => c.GetWrapperService_string(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)),
-        ..__CollectionResolvers<global::System.Lazy<global::IocSample.IWrapperService<string>>>(static c => c.GetAllLazy_IWrapperService_string_Array()),
-
-        // Func wrapper resolvers
-        __Resolver(typeof(global::System.Func<global::IocSample.IWrapperService<string>>), static c => c._func_IWrapperService_string_wrapperService_string),
-        ..__CollectionResolvers<global::System.Func<global::IocSample.IWrapperService<string>>>(static c => c.GetAllFunc_IWrapperService_string_Array()),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::IocSample.Module, object> resolver) =>

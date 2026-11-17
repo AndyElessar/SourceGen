@@ -439,16 +439,6 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         __Resolver(typeof(global::System.IServiceProvider), static c => c),
         __Resolver(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c),
         __Resolver(typeof(global::TestNamespace.TestContainer), static c => c),
-        __Resolver(typeof(global::TestNamespace.Foo), static c => c.GetFoo()),
-        __Resolver(typeof(global::TestNamespace.IFoo), static c => c.GetFoo()),
-        __KeyedResolver(typeof(global::TestNamespace.KeyedFoo), "k", static c => c.GetKeyedFoo__k_()),
-        __KeyedResolver(typeof(global::TestNamespace.IFoo), "k", static c => c.GetKeyedFoo__k_()),
-        __Resolver(typeof(global::TestNamespace.Bar), static c => c.GetBar()),
-        __Resolver(typeof(global::TestNamespace.IBar), static c => c.GetBar_As_IBar()),
-        __Resolver(typeof(global::TestNamespace.Baz), static c => c.GetBaz_TestNamespace_BazFactory_Create()),
-        __Resolver(typeof(global::TestNamespace.IBaz), static c => c.GetBaz_TestNamespace_BazFactory_Create()),
-        __EnumerableResolver<global::TestNamespace.KeyedFoo>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedFoo[] { c.GetKeyedFoo__k_() }),
-        __EnumerableResolver<global::TestNamespace.IFoo>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IFoo[] { c.GetKeyedFoo__k_() }),
 
         // KeyValuePair resolvers
         __Resolver(typeof(global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IFoo>>), static c => c.GetAllKvp_string_IFoo_Dictionary()),
@@ -468,6 +458,16 @@ partial class TestContainer : global::SourceGen.Ioc.IIocContainer<global::TestNa
         // Func wrapper resolvers
         __Resolver(typeof(global::System.Func<global::TestNamespace.IFoo>), static c => c._func_IFoo_foo),
         ..__CollectionResolvers<global::System.Func<global::TestNamespace.IFoo>>(static c => c.GetAllFunc_IFoo_Array()),
+        __Resolver(typeof(global::TestNamespace.Foo), static c => c.GetFoo()),
+        __Resolver(typeof(global::TestNamespace.IFoo), static c => c.GetFoo()),
+        __KeyedResolver(typeof(global::TestNamespace.KeyedFoo), "k", static c => c.GetKeyedFoo__k_()),
+        __KeyedResolver(typeof(global::TestNamespace.IFoo), "k", static c => c.GetKeyedFoo__k_()),
+        __Resolver(typeof(global::TestNamespace.Bar), static c => c.GetBar()),
+        __Resolver(typeof(global::TestNamespace.IBar), static c => c.GetBar_As_IBar()),
+        __Resolver(typeof(global::TestNamespace.Baz), static c => c.GetBaz_TestNamespace_BazFactory_Create()),
+        __Resolver(typeof(global::TestNamespace.IBaz), static c => c.GetBaz_TestNamespace_BazFactory_Create()),
+        __EnumerableResolver<global::TestNamespace.KeyedFoo>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.KeyedFoo[] { c.GetKeyedFoo__k_() }),
+        __EnumerableResolver<global::TestNamespace.IFoo>(global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, static c => new global::TestNamespace.IFoo[] { c.GetKeyedFoo__k_() }),
     ];
 
     private static __IocResolver __Resolver(global::System.Type serviceType, global::System.Func<global::TestNamespace.TestContainer, object> resolver) =>

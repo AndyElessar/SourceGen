@@ -303,9 +303,10 @@ partial class IocSourceGenerator
 
             if(key is not null)
             {
-                // A key with several registrations has a keyed array resolver; one registration resolves through GetKeyedServices
+                // A key with several registrations has a keyed array resolver, and so does KeyedService.AnyKey with several
+                // keyed registrations (every expression of it is the same key); one registration resolves through GetKeyedServices
                 return wrapperFields.KeyedCollectionResolvers is { } keyedCollectionResolvers
-                    && keyedCollectionResolvers.TryGetValue(new(elementTypeName, key), out var keyedArrayMethodName)
+                    && keyedCollectionResolvers.TryGetValue(new(elementTypeName, IsAnyKeyExpression(key) ? KeyedServiceAnyKey : key), out var keyedArrayMethodName)
                     ? new CollectionDependency(keyedArrayMethodName, wrapperFields.MergeFallbackServices, key)
                     : new CollectionFallbackDependency(elementTypeName, IsKeyed: true, Key: key, toArray);
             }
@@ -387,6 +388,16 @@ partial class IocSourceGenerator
         WrapperFieldLookup wrapperFields,
         bool useResolverMethods)
     {
+        // A wrapper type registered explicitly (Lazy<T>, Func<T>, KeyValuePair<K, V> or a dictionary type) resolves as that
+        // registration, also inside another wrapper, like an explicit collection type and like MS.DI (see Container.Collections).
+        // Task<T> keeps its async-init projection.
+        if(type is not TaskTypeData
+            && serviceLookup.TryGetValue(new(type.Name, key), out var explicitRegistrations)
+            && !explicitRegistrations[^1].IsAsyncInit)
+        {
+            return CreateDirectDependency(explicitRegistrations[^1]);
+        }
+
         switch(type)
         {
             case LazyTypeData lazy:
