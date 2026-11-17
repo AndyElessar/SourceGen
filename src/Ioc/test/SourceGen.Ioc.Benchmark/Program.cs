@@ -7,6 +7,7 @@ var benchmarkSwitcher = BenchmarkSwitcher.FromTypes(
 	typeof(ThreadSafeStrategyBenchmark),
 	typeof(RealisticAppBenchmark),
 	typeof(AsyncInitBenchmark),
+	typeof(GetServicesBenchmark),
 ]);
 
 benchmarkSwitcher.Run(args);

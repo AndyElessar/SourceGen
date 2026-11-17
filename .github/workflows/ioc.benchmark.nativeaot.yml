@@ -162,7 +162,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        class: [ThreadSafeStrategyBenchmark, RealisticAppBenchmark, AsyncInitBenchmark]
+        class: [ThreadSafeStrategyBenchmark, RealisticAppBenchmark, AsyncInitBenchmark, GetServicesBenchmark]
     # Job-level so that a skipped run for an unrelated label never cancels a running benchmark.
     # Newer commits replace older runs of the same pull request; every other run is kept.
     concurrency:
