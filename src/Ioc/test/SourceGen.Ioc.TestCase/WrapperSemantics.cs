@@ -98,3 +98,61 @@ public sealed class FuncWithArgumentsConsumer(
 // Not eager: NamedService takes its name from the Func argument and cannot be resolved directly
 [IocContainer(ExplicitOnly = true, EagerResolveOptions = EagerResolveOptions.None)]
 public sealed partial class WrapperSemanticsModule;
+
+/// <summary>Service whose wrapper and collection types are also registered explicitly (see <see cref="ExplicitWrapperRegistrationModule"/>).</summary>
+public interface IExplicitWrapperHandler;
+
+public sealed class ExplicitWrapperHandler : IExplicitWrapperHandler;
+
+/// <summary>An explicitly registered <c>IReadOnlyDictionary&lt;string, IExplicitWrapperHandler&gt;</c>.</summary>
+public sealed class ExplicitWrapperHandlerDictionary : Dictionary<string, IExplicitWrapperHandler>
+{
+    public static readonly ExplicitWrapperHandlerDictionary Default = new();
+}
+
+/// <summary>An explicitly registered <c>IReadOnlyList&lt;IExplicitWrapperHandler&gt;</c>.</summary>
+public sealed class ExplicitWrapperHandlerList : List<IExplicitWrapperHandler>
+{
+    public static readonly ExplicitWrapperHandlerList Default = new();
+}
+
+/// <summary>The explicitly registered wrapper instances.</summary>
+public static class ExplicitWrapperInstances
+{
+    public static readonly Lazy<IExplicitWrapperHandler> Lazy = new(static () => new ExplicitWrapperHandler());
+    public static readonly Func<IExplicitWrapperHandler> Func = static () => new ExplicitWrapperHandler();
+    public static readonly Lazy<Func<IExplicitWrapperHandler>> LazyFunc = new(static () => Func);
+}
+
+/// <summary>Consumer of wrapper and collection types that are registered explicitly, which it gets as registered.</summary>
+public sealed class ExplicitWrapperRegistrationConsumer(
+    IReadOnlyDictionary<string, IExplicitWrapperHandler> dictionary,
+    Lazy<IExplicitWrapperHandler> lazy,
+    Func<IExplicitWrapperHandler> func,
+    Lazy<Func<IExplicitWrapperHandler>> lazyFunc,
+    IReadOnlyList<IExplicitWrapperHandler> list)
+{
+    public IReadOnlyDictionary<string, IExplicitWrapperHandler> Dictionary => dictionary;
+    public Lazy<IExplicitWrapperHandler> Lazy => lazy;
+    public Func<IExplicitWrapperHandler> Func => func;
+    public Lazy<Func<IExplicitWrapperHandler>> LazyFunc => lazyFunc;
+    public IReadOnlyList<IExplicitWrapperHandler> List => list;
+}
+
+// The handler is registered non-keyed (Lazy<T> / Func<T> would be generated for it) and keyed (the dictionary would be built from it)
+[IocRegisterFor<ExplicitWrapperHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitWrapperHandler)])]
+[IocRegisterFor<ExplicitWrapperHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitWrapperHandler)], Key = "a")]
+[IocRegisterFor<ExplicitWrapperHandlerDictionary>(
+    ServiceLifetime.Singleton,
+    ServiceTypes = [typeof(IReadOnlyDictionary<string, IExplicitWrapperHandler>)],
+    Instance = "global::SourceGen.Ioc.TestCase.ExplicitWrapperHandlerDictionary.Default")]
+[IocRegisterFor<Lazy<IExplicitWrapperHandler>>(ServiceLifetime.Singleton, Instance = "global::SourceGen.Ioc.TestCase.ExplicitWrapperInstances.Lazy")]
+[IocRegisterFor<Func<IExplicitWrapperHandler>>(ServiceLifetime.Singleton, Instance = "global::SourceGen.Ioc.TestCase.ExplicitWrapperInstances.Func")]
+[IocRegisterFor<Lazy<Func<IExplicitWrapperHandler>>>(ServiceLifetime.Singleton, Instance = "global::SourceGen.Ioc.TestCase.ExplicitWrapperInstances.LazyFunc")]
+[IocRegisterFor<ExplicitWrapperHandlerList>(
+    ServiceLifetime.Singleton,
+    ServiceTypes = [typeof(IReadOnlyList<IExplicitWrapperHandler>)],
+    Instance = "global::SourceGen.Ioc.TestCase.ExplicitWrapperHandlerList.Default")]
+[IocRegisterFor<ExplicitWrapperRegistrationConsumer>(ServiceLifetime.Transient)]
+[IocContainer(ExplicitOnly = true)]
+public sealed partial class ExplicitWrapperRegistrationModule;

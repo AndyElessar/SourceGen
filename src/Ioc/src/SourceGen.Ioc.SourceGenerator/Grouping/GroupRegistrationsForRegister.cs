@@ -61,9 +61,23 @@ partial class IocSourceGenerator
             group.Add(entry);
         }
 
+        var explicitWrappers = CollectExplicitWrapperRegistrations(groupedRegistrations);
+
         var demand = WrapperDemand.Scan(registrations.Select(static r => r.Registration));
-        var lazyByTagKey = GroupLazyEntriesByTagKey(CollectLazyEntries(registrations, demand.LazyServiceTypes), canonicalTagsCache);
-        var funcByTagKey = GroupFuncEntriesByTagKey(CollectFuncEntries(registrations, demand.FuncTypes, features), canonicalTagsCache);
+        var lazyEntriesToRegister = CollectLazyEntries(registrations, demand.LazyServiceTypes);
+        var funcEntriesToRegister = CollectFuncEntries(registrations, demand.FuncTypes, features);
+        if(explicitWrappers is not null)
+        {
+            // Like MS.DI (and the Container output), an explicit Lazy<T> / Func<T> registration replaces the generated wrappers of
+            // T's registrations it is always registered with: written after it, a generated wrapper would win (last wins)
+            lazyEntriesToRegister.RemoveAll(entry => IsCoveredByExplicitRegistration(
+                explicitWrappers, new($"global::System.Lazy<{entry.InnerServiceTypeName}>", entry.Key), canonicalTagsCache[entry.Tags]));
+            funcEntriesToRegister.RemoveAll(entry => IsCoveredByExplicitRegistration(
+                explicitWrappers, new(entry.FuncServiceTypeName, entry.Registration.Key), canonicalTagsCache[entry.Tags]));
+        }
+
+        var lazyByTagKey = GroupLazyEntriesByTagKey(lazyEntriesToRegister, canonicalTagsCache);
+        var funcByTagKey = GroupFuncEntriesByTagKey(funcEntriesToRegister, canonicalTagsCache);
         var kvpByTagKey = GroupKvpEntriesByTagKey(CollectKeyValuePairEntries(registrations, demand.KvpPairs), canonicalTagsCache);
 
         // Keyed by (type, key): the same service type can be async-init under one key and synchronous under another
@@ -103,7 +117,8 @@ partial class IocSourceGenerator
                     kvp.Value.ToImmutableEquatableArray(),
                     lazyEntries is null ? [] : lazyEntries.ToImmutableEquatableArray(),
                     funcEntries is null ? [] : funcEntries.ToImmutableEquatableArray(),
-                    kvpEntries is null ? [] : kvpEntries.ToImmutableEquatableArray());
+                    kvpEntries is null ? [] : kvpEntries.ToImmutableEquatableArray(),
+                    GetExplicitWrapperServices(explicitWrappers, tags));
             })
             .ToImmutableEquatableArray();
 
@@ -113,6 +128,100 @@ partial class IocSourceGenerator
             assemblyName,
             tagGroups,
             asyncInitServices);
+    }
+
+    /// <summary>
+    /// Collects the registrations of wrapper and collection service types (<c>Lazy&lt;T&gt;</c>, <c>Func&lt;T&gt;</c>,
+    /// <c>KeyValuePair&lt;K, V&gt;</c>, the dictionary types, and the collection types other than <c>IEnumerable&lt;T&gt;</c>)
+    /// with the canonical tags of each, or returns <see langword="null"/> when there are none.
+    /// </summary>
+    /// <remarks>
+    /// <c>IEnumerable&lt;T&gt;</c> is left out: <c>GetServices&lt;T&gt;()</c> already resolves its explicit registration in
+    /// <c>MS.DI</c>. <c>Task&lt;T&gt;</c> keeps its async-init resolution. An async-init registration (registered as
+    /// <c>Task&lt;T&gt;</c> only), an open generic registration and a registration under <c>KeyedService.AnyKey</c> (which
+    /// <c>MS.DI</c> does not resolve as a single service) do not count.
+    /// </remarks>
+    private static List<(ServiceTypeKey Service, ImmutableEquatableArray<string> Tags)>? CollectExplicitWrapperRegistrations(
+        Dictionary<ImmutableEquatableArray<string>, List<RegisterEntry>> groupedRegistrations)
+    {
+        List<(ServiceTypeKey Service, ImmutableEquatableArray<string> Tags)>? explicitWrappers = null;
+        foreach(var group in groupedRegistrations)
+        {
+            foreach(var entry in group.Value)
+            {
+                var registration = entry.Registration;
+                if(registration.ServiceType is not WrapperTypeData or TaskTypeData or EnumerableTypeData
+                    || registration.IsOpenGeneric
+                    || registration.IsAsyncInit
+                    || entry is FactoryRegisterEntry { CanGenerate: false }
+                    || (registration.Key is { } key && IsAnyKeyExpression(key)))
+                {
+                    continue;
+                }
+
+                (explicitWrappers ??= []).Add((new(registration.ServiceType.Name, registration.Key), group.Key));
+            }
+        }
+
+        return explicitWrappers;
+    }
+
+    /// <summary>
+    /// Gets whether <paramref name="service"/> is registered explicitly whenever a registration with
+    /// <paramref name="tags"/> is (see <see cref="IsAlwaysRegisteredWith"/>).
+    /// </summary>
+    private static bool IsCoveredByExplicitRegistration(
+        List<(ServiceTypeKey Service, ImmutableEquatableArray<string> Tags)> explicitWrappers,
+        ServiceTypeKey service,
+        ImmutableEquatableArray<string> tags)
+    {
+        foreach(var explicitWrapper in explicitWrappers)
+        {
+            if(explicitWrapper.Service.Equals(service) && IsAlwaysRegisteredWith(explicitWrapper.Tags, tags))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets the explicitly registered wrapper and collection types that the dependencies of the tag group with
+    /// <paramref name="tags"/> resolve: those registered whenever the group is.
+    /// </summary>
+    private static ImmutableEquatableSet<ServiceTypeKey>? GetExplicitWrapperServices(
+        List<(ServiceTypeKey Service, ImmutableEquatableArray<string> Tags)>? explicitWrappers,
+        ImmutableEquatableArray<string> tags)
+    {
+        if(explicitWrappers is null)
+            return null;
+
+        HashSet<ServiceTypeKey>? services = null;
+        foreach(var explicitWrapper in explicitWrappers)
+        {
+            if(IsAlwaysRegisteredWith(explicitWrapper.Tags, tags))
+                (services ??= []).Add(explicitWrapper.Service);
+        }
+
+        return services?.ToImmutableEquatableSet();
+    }
+
+    /// <summary>
+    /// Gets whether a registration with <paramref name="registrationTags"/> is registered whenever one with
+    /// <paramref name="otherTags"/> is: both untagged (untagged registrations are registered when no tags are passed), or
+    /// tagged with every tag of <paramref name="otherTags"/> (a tagged registration is registered when any of its tags is passed).
+    /// </summary>
+    private static bool IsAlwaysRegisteredWith(ImmutableEquatableArray<string> registrationTags, ImmutableEquatableArray<string> otherTags)
+    {
+        if(otherTags.Length == 0)
+            return registrationTags.Length == 0;
+
+        foreach(var tag in otherTags)
+        {
+            if(!registrationTags.Contains(tag))
+                return false;
+        }
+
+        return true;
     }
 
     private static Dictionary<ImmutableEquatableArray<string>, List<LazyRegistrationEntry>> GroupLazyEntriesByTagKey(

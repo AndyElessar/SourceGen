@@ -1112,4 +1112,230 @@ public class WrapperTypeDependencyTests
 
         static int Count(string text, string value) => text.Split([value], StringSplitOptions.None).Length - 1;
     }
+
+    #region Explicit wrapper registrations
+
+    private const string ExplicitWrapperHandlers = """
+        using System;
+        using System.Collections.Generic;
+        using Microsoft.Extensions.DependencyInjection;
+        using SourceGen.Ioc;
+
+        namespace TestNamespace;
+
+        public interface IHandler { }
+
+        [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "a")]
+        public sealed class Handler : IHandler { }
+
+        public sealed class HandlerDictionary : Dictionary<string, IHandler>
+        {
+            public static readonly HandlerDictionary Default = new();
+            public static readonly HandlerDictionary Keyed = new();
+        }
+
+        public static class Wrappers
+        {
+            public static readonly Lazy<IHandler> Lazy = new(static () => new Handler());
+            public static readonly Func<IHandler> Func = static () => new Handler();
+            public static readonly Lazy<Func<IHandler>> LazyFunc = new(static () => Func);
+        }
+
+        """;
+
+    [Test]
+    public async Task ExplicitDictionaryRegistration_IsInjectedInsteadOfBuiltDictionary()
+    {
+        // Like MS.DI, an injected IReadOnlyDictionary<K, V> registered explicitly is the registration GetService returns,
+        // not a dictionary built from the KeyValuePair registrations (GitHub issue #241)
+        const string source = ExplicitWrapperHandlers + """
+            [IocRegisterFor<HandlerDictionary>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IReadOnlyDictionary<string, IHandler>)], Instance = "global::TestNamespace.HandlerDictionary.Default")]
+            [IocRegisterFor<HandlerDictionary>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IReadOnlyDictionary<string, IHandler>)], Instance = "global::TestNamespace.HandlerDictionary.Keyed", Key = "k")]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class Consumer(
+                IReadOnlyDictionary<string, IHandler> handlers,
+                [FromKeyedServices("k")] IReadOnlyDictionary<string, IHandler> keyedHandlers,
+                IDictionary<string, IHandler> notRegistered)
+            {
+                [IocInject]
+                public IReadOnlyDictionary<string, IHandler>? Optional { get; init; }
+            }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource)
+            .Contains("var p0 = sp.GetRequiredService<global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IHandler>>();")
+            .And.Contains("var p1 = sp.GetRequiredKeyedService<global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IHandler>>(\"k\");")
+            .And.Contains("var s0_p0 = sp.GetService<global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IHandler>>();")
+            // A dictionary type that is not registered explicitly is still built from the keyed registrations
+            .And.Contains("var p2 = sp.GetServices<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>().ToDictionary();");
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ExplicitLazyAndFuncRegistrations_AreInjectedAndGenerateNoWrapperRegistrations()
+    {
+        // Generated Lazy<T> / Func<T> registrations would be written after the explicit ones and win in MS.DI (last wins), so
+        // they are not generated; Lazy<Func<T>> registered explicitly is injected instead of a new Lazy over Func<T>
+        const string source = ExplicitWrapperHandlers + """
+            [IocRegisterFor<Lazy<IHandler>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Lazy", Key = "a")]
+            [IocRegisterFor<Func<IHandler>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Func", Key = "a")]
+            [IocRegisterFor<Lazy<Func<IHandler>>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.LazyFunc", Key = "a")]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class Consumer(
+                [FromKeyedServices("a")] Lazy<IHandler> lazy,
+                [FromKeyedServices("a")] Func<IHandler> func,
+                [FromKeyedServices("a")] Lazy<Func<IHandler>> lazyFunc);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource)
+            .Contains("var p0 = sp.GetRequiredKeyedService<global::System.Lazy<global::TestNamespace.IHandler>>(\"a\");")
+            .And.Contains("var p1 = sp.GetRequiredKeyedService<global::System.Func<global::TestNamespace.IHandler>>(\"a\");")
+            .And.Contains("var p2 = sp.GetRequiredKeyedService<global::System.Lazy<global::System.Func<global::TestNamespace.IHandler>>>(\"a\");")
+            .And.DoesNotContain("=> new global::System.Lazy<global::TestNamespace.IHandler>(")
+            .And.DoesNotContain("=> new global::System.Func<global::TestNamespace.IHandler>(");
+        await Verify(generatedSource);
+    }
+
+    [Test]
+    public async Task ExplicitLazyRegistration_UnderOtherKey_KeepsGeneratedWrapper()
+    {
+        // Only an explicit registration under the same key replaces the generated Lazy<T> of a registration
+        const string source = ExplicitWrapperHandlers + """
+            [IocRegisterFor<Lazy<IHandler>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Lazy")]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class Consumer([FromKeyedServices("a")] Lazy<IHandler> lazy);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource)
+            .Contains("services.AddKeyedSingleton<global::System.Lazy<global::TestNamespace.IHandler>>(\"a\", (global::System.IServiceProvider sp, object? key) => new global::System.Lazy<global::TestNamespace.IHandler>(");
+    }
+
+    [Test]
+    public async Task ExplicitDictionaryRegistration_AsyncInit_KeepsBuiltDictionary()
+    {
+        // An async-init registration is registered as Task<T> only, so the dependency keeps the built dictionary
+        const string source = ExplicitWrapperHandlers + """
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IReadOnlyDictionary<string, IHandler>)])]
+            public sealed class AsyncHandlerDictionary : Dictionary<string, IHandler>
+            {
+                [IocInject]
+                public System.Threading.Tasks.Task InitAsync() => System.Threading.Tasks.Task.CompletedTask;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class Consumer(IReadOnlyDictionary<string, IHandler> handlers);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject,AsyncMethodInject"
+            });
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource)
+            .Contains("var p0 = sp.GetServices<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>().ToDictionary();")
+            .And.DoesNotContain("sp.GetRequiredService<global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IHandler>>()");
+    }
+
+    [Test]
+    public async Task ExplicitWrapperRegistrations_WithTags_ResolveOnlyWhenAlwaysRegisteredWithConsumer()
+    {
+        // A tagged registration is registered when any of its tags is passed, and an untagged one only when no tags are:
+        // the explicit registration is used only when it is registered whenever the consumer is
+        const string source = ExplicitWrapperHandlers + """
+            [IocRegisterFor<HandlerDictionary>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IReadOnlyDictionary<string, IHandler>)], Instance = "global::TestNamespace.HandlerDictionary.Default", Tags = ["A", "B"])]
+            [IocRegisterFor<Lazy<IHandler>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Lazy", Key = "a", Tags = ["A"])]
+            public static class Registrations;
+
+            // Tags covered by the explicit registrations' tags: the explicit dictionary is injected
+            [IocRegister(Lifetime = ServiceLifetime.Transient, Tags = ["A"])]
+            public sealed class CoveredConsumer(IReadOnlyDictionary<string, IHandler> handlers);
+
+            // "C" does not register the explicit dictionary
+            [IocRegister(Lifetime = ServiceLifetime.Transient, Tags = ["A", "C"])]
+            public sealed class PartlyCoveredConsumer(IReadOnlyDictionary<string, IHandler> handlers);
+
+            // Untagged registrations are not registered together with tagged ones
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class UntaggedConsumer(IReadOnlyDictionary<string, IHandler> handlers, [FromKeyedServices("a")] Lazy<IHandler> lazy);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration")!;
+
+        await Assert.That(Count(generatedSource, "sp.GetRequiredService<global::System.Collections.Generic.IReadOnlyDictionary<string, global::TestNamespace.IHandler>>()")).IsEqualTo(1);
+        await Assert.That(Count(generatedSource, "sp.GetServices<global::System.Collections.Generic.KeyValuePair<string, global::TestNamespace.IHandler>>().ToDictionary()")).IsEqualTo(2);
+
+        // The untagged Handler's generated Lazy<IHandler> is kept: the tagged explicit Lazy<IHandler> is not registered with it
+        await Assert.That(generatedSource).Contains("=> new global::System.Lazy<global::TestNamespace.IHandler>(");
+        await Verify(generatedSource);
+
+        static int Count(string text, string value) => text.Split([value], StringSplitOptions.None).Length - 1;
+    }
+
+    [Test]
+    public async Task MultiParamFuncDependency_WithTaskOfAsyncInitService_ResolvesTaskRegistration()
+    {
+        // The body of a Func with input parameters resolves Task<T> of an async-init service through its Task<T> registration,
+        // like a constructor parameter: the service itself is not registered
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class AsyncService
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class Created(int value, Task<AsyncService> service);
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class Consumer(Func<int, Created> create);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject,AsyncMethodInject"
+            });
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource)
+            .Contains("new global::System.Func<int, global::TestNamespace.Created>(")
+            .And.Contains("= sp.GetRequiredService<global::System.Threading.Tasks.Task<global::TestNamespace.AsyncService>>();")
+            .And.DoesNotContain("Task.FromResult(sp.GetRequiredService<global::TestNamespace.AsyncService>())");
+    }
+
+    #endregion
 }

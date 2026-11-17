@@ -133,6 +133,49 @@ A keyed registration MUST NOT emit a non-keyed wrapper registration.
 
   An open generic registration is closed once for each runtime type (and set of decorators) too, with the first spelling of its dependencies it is closed for (see [Generic Registration](Register.Generics.spec.md#feature-1-closed-generic-registration-from-open-generic)), and its `Lazy<T>` / `Func<T>` registrations are emitted once. With `Handler<T> : IHandler<T>` registered for `IHandler<>`, a consumer of `Lazy<IHandler<(Entity A, string B)>>` declared before a consumer of `Lazy<IHandler<(Entity, string)>>` registers `Handler<(Entity A, string B)>`, `IHandler<(Entity A, string B)>` and `Lazy<IHandler<(Entity A, string B)>>` once each.
 
+#### Explicit Wrapper Registrations
+
+A wrapper or collection type can itself be registered as a service type (`[IocRegisterFor<HandlerDictionary>(ServiceTypes = [typeof(IReadOnlyDictionary<string, IHandler>)], Instance = ...)]`, `[IocRegisterFor<Lazy<IHandler>>(Instance = ...)]`). `MS.DI` resolves a constructor parameter of that type as the registration, so the injected value MUST be the instance `GetService` returns, not a wrapper built by the generated code; otherwise a consumer silently gets a second, different object. The decision is made at compile time: the dependency resolves through `MS.DI` instead of being built. This matches the Container output (see [Container Collections](Container.Collections.spec.md#explicit-collection-registrations)).
+
+|Rule|Required behavior|
+|:---|:---|
+|Types|`Lazy<T>`, `Func<...>`, `KeyValuePair<K, V>`, `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `Dictionary<K, V>`, and the collection types `IReadOnlyCollection<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IList<T>`, `T[]`. `IEnumerable<T>` keeps `GetServices<T>()`, which already returns its explicit registration in `MS.DI`.|
+|Match|The explicit registration MUST have the dependency's type (compared as a runtime type, see tuple element names above) and key (compared as written). A dependency under `KeyedService.AnyKey` and a registration under `KeyedService.AnyKey` never match, since `MS.DI` resolves no single service with that key.|
+|Resolution|`sp.GetRequiredService<TWrapper>()` / `sp.GetRequiredKeyedService<TWrapper>(key)`, or `GetService` / `GetKeyedService` for an optional (nullable) dependency. It applies to constructor, method, factory and decorator parameters, injected properties and fields, and inside another wrapper: `Lazy<Func<T>>` registered explicitly is resolved as is; otherwise `new Lazy<Func<T>>(() => ...)` resolves an explicit `Func<T>`, and `Lazy<IReadOnlyList<T>>` an explicit `IReadOnlyList<T>`.|
+|Async-init|An async-init registration is registered as `Task<TWrapper>` only, so it MUST NOT be used: the dependency keeps the generated wrapper. `Task<T>` itself keeps its async-init resolution (see [`WrapperKind.Task` Detection and Resolution](#wrapperkindtask-detection-and-resolution)).|
+|Tags|The explicit registration MUST be registered whenever the consumer is: both untagged, or the explicit registration has every tag of the consumer (a tagged registration is registered when any of its tags is passed, see [Tags](Register.Tags.spec.md)). Otherwise the dependency keeps the generated wrapper, since the explicit registration may be missing at runtime: with the explicit registration tagged `["A"]`, a consumer tagged `["A"]` resolves it, while consumers tagged `["A", "C"]` or untagged do not.|
+|Generated `Lazy<T>` / `Func<...>`|A standalone `Lazy<T>` / `Func<...>` registration of a registration of `T` MUST NOT be emitted when `Lazy<T>` / `Func<...>` is registered explicitly under the same key and is always registered with it (same tag rule, with the tags of the registration of `T`). The generated registrations are written after the others, so `MS.DI` (last wins) would otherwise return the generated wrapper instead of the explicit one, to `GetService` and to the consumers. Like `MS.DI`, `IEnumerable<Lazy<T>>` then contains the explicit registrations only.|
+|Compilation scope|Only the registrations of the compilation that generates the Register output are known. A wrapper type registered by hand in the `IServiceCollection`, or by another assembly's Register output, is not seen: the dependency is built by the generated code as before, and a generated `Lazy<T>` / `Func<...>` registration written after such a registration still wins.|
+
+`KeyValuePair<K, V>` is a value type, which the generic `AddXXX<T>` methods cannot register (`class` constraint), so an explicit `KeyValuePair<K, V>` registration does not compile in the Register output today.
+
+```csharp
+#region Define:
+public sealed class HandlerDictionary : Dictionary<string, IHandler>
+{
+    public static readonly HandlerDictionary Default = new();
+}
+
+[IocRegisterFor<HandlerDictionary>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IReadOnlyDictionary<string, IHandler>)], Instance = "global::MyApp.HandlerDictionary.Default")]
+[IocRegisterFor<Lazy<IHandler>>(ServiceLifetime.Singleton, Instance = "global::MyApp.Wrappers.Lazy")]
+public static class Registrations;
+
+[IocRegister]
+public sealed class Consumer(IReadOnlyDictionary<string, IHandler> handlers, Lazy<IHandler> lazy, IDictionary<string, IHandler> other);
+#endregion
+
+#region Generate:
+services.AddTransient<Consumer>((IServiceProvider sp) =>
+{
+    var p0 = sp.GetRequiredService<IReadOnlyDictionary<string, IHandler>>();     // HandlerDictionary.Default
+    var p1 = sp.GetRequiredService<Lazy<IHandler>>();                            // Wrappers.Lazy: no generated Lazy<IHandler> is registered
+    var p2 = sp.GetServices<KeyValuePair<string, IHandler>>().ToDictionary();   // not registered explicitly: built
+    var s0 = new Consumer(p0, p1, p2);
+    return s0;
+});
+#endregion
+```
+
 ### Async Method Injection
 
 `AsyncMethodInject` extends post-construction member injection with awaited initialization methods. The generator MUST treat async method injection as a distinct injection stage that runs after all synchronous injection steps.

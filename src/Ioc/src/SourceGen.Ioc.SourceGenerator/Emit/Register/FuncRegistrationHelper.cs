@@ -22,7 +22,7 @@ partial class IocSourceGenerator
         ServiceRegistrationModel Registration,
         ImmutableEquatableArray<string> Tags)
     {
-        public void WriteRegistration(SourceWriter writer)
+        public void WriteRegistration(SourceWriter writer, RegisterWriteContext context)
         {
             var lifetime = Registration.Lifetime.Name;
             var key = Registration.Key;
@@ -48,7 +48,7 @@ partial class IocSourceGenerator
             writer.WriteLine("{");
             writer.Indentation++;
 
-            WriteFuncFactoryBody(writer, this);
+            WriteFuncFactoryBody(writer, this, context);
 
             writer.Indentation--;
             writer.WriteLine("}));");
@@ -104,7 +104,8 @@ partial class IocSourceGenerator
     /// </summary>
     private static void WriteFuncRegistrations(
         SourceWriter writer,
-        ImmutableEquatableArray<FuncRegistrationEntry> entries)
+        ImmutableEquatableArray<FuncRegistrationEntry> entries,
+        RegisterWriteContext context)
     {
         if(entries.Length == 0)
             return;
@@ -114,14 +115,14 @@ partial class IocSourceGenerator
 
         foreach(var entry in entries)
         {
-            entry.WriteRegistration(writer);
+            entry.WriteRegistration(writer, context);
         }
     }
 
     /// <summary>
     /// Writes the body of a multi-parameter Func factory lambda using first-unused type matching.
     /// </summary>
-    private static void WriteFuncFactoryBody(SourceWriter writer, FuncRegistrationEntry entry)
+    private static void WriteFuncFactoryBody(SourceWriter writer, FuncRegistrationEntry entry, RegisterWriteContext context)
     {
         var constructorParams = entry.Registration.ImplementationType.ConstructorParameters ?? [];
         var inputArgNames = new string[entry.InputTypes.Length];
@@ -147,7 +148,7 @@ partial class IocSourceGenerator
             }
 
             var paramVar = $"p{resolvedParamIndex}";
-            var resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Registration.Key is not null, registrationKey: entry.Registration.Key);
+            var resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Registration.Key is not null, registrationKey: entry.Registration.Key, context);
             constructorParamEntries.Add((param.Name, resolvedVar));
             resolvedParamIndex++;
         }
@@ -169,7 +170,7 @@ partial class IocSourceGenerator
 
             var memberVar = $"s0_p{propertyFieldIndex}";
             var hasNonNullDefault = member.HasDefaultValue && !member.DefaultValueIsNull;
-            ResolveMemberValue(writer, memberType, memberType.Name, memberVar, member.Key, member.IsNullable, hasNonNullDefault, member.DefaultValue);
+            ResolveMemberValue(writer, memberType, memberType.Name, memberVar, member.Key, member.IsNullable, hasNonNullDefault, member.DefaultValue, context);
             propertyInits.Add($"{member.Name} = {memberVar}");
             propertyFieldIndex++;
         }
@@ -207,11 +208,12 @@ partial class IocSourceGenerator
                         method.Key,
                         isKeyedRegistration: entry.Registration.Key is not null,
                         registrationKey: entry.Registration.Key,
-                        typeNameResolver: null);
+                        typeNameResolver: null,
+                        context);
                 }
                 else
                 {
-                    resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Registration.Key is not null, registrationKey: entry.Registration.Key);
+                    resolvedVar = ResolveParamAndEmitVar(writer, param, paramVar, isKeyedRegistration: entry.Registration.Key is not null, registrationKey: entry.Registration.Key, context);
                 }
 
                 methodEntries.Add((param.Name, resolvedVar));
@@ -223,7 +225,7 @@ partial class IocSourceGenerator
         }
 
         // The input arguments are for the implementation only; decorator dependencies are resolved from DI
-        var outermostVar = WriteDecoratorChain(writer, entry.Registration, asyncInitServices: null);
+        var outermostVar = WriteDecoratorChain(writer, entry.Registration, context);
         writer.WriteLine($"return {outermostVar};");
     }
 
