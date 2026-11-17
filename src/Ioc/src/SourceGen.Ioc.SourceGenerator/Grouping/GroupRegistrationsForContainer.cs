@@ -15,7 +15,7 @@ partial class IocSourceGenerator
         var reservedNames = GetReservedNames(container);
 
         // Group registrations for code generation
-        var groups = BuildContainerRegistrationGroups(registrations, features, container.ThreadSafeStrategy, container.EagerResolveOptions, reservedNames, requestedCollectionServiceTypes, container.PartialAccessors, container.IntegrateServiceProvider);
+        var groups = BuildContainerRegistrationGroups(registrations, features, container.ThreadSafeStrategy, container.EagerResolveOptions, reservedNames, requestedCollectionServiceTypes, container.PartialAccessors, container.IntegrateServiceProvider, container.ImportedModules.Length > 0);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -95,7 +95,8 @@ partial class IocSourceGenerator
             reservedNames,
             requestedCollectionServiceTypes,
             container.PartialAccessors,
-            container.IntegrateServiceProvider);
+            container.IntegrateServiceProvider,
+            container.ImportedModules.Length > 0);
 
         return new ContainerWithGroups(container, groups);
     }
@@ -112,7 +113,8 @@ partial class IocSourceGenerator
         ReservedMemberNames reservedNames,
         ImmutableEquatableArray<string> requestedCollectionServiceTypes,
         ImmutableEquatableArray<PartialAccessorData> partialAccessors,
-        bool integrateServiceProvider)
+        bool integrateServiceProvider,
+        bool hasImportedModules)
     {
         // Group by (ServiceType.Name, Key) for efficient lookup
         var serviceLookup = new Dictionary<ServiceTypeKey, List<ServiceLookupEntry>>();
@@ -354,7 +356,8 @@ partial class IocSourceGenerator
             names,
             CreateProjectedTasks(lastWinsLookup, serviceLookup, lazyWrapperEntries, funcWrapperEntries, reservedNames, names),
             integrateServiceProvider,
-            keyedCollectionResolvers);
+            keyedCollectionResolvers,
+            hasImportedModules);
 
         var singletonEntries = CreateServiceContainerEntries(
             singletons,

@@ -183,6 +183,11 @@ partial class IocSourceGenerator
     /// (<c>IntegrateServiceProvider = true</c>), like <c>GetServices&lt;T&gt;()</c>.
     /// </param>
     /// <param name="KeyedCollectionResolvers">The array method of each keyed collection resolver, by element service type and key; <see langword="null"/> when there is none.</param>
+    /// <param name="CombinesModuleCollections">
+    /// Whether the container imports modules, whose collections it combines with its own at runtime: collection dependencies
+    /// then resolve through <c>GetServices&lt;T&gt;()</c> / <c>GetKeyedServices&lt;T&gt;(key)</c> instead of the container's
+    /// own array resolvers (see Container.ImportModule).
+    /// </param>
     private sealed record class WrapperFieldLookup(
         IReadOnlyDictionary<string, string> LazyFieldByResolver,
         IReadOnlyDictionary<string, string> FuncFieldByResolver,
@@ -191,7 +196,8 @@ partial class IocSourceGenerator
         ContainerNames Names,
         IReadOnlyDictionary<string, ImmutableEquatableArray<ProjectedTask>> ProjectedTasksByResolver,
         bool MergeFallbackServices,
-        IReadOnlyDictionary<ServiceTypeKey, string>? KeyedCollectionResolvers)
+        IReadOnlyDictionary<ServiceTypeKey, string>? KeyedCollectionResolvers,
+        bool CombinesModuleCollections)
     {
         /// <summary>
         /// Gets the method returning the cached <c>Task&lt;<paramref name="serviceType"/>&gt;</c> projection of the async-init
@@ -300,6 +306,13 @@ partial class IocSourceGenerator
         {
             var elementTypeName = collectionType.ElementType.Name;
             var toArray = collectionType.WrapperKind is not WrapperKind.Enumerable;
+
+            // A container importing modules combines their collections with its own at runtime, so its collection
+            // dependencies resolve like GetServices<T>() / GetKeyedServices<T>(key) (KeyValuePair collections excepted)
+            if(wrapperFields.CombinesModuleCollections && collectionType.ElementType is not KeyValuePairTypeData)
+            {
+                return new CollectionFallbackDependency(elementTypeName, IsKeyed: key is not null, Key: key, toArray);
+            }
 
             if(key is not null)
             {

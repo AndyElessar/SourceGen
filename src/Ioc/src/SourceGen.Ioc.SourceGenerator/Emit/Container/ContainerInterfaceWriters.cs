@@ -228,8 +228,32 @@ partial class IocSourceGenerator
         writer.WriteLine("return null;");
         writer.Indentation--;
         writer.WriteLine();
-        writer.WriteLine("var services = global::System.Array.CreateInstance(serviceType.GenericTypeArguments[0], 1);");
-        writer.WriteLine("services.SetValue(resolver(this), 0);");
+
+        if(container.ImportedModules.Length > 0)
+        {
+            // A service registered by several sources resolves the combined collection (see __CombineResolvers)
+            writer.WriteLine("var elementType = serviceType.GenericTypeArguments[0];");
+            writer.WriteLine("global::System.Array services;");
+            writer.WriteLine($"if(resolver.Target is global::SourceGen.Ioc.IocCollectionResolver<{container.ContainerTypeName}> collection && !{IsEnumerableTypeMethodName}(elementType))");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("services = (global::System.Array)collection.ArrayResolver(this);");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine("else");
+            writer.WriteLine("{");
+            writer.Indentation++;
+            writer.WriteLine("services = global::System.Array.CreateInstance(elementType, 1);");
+            writer.WriteLine("services.SetValue(resolver(this), 0);");
+            writer.Indentation--;
+            writer.WriteLine("}");
+            writer.WriteLine();
+        }
+        else
+        {
+            writer.WriteLine("var services = global::System.Array.CreateInstance(serviceType.GenericTypeArguments[0], 1);");
+            writer.WriteLine("services.SetValue(resolver(this), 0);");
+        }
 
         if(container.IntegrateServiceProvider)
         {
@@ -627,7 +651,7 @@ partial class IocSourceGenerator
         }
         else
         {
-            WriteServiceProviderExtensionsDictionaryMode(writer, container.IntegrateServiceProvider);
+            WriteServiceProviderExtensionsDictionaryMode(writer, container);
         }
 
         writer.WriteLine("#endregion");
@@ -688,8 +712,10 @@ partial class IocSourceGenerator
     /// These directly query _serviceResolvers FrozenDictionary for optimal performance.
     /// On a miss they fall back exactly like their non-generic counterparts.
     /// </summary>
-    private static void WriteServiceProviderExtensionsDictionaryMode(SourceWriter writer, bool integrateServiceProvider)
+    private static void WriteServiceProviderExtensionsDictionaryMode(SourceWriter writer, ContainerModel container)
     {
+        var integrateServiceProvider = container.IntegrateServiceProvider;
+
         // Fallback lookups used on a dictionary miss (only when the container integrates a service provider).
         // They are constants, so each miss expression below is a constant string as well.
         const string fallback = "GetFallbackServiceProvider()";
@@ -761,13 +787,19 @@ partial class IocSourceGenerator
         writer.WriteLine("&& !(typeof(T).IsConstructedGenericType && typeof(T).GetGenericTypeDefinition() == typeof(global::System.Threading.Tasks.Task<>))");
         writer.WriteLine($"&& _serviceResolvers.TryGetValue(new global::SourceGen.Ioc.ServiceIdentifier(typeof(T), serviceKey ?? {NonKeyedServiceKey}), out var resolver)");
         writer.Indentation++;
+
+        // A service registered by several sources of an importer resolves the combined collection (see __CombineResolvers)
+        var services = container.ImportedModules.Length > 0
+            ? $"(resolver.Target is global::SourceGen.Ioc.IocCollectionResolver<{container.ContainerTypeName}> collection && !{IsEnumerableTypeMethodName}(typeof(T)) ? (T[])collection.ArrayResolver(this) : [(T)resolver(this)])"
+            : "[(T)resolver(this)]";
+
         if(integrateServiceProvider)
         {
-            writer.WriteLine($"? {MergeFallbackServicesMethodName}<T>([(T)resolver(this)], serviceKey)");
+            writer.WriteLine($"? {MergeFallbackServicesMethodName}<T>({services}, serviceKey)");
         }
         else
         {
-            writer.WriteLine("? [(T)resolver(this)]");
+            writer.WriteLine($"? {services}");
         }
         writer.WriteLine(": null;");
         writer.Indentation--;
