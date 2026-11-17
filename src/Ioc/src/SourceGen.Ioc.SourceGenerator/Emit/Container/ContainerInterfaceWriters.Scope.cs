@@ -133,25 +133,23 @@ partial class IocSourceGenerator
             {
                 // Combine with imported modules - wrap module resolvers to pass the correct module instance
                 // Use static access (module.Name is the fully qualified type name) for static abstract Resolvers
-                writer.WriteLine($"private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<{container.ContainerTypeName}, object>> _serviceResolvers =");
+                // Sources in import order, then the container's own: single services are last-wins, collections are combined
+                writer.WriteLine($"private static readonly global::System.Collections.Frozen.FrozenDictionary<global::SourceGen.Ioc.ServiceIdentifier, global::System.Func<{container.ContainerTypeName}, object>> _serviceResolvers = {CombineResolversMethodName}(");
+                writer.WriteLine("[");
                 writer.Indentation++;
 
-                var isFirst = true;
                 foreach(var module in container.ImportedModules)
                 {
                     var fieldName = GetModuleFieldName(module.Type.Name);
-
-                    // Every module after the first is appended with .Concat(...)
-                    writer.WriteLine($"{(isFirst ? "" : ".Concat(")}{ImportModuleResolversMethodName}({module.Type.Name}.Resolvers, static c => c.{fieldName}){(isFirst ? "" : ")")}");
-
-                    isFirst = false;
+                    writer.WriteLine($"{ImportModuleResolversMethodName}({module.Type.Name}.Resolvers, static c => c.{fieldName}),");
                 }
 
-                writer.WriteLine(".Concat(_localResolvers)");
-                writer.WriteLine(".ToFrozenDictionary();");
+                writer.WriteLine("_localResolvers,");
                 writer.Indentation--;
+                writer.WriteLine("]);");
 
                 WriteImportModuleResolversMethod(writer, container);
+                WriteCombineResolversMethods(writer, container);
 
             }
             else
@@ -173,7 +171,9 @@ partial class IocSourceGenerator
     /// a service key, or <c>KeyedService.AnyKey</c>). A collection resolved through the importer therefore merges once, with
     /// the importer's fallback provider and fallback scope, whatever the module's own <c>IntegrateServiceProvider</c> (see
     /// Container.ImportModule). The wrapped entries stay <c>IocCollectionResolver</c>s, so nested imports merge at the
-    /// outermost importer. Explicit registrations of <c>IEnumerable&lt;T&gt;</c> are kept as they are.
+    /// outermost importer. Explicit registrations of <c>IEnumerable&lt;T&gt;</c> are kept as they are. A single-service
+    /// entry that is an <c>IocCollectionResolver</c> (combined by a nested importer, see <see cref="WriteCombineResolversMethods"/>)
+    /// keeps its array resolver and still resolves the single service.
     /// </summary>
     private static void WriteImportModuleResolversMethod(SourceWriter writer, ContainerModel container)
     {
@@ -193,10 +193,16 @@ partial class IocSourceGenerator
 
         if(container.IntegrateServiceProvider)
         {
-            // The fallback services of the same key: null for non-keyed collections, KeyedService.AnyKey for all keyed services
+            // The fallback services of the same key: null for non-keyed collections, KeyedService.AnyKey for all keyed services.
+            // The single service of a nested importer that combines several sources keeps resolving that service.
             writer.WriteLine("var serviceType = entry.Key.ServiceType;");
             writer.WriteLine($"var serviceKey = entry.Key.Key == {NonKeyedServiceKey} ? null : entry.Key.Key;");
-            writer.WriteLine($"yield return new(entry.Key, new global::SourceGen.Ioc.IocCollectionResolver<{container.ContainerTypeName}>(array, c => c.{MergeFallbackServicesMethodName}(serviceType, (global::System.Array)array(c), serviceKey)).Resolve);");
+            writer.WriteLine($"global::System.Func<{container.ContainerTypeName}, object> resolve = {IsEnumerableTypeMethodName}(serviceType)");
+            writer.Indentation++;
+            writer.WriteLine($"? c => c.{MergeFallbackServicesMethodName}(serviceType, (global::System.Array)array(c), serviceKey)");
+            writer.WriteLine(": c => resolver(module(c));");
+            writer.Indentation--;
+            writer.WriteLine($"yield return new(entry.Key, new global::SourceGen.Ioc.IocCollectionResolver<{container.ContainerTypeName}>(array, resolve).Resolve);");
         }
         else
         {
@@ -213,6 +219,218 @@ partial class IocSourceGenerator
         writer.WriteLine("}");
         writer.Indentation--;
         writer.WriteLine("}");
+        writer.Indentation--;
+        writer.WriteLine("}");
+    }
+
+    /// <summary>
+    /// Writes the helpers that build <c>_serviceResolvers</c> of a container importing modules from its sources (each
+    /// imported module in import order, then <c>_localResolvers</c>), like <c>MS.DI</c> with the module's registrations added
+    /// before the container's (see Container.ImportModule):
+    /// <list type="bullet">
+    /// <item><c>__CombineResolvers</c>: single services are last-wins (within and across sources). The <c>IEnumerable&lt;T&gt;</c>
+    /// entry of each key (including <c>KeyedService.AnyKey</c>) is the last explicit registration of a source, if any;
+    /// otherwise, with parts from two or more sources (a source's generated collection array, or its single service of
+    /// <c>T</c> under the key), a combined <c>IocCollectionResolver</c> that concatenates them and merges the fallback
+    /// services once. A single service registered by two or more sources without any <c>IEnumerable&lt;T&gt;</c> entry
+    /// becomes an <c>IocCollectionResolver</c> whose array is the combined collection and which still resolves the
+    /// last-wins service, for <c>__ResolveCollection</c> and an outer importer. Value type elements are not combined.</item>
+    /// <item><c>__CombineCollection</c>: concatenates the parts into an array of the element type.</item>
+    /// <item><c>__IsEnumerableType</c> / <c>__IsCombinedElement</c>: whether a type is <c>IEnumerable&lt;T&gt;</c>, and
+    /// whether a single service is a collection element (not <c>KeyedService.AnyKey</c>, a value type, <c>Task&lt;T&gt;</c>,
+    /// <c>IServiceProvider</c> / <c>IServiceScopeFactory</c>, which every source registers as itself, or a collection type
+    /// that a source generates: <c>IEnumerable&lt;T&gt;</c>, <c>IReadOnlyCollection&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>,
+    /// <c>IReadOnlyList&lt;T&gt;</c>, <c>IList&lt;T&gt;</c>, <c>T[]</c>).</item>
+    /// </list>
+    /// </summary>
+    private static void WriteCombineResolversMethods(SourceWriter writer, ContainerModel container)
+    {
+        const string identifier = "global::SourceGen.Ioc.ServiceIdentifier";
+        var resolverType = $"global::System.Func<{container.ContainerTypeName}, object>";
+        var collectionResolverType = $"global::SourceGen.Ioc.IocCollectionResolver<{container.ContainerTypeName}>";
+        var dictionaryType = $"global::System.Collections.Generic.Dictionary<{identifier}, {resolverType}>";
+
+        // __CombineResolvers
+        writer.WriteLine();
+        writer.WriteLine($"private static global::System.Collections.Frozen.FrozenDictionary<{identifier}, {resolverType}> {CombineResolversMethodName}(global::System.Collections.Generic.IEnumerable<{ResolverEntryAlias}>[] sources)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine($"var resolvers = new {dictionaryType}();");
+        writer.WriteLine($"var sourceResolvers = new {dictionaryType}[sources.Length];");
+        writer.WriteLine($"var collectionElements = new global::System.Collections.Generic.HashSet<{identifier}>();");
+        writer.WriteLine("for(var i = 0; i < sources.Length; i++)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine($"var source = sourceResolvers[i] = new {dictionaryType}();");
+        writer.WriteLine("foreach(var entry in sources[i])");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("source[entry.Key] = entry.Value;");
+        writer.WriteLine("resolvers[entry.Key] = entry.Value;");
+        writer.WriteLine($"if({IsEnumerableTypeMethodName}(entry.Key.ServiceType))");
+        writer.Indentation++;
+        writer.WriteLine($"collectionElements.Add(new {identifier}(entry.Key.ServiceType.GenericTypeArguments[0], entry.Key.Key));");
+        writer.Indentation--;
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine($"var parts = new global::System.Collections.Generic.List<({resolverType} Resolver, bool IsArray)>();");
+        writer.WriteLine($"{identifier}[] ids = [.. resolvers.Keys];");
+        writer.WriteLine("foreach(var id in ids)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine($"var isCollection = {IsEnumerableTypeMethodName}(id.ServiceType);");
+        writer.WriteLine("var elementType = isCollection ? id.ServiceType.GenericTypeArguments[0] : id.ServiceType;");
+        writer.WriteLine($"var elementId = new {identifier}(elementType, id.Key);");
+        writer.WriteLine($"var isElement = {IsCombinedElementMethodName}(elementId);");
+        writer.WriteLine("if(elementType.IsValueType || (!isCollection && (!isElement || collectionElements.Contains(id))))");
+        writer.Indentation++;
+        writer.WriteLine("continue;");
+        writer.Indentation--;
+        writer.WriteLine();
+        writer.WriteLine("parts.Clear();");
+        writer.WriteLine($"{resolverType}? explicitResolver = null;");
+        writer.WriteLine("foreach(var source in sourceResolvers)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("if(isCollection && source.TryGetValue(id, out var resolver))");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine($"if(resolver.Target is {collectionResolverType} collection)");
+        writer.Indentation++;
+        writer.WriteLine("parts.Add((collection.ArrayResolver, true));");
+        writer.Indentation--;
+        writer.WriteLine("else");
+        writer.Indentation++;
+        writer.WriteLine("explicitResolver = resolver;");
+        writer.Indentation--;
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("else if(isElement && source.TryGetValue(elementId, out var element))");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine($"parts.Add(element.Target is {collectionResolverType} combined ? (combined.ArrayResolver, true) : (element, false));");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine("if(explicitResolver is not null)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("resolvers[id] = explicitResolver;");
+        writer.WriteLine("continue;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine("if(parts.Count < 2)");
+        writer.Indentation++;
+        writer.WriteLine("continue;");
+        writer.Indentation--;
+        writer.WriteLine();
+        writer.WriteLine("var combinedParts = parts.ToArray();");
+        writer.WriteLine($"{resolverType} array = c => {CombineCollectionMethodName}(elementType, combinedParts, c);");
+        writer.WriteLine($"{resolverType} resolve = resolvers[id];");
+        writer.WriteLine("if(isCollection)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        if(container.IntegrateServiceProvider)
+        {
+            writer.WriteLine("var serviceType = id.ServiceType;");
+            writer.WriteLine($"var serviceKey = id.Key == {NonKeyedServiceKey} ? null : id.Key;");
+            writer.WriteLine($"resolve = c => c.{MergeFallbackServicesMethodName}(serviceType, (global::System.Array)array(c), serviceKey);");
+        }
+        else
+        {
+            writer.WriteLine("resolve = array;");
+        }
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine($"resolvers[id] = new {collectionResolverType}(array, resolve).Resolve;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine("return resolvers.ToFrozenDictionary();");
+        writer.Indentation--;
+        writer.WriteLine("}");
+
+        // __CombineCollection: Array.CreateInstance is RequiresDynamicCode, but value type elements are never combined
+        writer.WriteLine();
+        writer.WriteLine("[global::System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"AotAnalysis\", \"IL3050:RequiresDynamicCode\", Justification = \"Arrays are only created for reference element types.\")]");
+        writer.WriteLine($"private static global::System.Array {CombineCollectionMethodName}(global::System.Type elementType, ({resolverType} Resolver, bool IsArray)[] parts, {container.ContainerTypeName} container)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("var values = new object[parts.Length];");
+        writer.WriteLine("var length = 0;");
+        writer.WriteLine("for(var i = 0; i < parts.Length; i++)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("values[i] = parts[i].Resolver(container);");
+        writer.WriteLine("length += parts[i].IsArray ? ((global::System.Array)values[i]).Length : 1;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine("var services = global::System.Array.CreateInstance(elementType, length);");
+        writer.WriteLine("var index = 0;");
+        writer.WriteLine("for(var i = 0; i < parts.Length; i++)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("if(parts[i].IsArray)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("var array = (global::System.Array)values[i];");
+        writer.WriteLine("array.CopyTo(services, index);");
+        writer.WriteLine("index += array.Length;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine("else");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("services.SetValue(values[i], index++);");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.Indentation--;
+        writer.WriteLine("}");
+        writer.WriteLine();
+        writer.WriteLine("return services;");
+        writer.Indentation--;
+        writer.WriteLine("}");
+
+        // __IsEnumerableType / __IsCombinedElement
+        writer.WriteLine();
+        writer.WriteLine($"private static bool {IsEnumerableTypeMethodName}(global::System.Type type) =>");
+        writer.Indentation++;
+        writer.WriteLine("type.IsConstructedGenericType && type.GetGenericTypeDefinition() == typeof(global::System.Collections.Generic.IEnumerable<>);");
+        writer.Indentation--;
+        writer.WriteLine();
+        // Every source registers itself as IServiceProvider / IServiceScopeFactory and its generated collection types,
+        // which are not services to combine (MS.DI has a single IServiceProvider)
+        writer.WriteLine($"private static bool {IsCombinedElementMethodName}({identifier} id)");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        writer.WriteLine("var type = id.ServiceType;");
+        writer.WriteLine($"if(id.Key == {KeyedServiceAnyKey} || type.IsValueType || type.IsArray || type == typeof(global::System.IServiceProvider) || type == typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory))");
+        writer.Indentation++;
+        writer.WriteLine("return false;");
+        writer.Indentation--;
+        writer.WriteLine();
+        writer.WriteLine("if(!type.IsConstructedGenericType)");
+        writer.Indentation++;
+        writer.WriteLine("return true;");
+        writer.Indentation--;
+        writer.WriteLine();
+        writer.WriteLine("var definition = type.GetGenericTypeDefinition();");
+        writer.WriteLine("return definition != typeof(global::System.Threading.Tasks.Task<>)");
+        writer.Indentation++;
+        writer.WriteLine("&& definition != typeof(global::System.Collections.Generic.IEnumerable<>)");
+        writer.WriteLine("&& definition != typeof(global::System.Collections.Generic.IReadOnlyCollection<>)");
+        writer.WriteLine("&& definition != typeof(global::System.Collections.Generic.ICollection<>)");
+        writer.WriteLine("&& definition != typeof(global::System.Collections.Generic.IReadOnlyList<>)");
+        writer.WriteLine("&& definition != typeof(global::System.Collections.Generic.IList<>);");
+        writer.Indentation--;
         writer.Indentation--;
         writer.WriteLine("}");
     }

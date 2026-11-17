@@ -475,4 +475,67 @@ public class ModuleImportContainerTests
 
         await Verify(generatedSource).UseParameters(integrateServiceProvider);
     }
+
+    [Test]
+    public async Task Container_WithImportedModuleRegisteringSameServiceType_CombinesCollections()
+    {
+        const string sharedLibSource = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace SharedLib;
+
+            public interface IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class Plugin1 : IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)], Key = "a")]
+            public class Plugin2 : IPlugin { }
+
+            [IocContainer]
+            public partial class SharedModule { }
+            """;
+
+        const string mainAppSource = """
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+            using SharedLib;
+
+            namespace MainApp;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class LocalPlugin1 : IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)])]
+            public class LocalPlugin2 : IPlugin { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IPlugin)], Key = "a")]
+            public class LocalKeyedPlugin : IPlugin { }
+
+            [IocRegister]
+            public class Consumer(
+                IEnumerable<IPlugin> plugins,
+                IPlugin[] pluginArray,
+                [IocInject(Key = "a")] IEnumerable<IPlugin> keyedPlugins);
+
+            [IocImportModule<SharedModule>]
+            [IocContainer]
+            public partial class AppContainer;
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGeneratorWithDependencies<IocSourceGenerator>(
+            (sharedLibSource, "SharedLib"), (mainAppSource, "MainApp"));
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        // Collections combine the module's and the container's services at runtime, so dependencies resolve like GetServices<T>()
+        await Assert.That(generatedSource).Contains("__CombineResolvers(");
+        await Assert.That(generatedSource).Contains("GetServices<global::SharedLib.IPlugin>()");
+        await Assert.That(generatedSource).Contains("GetServices<global::SharedLib.IPlugin>().ToArray()");
+        await Assert.That(generatedSource).Contains("GetKeyedServices<global::SharedLib.IPlugin>(\"a\")");
+
+        await Verify(generatedSource);
+    }
 }
