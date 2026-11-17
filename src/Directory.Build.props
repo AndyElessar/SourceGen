@@ -25,6 +25,15 @@
     <PackageIcon>icon.png</PackageIcon>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!--
+      Nerdbank.GitVersioning 3.10 appends version variables to $GITHUB_ENV from every project build without a lock, and
+      parallel builds tear its lines ("Invalid format"). No workflow reads them, so they are not set. Can be removed after
+      upgrading to a release with dotnet/Nerdbank.GitVersioning@329154d7.
+    -->
+    <NBGV_SetCloudBuildVersionVars>false</NBGV_SetCloudBuildVersionVars>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Nerdbank.GitVersioning" PrivateAssets="All" />
     <PackageReference Include="PolySharp">
