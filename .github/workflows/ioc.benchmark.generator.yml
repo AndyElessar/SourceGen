@@ -115,10 +115,11 @@ jobs:
             echo "accepted=$ACCEPTED"
           } >> "$GITHUB_OUTPUT"
 
-  # Each class runs on its own runner in parallel. Its base and head run on that runner, so time comparisons
-  # are not affected by runner hardware, and its *Overhead benchmarks estimate the drift between them.
+  # Each shard of a class runs on its own runner in parallel. Its base and head run on that runner, so time
+  # comparisons are not affected by runner hardware, and its scenarios' *Overhead benchmarks estimate the drift
+  # between them. The slowest class is split into shards by scenario group.
   measure:
-    name: measure (${{ matrix.class }})
+    name: measure (${{ matrix.class }}${{ matrix.shards > 1 && format(' {0}/{1}', matrix.shard, matrix.shards) || '' }})
     needs: plan
     if: needs.plan.outputs.run == 'true'
     runs-on: ubuntu-latest
@@ -128,11 +129,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        class: [GeneratorBenchmarks, ColdGeneratorBenchmarks, AnalyzerBenchmarks]
+        include:
+          - { class: GeneratorBenchmarks, shard: 1, shards: 3 }
+          - { class: GeneratorBenchmarks, shard: 2, shards: 3 }
+          - { class: GeneratorBenchmarks, shard: 3, shards: 3 }
+          - { class: ColdGeneratorBenchmarks, shard: 1, shards: 1 }
+          - { class: AnalyzerBenchmarks, shard: 1, shards: 1 }
     # Job-level so that a skipped run for an unrelated label never cancels a running benchmark.
     # Newer commits replace older runs of the same pull request; every other run is kept.
     concurrency:
-      group: ${{ github.workflow }}-${{ matrix.class }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      group: ${{ github.workflow }}-${{ matrix.class }}-${{ matrix.shard }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
       cancel-in-progress: true
 
     steps:
@@ -188,6 +194,8 @@ jobs:
         env:
           BASE_DIR: ${{ steps.build-base.outcome == 'success' && steps.base.outputs.dir || '' }}
           CLASS: ${{ matrix.class }}
+          SHARD: ${{ matrix.shard }}
+          SHARDS: ${{ matrix.shards }}
           # Scenarios per BenchmarkDotNet run. Smaller groups shorten the time between a benchmark's base and head runs,
           # but every run builds its own benchmark executable first.
           GROUP_SIZE: '2'
@@ -226,8 +234,9 @@ jobs:
           fi
 
           # Groups alternate base-head and head-base, so a steady drift during the job affects both sides equally.
+          # A shard runs every SHARDS-th group, starting at group SHARD - 1.
           head_status=0
-          for ((group = 0; group * GROUP_SIZE < ${#all[@]}; group++)); do
+          for ((group = SHARD - 1; group * GROUP_SIZE < ${#all[@]}; group += SHARDS)); do
             filters=()
             for scenario in "${all[@]:group * GROUP_SIZE:GROUP_SIZE}"; do
               filters+=("*.$CLASS.*(Count: 500, Scenario: $scenario)")
@@ -235,7 +244,7 @@ jobs:
             if (( group % 2 == 0 )); then order=(base head); else order=(head base); fi
 
             for side in "${order[@]}"; do
-              out="$results/$side/$CLASS/group-$group"
+              out="$results/$side/$CLASS/shard-$SHARD/group-$group"
               if [[ "$side" == head ]]; then
                 run "$GITHUB_WORKSPACE" "$out" "${filters[@]}" || head_status=$?
               elif [[ -n "$BASE_DIR" ]] && ! run "$BASE_DIR" "$out" "${filters[@]}"; then
@@ -243,8 +252,8 @@ jobs:
                 # Its partial reports move out of the compared directory but stay in the uploaded artifact.
                 echo "::warning title=Base benchmark failed::The base run of $CLASS group $group failed, so its head results are reported without a baseline."
                 if [[ -d "$out" ]]; then
-                  mkdir -p "$results/failed-base/$CLASS"
-                  mv "$out" "$results/failed-base/$CLASS/group-$group"
+                  mkdir -p "$results/failed-base/$CLASS/shard-$SHARD"
+                  mv "$out" "$results/failed-base/$CLASS/shard-$SHARD/group-$group"
                 fi
               fi
             done
@@ -255,7 +264,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: ioc-generator-benchmark-${{ matrix.class }}
+          name: ioc-generator-benchmark-${{ matrix.class }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/generator-benchmark
           if-no-files-found: warn
           retention-days: 7
@@ -291,7 +300,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@v8
         with:
-          pattern: ioc-generator-benchmark-*Benchmarks
+          pattern: ioc-generator-benchmark-*Benchmarks-*
           path: ${{ runner.temp }}/generator-benchmark
           merge-multiple: true
 
@@ -320,7 +329,7 @@ jobs:
             echo "## SourceGen.Ioc generator benchmark"
             echo
             if [[ -n "$(find "$results/base" -name '*-report*.json' -print -quit 2>/dev/null)" ]]; then
-              echo "Head \`$HEAD_LABEL\` is compared with base \`$BASE_LABEL\`. Each benchmark class ran on its own runner, alternating between base and head runs of its scenarios."
+              echo "Head \`$HEAD_LABEL\` is compared with base \`$BASE_LABEL\`. Each benchmark class, or shard of a class, ran on its own runner, alternating between base and head runs of its scenarios."
             else
               echo "Head \`$HEAD_LABEL\` is reported without a baseline because base \`$BASE_LABEL\` produced no results."
             fi

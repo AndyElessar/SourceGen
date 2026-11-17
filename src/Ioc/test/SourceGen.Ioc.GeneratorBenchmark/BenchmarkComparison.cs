@@ -55,6 +55,7 @@ internal static class BenchmarkComparison
 
         foreach(var file in files)
         {
+            var runner = Runner(path, file);
             using var document = JsonDocument.Parse(File.ReadAllBytes(file));
             var root = document.RootElement;
             if(!root.TryGetProperty("Benchmarks", out var benchmarks))
@@ -80,7 +81,7 @@ internal static class BenchmarkComparison
                 // Failed benchmarks have no statistics; keeping them as failed measurements fails the gate instead of dropping them.
                 if(!benchmark.TryGetProperty("Statistics", out var statistics) || Number(statistics, "Mean") is double.NaN)
                 {
-                    measurements.TryAdd(key, Measurement.FailedRun with { Type = type });
+                    measurements.TryAdd(key, Measurement.FailedRun with { Type = type, Runner = runner });
                     continue;
                 }
 
@@ -88,11 +89,28 @@ internal static class BenchmarkComparison
                 var memory = benchmark.TryGetProperty("Memory", out value) ? value : default;
                 measurements.TryAdd(
                     key,
-                    new(Number(statistics, "Mean"), Number(interval, "Lower"), Number(interval, "Upper"), Integer(memory, "BytesAllocatedPerOperation"), type));
+                    new(Number(statistics, "Mean"), Number(interval, "Lower"), Number(interval, "Upper"), Integer(memory, "BytesAllocatedPerOperation"), type, runner));
             }
         }
 
         return new(measurements, hosts);
+    }
+
+    /// <summary>
+    /// Identifies the runner of a report by its directory relative to <paramref name="root"/>, up to the first
+    /// <c>group-&lt;n&gt;</c> directory: CI runs the scenario groups of a class or class shard on one runner, in
+    /// <c>&lt;class&gt;/shard-&lt;k&gt;/group-&lt;n&gt;/</c>.
+    /// </summary>
+    private static string Runner(string root, string file)
+    {
+        if(File.Exists(root))
+        {
+            return "";
+        }
+
+        var segments = Path.GetRelativePath(root, Path.GetDirectoryName(file)!)
+            .Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+        return string.Join('/', segments.TakeWhile(static segment => !segment.StartsWith("group-", StringComparison.Ordinal)));
     }
 
     /// <summary>
@@ -103,17 +121,20 @@ internal static class BenchmarkComparison
     /// Drift control benchmarks do the same work without the code under test, such as the generator benchmarks'
     /// <c>*Overhead</c> benchmarks (Roslyn without the IoC generator or analyzers) and the runtime benchmarks' <c>*_MSDI</c>
     /// benchmarks (resolution with Microsoft.Extensions.DependencyInjection). A change in their time comes from the
-    /// environment, which shifts every benchmark that ran after the base run.
+    /// environment, which shifts every benchmark that ran after the base run. A class split across runners gets
+    /// one drift per runner, because each runner drifts on its own.
     /// </remarks>
     private static RunnerDrift Drift(Report baseline, Report head, string driftSuffix)
     {
-        (string Type, double Ratio)[] ratios = [.. head.Measurements
+        (string Type, string Runner, double Ratio)[] ratios = [.. head.Measurements
             .Where(pair => IsDriftControl(pair.Key.Method, driftSuffix) && !pair.Value.Failed)
-            .Select(pair => (pair.Value.Type, Head: pair.Value.Mean, Base: baseline.Measurements.GetValueOrDefault(pair.Key)?.Mean ?? double.NaN))
+            .Select(pair => (pair.Value.Type, pair.Value.Runner, Head: pair.Value.Mean, Base: baseline.Measurements.GetValueOrDefault(pair.Key)?.Mean ?? double.NaN))
             .Where(static ratio => ratio.Base > 0)
-            .Select(static ratio => (ratio.Type, ratio.Head / ratio.Base))];
+            .Select(static ratio => (ratio.Type, ratio.Runner, ratio.Head / ratio.Base))];
 
         return new(
+            ratios.GroupBy(static ratio => (ratio.Type, ratio.Runner), static ratio => ratio.Ratio)
+                .ToDictionary(static group => group.Key, static group => Median(group)),
             ratios.GroupBy(static ratio => ratio.Type, static ratio => ratio.Ratio, StringComparer.Ordinal)
                 .ToDictionary(static group => group.Key, static group => Median(group), StringComparer.Ordinal),
             ratios.Length > 0 ? Median(ratios.Select(static ratio => ratio.Ratio)) : 1);
@@ -150,8 +171,8 @@ internal static class BenchmarkComparison
             return new(key, baseline, head, double.NaN, double.NaN, Status.NoBaseline);
         }
 
-        // Head times are divided by the class's drift, so the comparison shows the change the code made rather than the runner.
-        var factor = drift.For(head.Type);
+        // Head times are divided by the drift of the class on its runner, so the comparison shows the change the code made rather than the runner.
+        var factor = drift.For(head.Type, head.Runner);
         var time = Change(baseline.Mean, head.Mean / factor);
         if(baseline.Allocated is not { } baselineBytes)
         {
@@ -207,12 +228,19 @@ internal static class BenchmarkComparison
             .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
             .Select(static pair => Invariant($" ({pair.Value}% for `{pair.Key}`)")));
         builder.Append(Invariant($"Allocated is managed memory per operation. An allocation increase above {threshold}%{overrides} fails the check unless it is accepted; `*{driftSuffix}` benchmarks, which do the same work without the code under test, are not checked. A time change above {threshold}% is reported only when the 99.9% confidence intervals do not overlap, and never fails the check because shared runners are noisy."));
-        if(drift.ByClass.Count > 0)
+        if(drift.ByRunner.Count > 0)
         {
-            var drifts = string.Join(", ", drift.ByClass
-                .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
-                .Select(static pair => Invariant($"{FormatChange((pair.Value - 1) * 100)} for `{pair.Key}`")));
-            builder.Append(Invariant($" Δ time and the confidence intervals are adjusted for runner drift: head times are divided by the median time change of the class's `*{driftSuffix}` benchmarks ({drifts}), or of all of them for other classes ({FormatChange((drift.Overall - 1) * 100)})."));
+            // A class measured on several runners lists each runner's drift.
+            var shared = drift.ByRunner.Keys
+                .GroupBy(static key => key.Type, StringComparer.Ordinal)
+                .Where(static group => group.Skip(1).Any())
+                .Select(static group => group.Key)
+                .ToHashSet(StringComparer.Ordinal);
+            var drifts = string.Join(", ", drift.ByRunner
+                .OrderBy(static pair => pair.Key.Type, StringComparer.Ordinal)
+                .ThenBy(static pair => pair.Key.Runner, StringComparer.Ordinal)
+                .Select(pair => Invariant($"{FormatChange((pair.Value - 1) * 100)} for `{(shared.Contains(pair.Key.Type) ? pair.Key.Runner : pair.Key.Type)}`")));
+            builder.Append(Invariant($" Δ time and the confidence intervals are adjusted for runner drift: head times are divided by the median time change of the `*{driftSuffix}` benchmarks of the class on the same runner ({drifts}), or of the class on all its runners when a runner has none, or of all of them for other classes ({FormatChange((drift.Overall - 1) * 100)})."));
         }
 
         if(rows.Any(static row => row.Status is Status.Accepted))
@@ -370,7 +398,8 @@ internal static class BenchmarkComparison
         NoBaseline,
     }
 
-    private sealed record Measurement(double Mean, double Lower, double Upper, long? Allocated, string Type = "")
+    /// <param name="Runner">The runner the benchmark ran on, see <see cref="Runner(string, string)"/>.</param>
+    private sealed record Measurement(double Mean, double Lower, double Upper, long? Allocated, string Type = "", string Runner = "")
     {
         /// <summary>A benchmark that was reported without statistics because its run failed.</summary>
         public static Measurement FailedRun { get; } = new(double.NaN, double.NaN, double.NaN, null);
@@ -380,11 +409,13 @@ internal static class BenchmarkComparison
 
     private sealed record Host(string Processor, string Os, string Runtime, string BenchmarkDotNet);
 
-    /// <param name="ByClass">The head/base time ratio of each benchmark class that has overhead benchmarks in both runs.</param>
+    /// <param name="ByRunner">The head/base time ratio of each benchmark class on each runner where it has overhead benchmarks in both runs.</param>
+    /// <param name="ByClass">The ratio of each benchmark class over all its runners, used for a runner without its own.</param>
     /// <param name="Overall">The ratio over all overhead benchmarks, used for classes without their own, or 1 when there are none.</param>
-    private sealed record RunnerDrift(Dictionary<string, double> ByClass, double Overall)
+    private sealed record RunnerDrift(Dictionary<(string Type, string Runner), double> ByRunner, Dictionary<string, double> ByClass, double Overall)
     {
-        public double For(string type) => ByClass.GetValueOrDefault(type, Overall);
+        public double For(string type, string runner)
+            => ByRunner.TryGetValue((type, runner), out var drift) ? drift : ByClass.GetValueOrDefault(type, Overall);
     }
 
     /// <param name="Hosts">The environment of each benchmark class, from the first report that contains it.</param>
