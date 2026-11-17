@@ -1,5 +1,5 @@
 lockfile_version: '1'
-apm_version: 0.35.1
+apm_version: 0.36.0
 dependencies:
 - repo_url: thomhurst/tunit
   materialization_repo_url: thomhurst/TUnit
@@ -13,13 +13,21 @@ dependencies:
   package_type: claude_skill
   deployed_files:
   - .agents/skills/tunit
+  - .agents/skills/tunit/LICENSE
   - .agents/skills/tunit/SKILL.md
   - .claude/skills/tunit
+  - .claude/skills/tunit/LICENSE
   - .claude/skills/tunit/SKILL.md
   deployed_file_hashes:
+    .agents/skills/tunit/LICENSE: sha256:53d1954a8bfd660bd53fa5cec8a47349e15bcbffc0b673f36997e7603fb58dc8
     .agents/skills/tunit/SKILL.md: sha256:ef9bda6f2e4bf459e9f40fa7b7bb0e233e59308cae064f3d181a8c9c6d0b615d
+    .claude/skills/tunit/LICENSE: sha256:53d1954a8bfd660bd53fa5cec8a47349e15bcbffc0b673f36997e7603fb58dc8
     .claude/skills/tunit/SKILL.md: sha256:ef9bda6f2e4bf459e9f40fa7b7bb0e233e59308cae064f3d181a8c9c6d0b615d
-  content_hash: sha256:a71435220a068a82ed83c49c301291be19ddcc48a170fee6c0e66bdb8d7c1279
+  content_hash: sha256:5d88893bd56fe73a6e20f12c1e2946c4b50e097474ed4414b4724add8f83b5e2
+  carried_licenses:
+  - path: LICENSE
+    source: LICENSE
+    hash: sha256:53d1954a8bfd660bd53fa5cec8a47349e15bcbffc0b673f36997e7603fb58dc8
 deployments:
 - kind: project-relative
   target: agent-skills
@@ -183,6 +191,15 @@ deployments:
   - thomhurst/tunit/skills/tunit
   active_owner: thomhurst/tunit/skills/tunit
   content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/tunit/LICENSE
+  runtime: null
+  scope: project
+  owners:
+  - thomhurst/tunit/skills/tunit
+  active_owner: thomhurst/tunit/skills/tunit
+  content_hash: sha256:53d1954a8bfd660bd53fa5cec8a47349e15bcbffc0b673f36997e7603fb58dc8
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/tunit/SKILL.md
@@ -390,6 +407,15 @@ deployments:
   - thomhurst/tunit/skills/tunit
   active_owner: thomhurst/tunit/skills/tunit
   content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/tunit/LICENSE
+  runtime: null
+  scope: project
+  owners:
+  - thomhurst/tunit/skills/tunit
+  active_owner: thomhurst/tunit/skills/tunit
+  content_hash: sha256:53d1954a8bfd660bd53fa5cec8a47349e15bcbffc0b673f36997e7603fb58dc8
 - kind: project-relative
   target: claude
   value: .claude/skills/tunit/SKILL.md
