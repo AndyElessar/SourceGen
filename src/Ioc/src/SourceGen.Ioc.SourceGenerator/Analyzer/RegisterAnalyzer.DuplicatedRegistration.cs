@@ -25,19 +25,11 @@ public sealed partial class RegisterAnalyzer
         // Build effective tags list using helper method
         var effectiveTags = AnalyzerHelpers.GetEffectiveTags(tags);
 
-        // Check each effective tag for duplicates
+        // Record every effective tag, so a later registration that duplicates this one on another tag is reported too; the
+        // registration itself is reported once
         var hasDuplicate = false;
         foreach (var tag in effectiveTags)
-        {
-            var registrationKey = (targetType, key, tag);
-
-            // Try to add; if already exists, mark as duplicate
-            if (!analyzerContext.RegistrationKeys.Add(registrationKey))
-            {
-                hasDuplicate = true;
-                break; // Only need to find one duplicate
-            }
-        }
+            hasDuplicate |= !analyzerContext.RegistrationKeys.Add((targetType, key, tag));
 
         if (hasDuplicate)
         {
