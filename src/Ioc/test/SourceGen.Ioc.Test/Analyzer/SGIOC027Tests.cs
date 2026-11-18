@@ -375,5 +375,60 @@ public class SGIOC027Tests
             await Assert.That(sgioc027[0].GetMessage()).Contains("async-init").And.Contains("decorator");
         }
     }
+
+    [Test]
+    public async Task SGIOC027_InstanceWithAsyncInjectMethod_IsNotAsyncInit_NoDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            // An Instance is registered as is, without calling its inject methods, so it is not async-init
+            public sealed class AsyncThing
+            {
+                public static readonly AsyncThing Default = new();
+
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegisterFor<AsyncThing>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.AsyncThing.Default")]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class Consumer(AsyncThing thing, Lazy<AsyncThing> lazy);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer
+            {
+                public partial AsyncThing GetThing();
+                public partial Lazy<AsyncThing> GetLazyThing();
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<ContainerAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC027")).IsEmpty();
+
+        // Like the analyzer, the generator implements the accessors with the instance, synchronously
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions,
+            suppressedInitialDiagnosticIds: new HashSet<string> { "CS8795" });
+        await result.VerifyCompilableAsync();
+        await Assert.That(SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs"))
+            .Contains("public partial global::TestNamespace.AsyncThing GetThing() => global::TestNamespace.AsyncThing.Default;");
+    }
 }
 

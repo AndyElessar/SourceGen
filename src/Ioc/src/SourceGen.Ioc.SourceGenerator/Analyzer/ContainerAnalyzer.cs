@@ -442,6 +442,10 @@ public sealed partial class ContainerAnalyzer : DiagnosticAnalyzer
                 isAsyncInitByImplementation[implementationType] = isAsyncInit;
             }
 
+            // Like the generator, an Instance is registered as is, without calling its inject methods
+            if(registration.IsInstance)
+                isAsyncInit = false;
+
             foreach(var serviceType in registration.ServiceTypes)
             {
                 if(isAsyncInit || AnalyzerHelpers.HasAsyncDecorator(implementationType, serviceType, registration.Decorators, features, assembly))

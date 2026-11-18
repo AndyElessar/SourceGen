@@ -27,6 +27,8 @@ SGIOC027, SGIOC029 and SGIOC030 treat a registered (service type, key) pair as a
 
 Both require `AsyncMethodInject`.
 
+An `Instance` registration is never async-init, whatever methods its implementation type has: like the generator, which registers the instance as is without calling its inject methods (see [Classification Rules](../../Spec/Register.Injection.spec.md#classification-rules)), the analyzer MUST NOT report SGIOC027, SGIOC029 or SGIOC030 for it. Otherwise it would report an error for an accessor or dependency that the generated code resolves synchronously.
+
 ---
 
 ## SGIOC027 - Error - Design - Partial accessor must return `Task<T>` for async-init service

@@ -401,7 +401,8 @@ partial class ContainerAnalyzer
                     : registration.Decorators.Length > 0 ? registration.Decorators
                     : best?.Decorators ?? [],
                 lifetime,
-                registration.Syntax));
+                registration.Syntax,
+                registration.HasInstance));
 
             void MatchDefaults(INamedTypeSymbol candidate)
             {
@@ -1358,6 +1359,7 @@ partial class ContainerAnalyzer
     /// <param name="Decorators">The decorator types of the registration, or of its best default settings (SGIOC027/029).</param>
     /// <param name="Lifetime">The effective lifetime (SGIOC045).</param>
     /// <param name="Syntax">The attribute that declares the registration, where SGIOC045 is reported; <see langword="null"/> to not report it.</param>
+    /// <param name="IsInstance">Whether the registration has an <c>Instance</c>, which is never async-init (SGIOC027/029).</param>
     private sealed record class ResolvedRegistration(
         INamedTypeSymbol ImplementationType,
         string? Key,
@@ -1369,7 +1371,8 @@ partial class ContainerAnalyzer
         ImmutableArray<InjectMemberInfo> InjectMembers = default,
         ImmutableArray<INamedTypeSymbol> Decorators = default,
         ServiceLifetime? Lifetime = null,
-        SyntaxReference? Syntax = null);
+        SyntaxReference? Syntax = null,
+        bool IsInstance = false);
 
     private enum ActivationKind
     {
