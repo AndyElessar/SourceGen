@@ -14,10 +14,16 @@ public sealed partial class RegisterAnalyzer
         CancellationToken cancellationToken)
     {
         var targetType = serviceInfo.Type;
-        var currentLifetime = serviceInfo.Lifetime;
-        var location = serviceInfo.Location;
+        var dependencies = graph.GetDependencies(targetType);
+        if (dependencies.IsEmpty)
+            return;
 
-        foreach (var dependencyInfo in graph.GetDependencies(targetType))
+        // The dependencies are those of the constructor, which only the constructed registrations call. A cycle is a
+        // property of the implementation type, so it is reported once, at its first constructed registration.
+        var cycleLocation = serviceInfo.GetFirstActivationLocation(injected: false);
+        var activations = serviceInfo.Activations;
+
+        foreach (var dependencyInfo in dependencies)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -33,21 +39,42 @@ public sealed partial class RegisterAnalyzer
                     var cycleString = BuildCycleString(pathStack);
                     reportDiagnostic(Diagnostic.Create(
                         CircularDependency,
-                        location,
+                        cycleLocation,
                         cycleString));
                 }
             }
 
-            // SGIOC003-005: Check for lifetime conflict
-            var lifetimeConflictDescriptor = GetLifetimeConflictDescriptor(currentLifetime, dependencyInfo.Lifetime, dependencyInfo.IsThroughFunc);
-            if (lifetimeConflictDescriptor is not null)
+            // SGIOC003-005: Check every constructed registration with its own lifetime, at its own location
+            for (var i = 0; i < activations.Length; i++)
             {
-                reportDiagnostic(Diagnostic.Create(
-                    lifetimeConflictDescriptor,
-                    location,
-                    targetType.Name,
-                    dependencyInfo.Type.Name));
+                var activation = activations[i];
+                if (!activation.IsConstructed || IsReportedAtEarlierActivation(activations, i))
+                    continue;
+
+                var lifetimeConflictDescriptor = GetLifetimeConflictDescriptor(activation.Lifetime, dependencyInfo.Lifetime, dependencyInfo.IsThroughFunc);
+                if (lifetimeConflictDescriptor is not null)
+                {
+                    reportDiagnostic(Diagnostic.Create(
+                        lifetimeConflictDescriptor,
+                        activation.Location,
+                        targetType.Name,
+                        dependencyInfo.Type.Name));
+                }
             }
+        }
+
+        // Registrations without a source location share a null location: report a lifetime conflict there once
+        static bool IsReportedAtEarlierActivation(ImmutableArray<ServiceActivation> activations, int index)
+        {
+            var activation = activations[index];
+            for (var i = 0; i < index; i++)
+            {
+                var earlier = activations[i];
+                if (earlier.IsConstructed && earlier.Lifetime == activation.Lifetime && Equals(earlier.Location, activation.Location))
+                    return true;
+            }
+
+            return false;
         }
     }
 
@@ -63,6 +90,7 @@ public sealed partial class RegisterAnalyzer
     {
         public INamedTypeSymbol Type => Info.Type;
 
+        /// <summary>The lifetime of the dependency's first registration.</summary>
         public ServiceLifetime Lifetime => Info.Lifetime;
     }
 

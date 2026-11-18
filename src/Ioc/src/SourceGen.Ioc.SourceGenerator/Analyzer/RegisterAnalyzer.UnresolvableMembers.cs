@@ -15,17 +15,14 @@ public sealed partial class RegisterAnalyzer
         ServiceInfo serviceInfo,
         CancellationToken cancellationToken)
     {
-        var keyTypeSymbol = serviceInfo.KeyTypeSymbol;
-        var hasKey = serviceInfo.HasKey;
-
-        // Check constructor parameters (using cached constructor)
+        // Check constructor parameters (using cached constructor) against the registrations that call the constructor
         var constructor = serviceInfo.Constructor;
         if (constructor is not null)
         {
-            AnalyzeServiceKeyParametersInMethod(reportDiagnostic, constructor.Parameters, keyTypeSymbol, hasKey, cancellationToken);
+            AnalyzeServiceKeyParametersInMethod(reportDiagnostic, constructor.Parameters, serviceInfo.Activations, injected: false, cancellationToken);
         }
 
-        // Check [Inject] method parameters (using cached injected members)
+        // Check [Inject] method parameters (using cached injected members) against the registrations that inject them
         foreach (var (member, _) in serviceInfo.InjectedMembers)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -33,20 +30,21 @@ public sealed partial class RegisterAnalyzer
             if (member is not IMethodSymbol method)
                 continue;
 
-            AnalyzeServiceKeyParametersInMethod(reportDiagnostic, method.Parameters, keyTypeSymbol, hasKey, cancellationToken);
+            AnalyzeServiceKeyParametersInMethod(reportDiagnostic, method.Parameters, serviceInfo.Activations, injected: true, cancellationToken);
         }
     }
 
     /// <summary>
-    /// Analyzes parameters for [ServiceKey] attribute and reports diagnostics.
-    /// SGIOC013: Reports when parameter type does not match registered key type.
-    /// SGIOC014: Reports when [ServiceKey] is used but no Key is registered.
+    /// Analyzes parameters for [ServiceKey] attribute and reports diagnostics, for each registration that calls the method:
+    /// those that construct (<paramref name="injected"/> false) or inject (<paramref name="injected"/> true) the instance.
+    /// SGIOC013: Reports when parameter type does not match registered key type, once per key type.
+    /// SGIOC014: Reports when [ServiceKey] is used but no Key is registered, once per parameter.
     /// </summary>
     private static void AnalyzeServiceKeyParametersInMethod(
         Action<Diagnostic> reportDiagnostic,
         ImmutableArray<IParameterSymbol> parameters,
-        ITypeSymbol? keyTypeSymbol,
-        bool hasKey,
+        ImmutableArray<ServiceActivation> activations,
+        bool injected,
         CancellationToken cancellationToken)
     {
         foreach (var param in parameters)
@@ -63,26 +61,45 @@ public sealed partial class RegisterAnalyzer
             var location = serviceKeyAttribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
                 ?? param.Locations.FirstOrDefault();
 
-            // SGIOC014: No key is registered but [ServiceKey] is used
-            if (!hasKey)
+            // The diagnostics are reported at the parameter, so each problem is reported once for all the registrations
+            var reportedNoKey = false;
+            List<ITypeSymbol>? reportedKeyTypes = null;
+            foreach (var activation in activations)
             {
-                reportDiagnostic(Diagnostic.Create(
-                    ServiceKeyNotRegisteredForRegistration,
-                    location,
-                    param.Name));
-                continue;
-            }
+                if (!(injected ? activation.IsInjected : activation.IsConstructed))
+                    continue;
 
-            // Skip type checking when the key type cannot be resolved in collection phase (e.g., KeyType.Csharp)
-            if (keyTypeSymbol is null)
-                continue;
+                // SGIOC014: No key is registered but [ServiceKey] is used
+                if (!activation.HasKey)
+                {
+                    if (!reportedNoKey)
+                    {
+                        reportedNoKey = true;
+                        reportDiagnostic(Diagnostic.Create(
+                            ServiceKeyNotRegisteredForRegistration,
+                            location,
+                            param.Name));
+                    }
 
-            var paramType = param.Type;
+                    continue;
+                }
 
-            // SGIOC013: Check if the parameter type is compatible with the key type
-            // The parameter type should be the same as or assignable from the key type
-            if (!IsAssignable(paramType, keyTypeSymbol))
-            {
+                // Skip type checking when the key type cannot be resolved in collection phase (e.g., KeyType.Csharp)
+                var keyTypeSymbol = activation.KeyTypeSymbol;
+                if (keyTypeSymbol is null)
+                    continue;
+
+                var paramType = param.Type;
+
+                // SGIOC013: Check if the parameter type is compatible with the key type
+                // The parameter type should be the same as or assignable from the key type
+                if (IsAssignable(paramType, keyTypeSymbol)
+                    || reportedKeyTypes?.Contains(keyTypeSymbol, SymbolEqualityComparer.Default) == true)
+                {
+                    continue;
+                }
+
+                (reportedKeyTypes ??= []).Add(keyTypeSymbol);
                 reportDiagnostic(Diagnostic.Create(
                     ServiceKeyTypeMismatch,
                     location,
@@ -105,8 +122,8 @@ public sealed partial class RegisterAnalyzer
         KeyedServiceIndex keyedServiceIndex,
         CancellationToken cancellationToken)
     {
-        // Skip services with Factory or Instance — they handle their own resolution
-        if (serviceInfo.HasFactory || serviceInfo.HasInstance)
+        // Skip services whose registrations all have Factory or Instance — they handle their own resolution
+        if (!serviceInfo.HasConstructorActivation)
             return;
 
         // Check constructor parameters
@@ -194,7 +211,7 @@ public sealed partial class RegisterAnalyzer
             {
                 // Check whether nameof() resolution captured a concrete key type.
                 if (analyzerContext.ResolvedCsharpKeyTypes.TryGetValue(
-                    (candidateInfo.Type, candidateInfo.Location), out var resolvedKeyType))
+                    (candidateInfo.Type, candidateInfo.Activation.Location), out var resolvedKeyType))
                 {
                     if (IsAssignable(keyType, resolvedKeyType))
                     {
@@ -314,15 +331,15 @@ public sealed partial class RegisterAnalyzer
     /// </summary>
     private sealed class KeyedServiceIndex(AnalyzerContext analyzerContext)
     {
-        private Dictionary<ITypeSymbol, List<ServiceInfo>>? _byAssignableType;
-        private List<ServiceInfo>? _all;
+        private Dictionary<ITypeSymbol, List<KeyedCandidate>>? _byAssignableType;
+        private List<KeyedCandidate>? _all;
 
-        private static readonly List<ServiceInfo> s_noCandidates = [];
+        private static readonly List<KeyedCandidate> s_noCandidates = [];
 
         /// <summary>
         /// Gets the keyed registrations assignable to <paramref name="valueType"/>. The returned list must not be modified.
         /// </summary>
-        public List<ServiceInfo> GetCandidates(ITypeSymbol valueType, CancellationToken cancellationToken)
+        public List<KeyedCandidate> GetCandidates(ITypeSymbol valueType, CancellationToken cancellationToken)
         {
             if (_byAssignableType is null || _all is null)
                 Build(cancellationToken);
@@ -334,12 +351,11 @@ public sealed partial class RegisterAnalyzer
             if (_byAssignableType!.TryGetValue(valueType, out var candidates))
                 return candidates;
 
-            // Nullable<T> accepts exactly T
+            // Nullable<T> accepts exactly T, a value type indexed only under itself
             if (valueType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T, TypeArguments: [INamedTypeSymbol underlyingType] }
-                && analyzerContext.RegisteredServices.TryGetValue(underlyingType, out var underlyingInfo)
-                && underlyingInfo.HasKey)
+                && _byAssignableType.TryGetValue(underlyingType, out var underlyingCandidates))
             {
-                return [underlyingInfo];
+                return underlyingCandidates;
             }
 
             return s_noCandidates;
@@ -348,31 +364,36 @@ public sealed partial class RegisterAnalyzer
         private void Build(CancellationToken cancellationToken)
         {
             // Keyed by runtime type (without tuple element names), like the generator's dependency resolution
-            var byAssignableType = new Dictionary<ITypeSymbol, List<ServiceInfo>>(RuntimeTypeSymbolComparer.Instance);
-            var all = new List<ServiceInfo>();
+            var byAssignableType = new Dictionary<ITypeSymbol, List<KeyedCandidate>>(RuntimeTypeSymbolComparer.Instance);
+            var all = new List<KeyedCandidate>();
 
             foreach (var kvp in analyzerContext.RegisteredServices)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
+                // Every keyed registration of the type is a candidate, not only the first registration
                 var info = kvp.Value;
-                if (!info.HasKey)
-                    continue;
+                foreach (var activation in info.Activations)
+                {
+                    if (!activation.HasKey)
+                        continue;
 
-                all.Add(info);
-                Add(info.Type, info);
+                    var candidate = new KeyedCandidate(info.Type, activation);
+                    all.Add(candidate);
+                    Add(info.Type, candidate);
 
-                foreach (var iface in info.Type.AllInterfaces)
-                    Add(iface, info);
+                    foreach (var iface in info.Type.AllInterfaces)
+                        Add(iface, candidate);
 
-                for (var baseType = info.Type.BaseType; baseType is not null && baseType.SpecialType is not SpecialType.System_Object; baseType = baseType.BaseType)
-                    Add(baseType, info);
+                    for (var baseType = info.Type.BaseType; baseType is not null && baseType.SpecialType is not SpecialType.System_Object; baseType = baseType.BaseType)
+                        Add(baseType, candidate);
+                }
             }
 
             _byAssignableType = byAssignableType;
             _all = all;
 
-            void Add(ITypeSymbol type, ServiceInfo info)
+            void Add(ITypeSymbol type, KeyedCandidate candidate)
             {
                 if (!byAssignableType.TryGetValue(type, out var list))
                 {
@@ -380,8 +401,16 @@ public sealed partial class RegisterAnalyzer
                     byAssignableType[type] = list;
                 }
 
-                list.Add(info);
+                list.Add(candidate);
             }
         }
+    }
+
+    /// <summary>
+    /// A keyed registration of an implementation type.
+    /// </summary>
+    private readonly record struct KeyedCandidate(INamedTypeSymbol Type, ServiceActivation Activation)
+    {
+        public ITypeSymbol? KeyTypeSymbol => Activation.KeyTypeSymbol;
     }
 }

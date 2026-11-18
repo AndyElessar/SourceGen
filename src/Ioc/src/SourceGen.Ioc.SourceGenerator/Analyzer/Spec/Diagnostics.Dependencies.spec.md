@@ -14,7 +14,31 @@ The container constructs a registration only when it has neither `Instance` nor 
 | `Factory` | Not analyzed: the factory method creates the instance | Analyzed (SGIOC033): the generator calls the inject methods of an async-init factory result |
 | `Instance` | Not analyzed: the instance already exists | Not analyzed: the instance is not injected |
 
-An implementation type with several registrations is analyzed as constructor-activated when any of them is, and its members as injected when any of them has no `Instance`. An `Instance` or `Factory` registration is still a dependency of the services that depend on it, with its own lifetime. For example, `List<T>` registered with `Instance` and the service type `IEnumerable<T>` is not a circular dependency, although its `List(IEnumerable<T>)` constructor resolves to the registration itself:
+An implementation type can have several registrations (for example with different keys or tags). Each registration is analyzed with its own lifetime, location, key and activation, not those of the first registration of the type:
+
+| Diagnostic | Registrations analyzed | Reported at |
+| --- | --- | --- |
+| SGIOC002 | The constructor, when any registration is constructor-activated | The first constructor-activated registration, once per cycle edge of the type |
+| SGIOC003-005 | Each constructor-activated registration, with its own lifetime | That registration; a conflict is reported once per location |
+| SGIOC033 | The constructor when any registration is constructor-activated; the members when any registration has no `Instance` | The first registration that calls the constructor / injects the members (the diagnostic does not depend on the consumer's lifetime) |
+| SGIOC013/014 | Each registration that calls the method (see [Key Diagnostics](Diagnostics.Keys.spec.md)) | The `[ServiceKey]` parameter, once per problem |
+
+```csharp
+[assembly: IocRegisterFor<Foo>(ServiceLifetime.Transient, Key = "a")]
+
+public interface IScopedDep;
+
+[IocRegister<IScopedDep>(Lifetime = ServiceLifetime.Scoped)]
+public class ScopedDep : IScopedDep;
+
+// SGIOC003 at this registration: it captures IScopedDep, although the first registration of Foo is Transient
+[IocRegister(Lifetime = ServiceLifetime.Singleton)]
+public class Foo(IScopedDep dep);
+```
+
+As a dependency, an implementation type still has the lifetime of its first registration: the lookup of a dependency (directly, through the service type index, and through the open generic definition) does not select the registration the container resolves for the requested service type and key.
+
+An `Instance` or `Factory` registration is still a dependency of the services that depend on it. For example, `List<T>` registered with `Instance` and the service type `IEnumerable<T>` is not a circular dependency, although its `List(IEnumerable<T>)` constructor resolves to the registration itself:
 
 ```csharp
 public static class Collections
@@ -51,7 +75,7 @@ Report when there are singleton service depending on scoped service.
 **Analysis:**
 
 - Collects all registered services with their lifetimes (Singleton/Scoped/Transient).
-- Analyzes each constructor-activated service's constructor parameters (see [Analyzed Registrations](#analyzed-registrations)) and queries the dependency's lifetime.
+- Analyzes the constructor parameters of each constructor-activated registration, with that registration's own lifetime (see [Analyzed Registrations](#analyzed-registrations)), and queries the dependency's lifetime.
 - Unwraps `Func<T>`, `Func<T1, ..., TReturn>`, and `Lazy<T>` wrapper types to detect captive dependencies through wrappers. A `Func` is reported too, because a Singleton resolves the Scoped service from the root scope.
 - Reports when a Singleton service depends on a Scoped service.
 
@@ -90,7 +114,7 @@ Report when a registered service depends on `Func<T1, ..., TReturn>` with at lea
 - Checks constructor parameters, and the types of `[IocInject]`/`[Inject]` properties, fields and method parameters, as listed in [Analyzed Registrations](#analyzed-registrations).
 - Looks up `TReturn` like the lifetime checks (SGIOC003-005): directly, through the service type index, and through the open generic definition. The service key of `[FromKeyedServices]` is not considered.
 - Does not report the parameterless `Func<T>` or `Lazy<T>`, which follow the lifetime, or a `TReturn` that is not registered.
-- Reports one diagnostic per dependency at the consumer's registration.
+- Reports one diagnostic per dependency at the consumer's first registration that calls the constructor or injects the member (see [Analyzed Registrations](#analyzed-registrations)).
 
 **Message format:** `'{Consumer}' depends on '{FuncType}', which creates a new '{ServiceType}' on every call although '{ServiceType}' is registered as {Lifetime}`
 

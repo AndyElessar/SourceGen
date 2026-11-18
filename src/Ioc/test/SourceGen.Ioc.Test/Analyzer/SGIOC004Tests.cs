@@ -328,8 +328,37 @@ public class SGIOC004Tests
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004").ToList();
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
+        await Assert.That(sgioc004[0].Location.SourceTree!.GetText().ToString(sgioc004[0].Location.SourceSpan))
+            .IsEqualTo("IocRegister(Lifetime = ServiceLifetime.Singleton)");
+    }
+
+    [Test]
+    public async Task SGIOC004_SingletonInstanceFirst_ThenTransientConstructorRegistration_NoDiagnostic()
+    {
+        // The Singleton registration is an Instance, and the constructed registration is Transient, so nothing is captured
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class TransientService;
+
+            [IocRegister(Key = "default", Instance = nameof(Default))]
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Foo(TransientService transient)
+            {
+                public static readonly Foo Default = new(new TransientService());
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
         var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004");
 
-        await Assert.That(sgioc004).Count().IsGreaterThanOrEqualTo(1);
+        await Assert.That(sgioc004).Count().IsEqualTo(0);
     }
 }

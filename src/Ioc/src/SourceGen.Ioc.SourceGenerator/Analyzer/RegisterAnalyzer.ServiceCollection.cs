@@ -626,24 +626,27 @@ public sealed partial class RegisterAnalyzer
         ImmutableArray<ServiceSymbolKey> registrations,
         ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations)
     {
+        var hasKey = serviceKey is not null;
+        var activation = new ServiceActivation(lifetime, location, hasKey, keyTypeSymbol, hasFactory, hasInstance);
+
         // Same implementation type already registered (e.g., multiple assembly-level IocRegisterFor
         // attributes targeting the same impl type with different keys). Record the additional
-        // (service type, key) pairs on the existing entry so SGIOC030 analysis sees all registrations.
+        // (service type, key) pairs and the registration's own activation on the existing entry,
+        // so the analyses see every registration, not only the first one.
         if(analyzerContext.RegisteredServices.TryGetValue(targetType, out var existingInfo))
         {
             existingInfo.AddRegistrations(registrations, asyncDecoratedRegistrations);
-            existingInfo.AddActivation(hasFactory, hasInstance, analyzerContext.Assembly);
+            existingInfo.AddActivation(activation, analyzerContext.Assembly);
             return;
         }
 
-        var hasKey = serviceKey is not null;
-        var serviceInfo = new ServiceInfo(targetType, lifetime, location, serviceKey, keyTypeSymbol, hasKey, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations, analyzerContext.Assembly);
+        var serviceInfo = new ServiceInfo(targetType, serviceKey, activation, registrations, asyncDecoratedRegistrations, analyzerContext.Assembly);
         if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
         {
             // Another registration of the type was added concurrently
             existingInfo = analyzerContext.RegisteredServices[targetType];
             existingInfo.AddRegistrations(registrations, asyncDecoratedRegistrations);
-            existingInfo.AddActivation(hasFactory, hasInstance, analyzerContext.Assembly);
+            existingInfo.AddActivation(activation, analyzerContext.Assembly);
             return;
         }
 
@@ -1033,36 +1036,56 @@ public sealed partial class RegisterAnalyzer
         }
     }
 
+    /// <summary>
+    /// One registration of an implementation type: its lifetime, location, key, and how the container activates it.
+    /// </summary>
+    /// <param name="Lifetime">The effective lifetime of the registration.</param>
+    /// <param name="Location">The location of the registration attribute.</param>
+    /// <param name="HasKey">Whether a Key is specified (regardless of KeyType).</param>
+    /// <param name="KeyTypeSymbol">The type of the Key, or null if no Key is specified or KeyType is Csharp.</param>
+    /// <param name="HasFactory">Whether a Factory method is specified.</param>
+    /// <param name="HasInstance">Whether an Instance is specified.</param>
+    private readonly record struct ServiceActivation(
+        ServiceLifetime Lifetime,
+        Location? Location,
+        bool HasKey,
+        ITypeSymbol? KeyTypeSymbol,
+        bool HasFactory,
+        bool HasInstance)
+    {
+        /// <summary>
+        /// Gets whether the container calls the constructor: the registration has neither Instance nor Factory.
+        /// </summary>
+        public bool IsConstructed => !HasInstance && !HasFactory;
+
+        /// <summary>
+        /// Gets whether the container injects the members: the registration has no Instance (the generator calls the inject
+        /// methods of an async-init factory result).
+        /// </summary>
+        public bool IsInjected => !HasInstance;
+    }
+
     private sealed record ServiceInfo
     {
         public INamedTypeSymbol Type { get; }
-        public ServiceLifetime Lifetime { get; }
-        public Location? Location { get; }
 
         /// <summary>
-        /// The registration key string, or null if the service is unkeyed.
+        /// The lifetime of the first registration of this implementation type, used when the type is a dependency of another
+        /// registration. The analyses of the type's own constructor and members use <see cref="Activations"/>.
+        /// </summary>
+        public ServiceLifetime Lifetime { get; }
+
+        /// <summary>
+        /// The key string of the first registration, or null if it is unkeyed.
         /// </summary>
         public string? ServiceKey { get; }
 
         /// <summary>
-        /// The type symbol of the registration key, or null if no key is specified or KeyType is Csharp.
+        /// Every registration of this implementation type, in source order.
         /// </summary>
-        public ITypeSymbol? KeyTypeSymbol { get; }
+        public ImmutableArray<ServiceActivation> Activations => _activations;
 
-        /// <summary>
-        /// Indicates whether a Key is specified (regardless of KeyType).
-        /// </summary>
-        public bool HasKey { get; }
-
-        /// <summary>
-        /// Indicates whether a Factory method is specified.
-        /// </summary>
-        public bool HasFactory { get; }
-
-        /// <summary>
-        /// Indicates whether an Instance is specified.
-        /// </summary>
-        public bool HasInstance { get; }
+        private ImmutableArray<ServiceActivation> _activations = [];
 
         /// <summary>
         /// All (service type, key) pairs from every registration that maps to this implementation type.
@@ -1100,47 +1123,60 @@ public sealed partial class RegisterAnalyzer
         private ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> _injectedMembers = [];
         private int _hasInjection;
 
+        /// <summary>
+        /// Gets whether a registration of this implementation type has neither Instance nor Factory, so the container calls
+        /// its constructor.
+        /// </summary>
+        public bool HasConstructorActivation => Volatile.Read(ref _hasConstructorActivation) != 0;
+
         public ServiceInfo(
             INamedTypeSymbol type,
-            ServiceLifetime lifetime,
-            Location? location,
             string? serviceKey,
-            ITypeSymbol? keyTypeSymbol,
-            bool hasKey,
-            bool hasFactory,
-            bool hasInstance,
+            ServiceActivation activation,
             ImmutableArray<ServiceSymbolKey> registrations,
             ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations,
             IAssemblySymbol assembly)
         {
             Type = type;
-            Lifetime = lifetime;
-            Location = location;
+            Lifetime = activation.Lifetime;
             _allRegistrations = registrations;
             _asyncDecoratedRegistrations = asyncDecoratedRegistrations;
             ServiceKey = serviceKey;
-            KeyTypeSymbol = keyTypeSymbol;
-            HasKey = hasKey;
-            HasFactory = hasFactory;
-            HasInstance = hasInstance;
 
-            AddActivation(hasFactory, hasInstance, assembly);
+            AddActivation(activation, assembly);
         }
 
         /// <summary>
-        /// Records how another registration of this implementation type is activated, so <see cref="Constructor"/> and
+        /// Records a registration of this implementation type, so <see cref="Activations"/>, <see cref="Constructor"/> and
         /// <see cref="InjectedMembers"/> cover every registration of the type, not only the first one.
         /// </summary>
-        public void AddActivation(bool hasFactory, bool hasInstance, IAssemblySymbol assembly)
+        public void AddActivation(ServiceActivation activation, IAssemblySymbol assembly)
         {
+            ImmutableInterlocked.Update(ref _activations, static (current, added) => current.Add(added), activation);
+
             // Like the generator, an Instance or Factory registration is not constructed, so its constructor has no dependencies
-            if(!hasInstance && !hasFactory && Interlocked.Exchange(ref _hasConstructorActivation, 1) == 0)
+            if(activation.IsConstructed && Interlocked.Exchange(ref _hasConstructorActivation, 1) == 0)
                 Volatile.Write(ref _constructor, Type.GetSelectedConstructor(assembly));
 
             // An Instance is not injected; a Factory's result keeps its injected members, since the generator calls the inject
             // methods of an async-init factory result
-            if(!hasInstance && Interlocked.Exchange(ref _hasInjection, 1) == 0)
+            if(activation.IsInjected && Interlocked.Exchange(ref _hasInjection, 1) == 0)
                 ImmutableInterlocked.InterlockedExchange(ref _injectedMembers, [.. Type.GetInjectedMembers()]);
+        }
+
+        /// <summary>
+        /// Gets the location of the first registration that the container constructs (<paramref name="injected"/> false) or
+        /// injects (<paramref name="injected"/> true), where a dependency of its constructor or injected members is reported.
+        /// </summary>
+        public Location? GetFirstActivationLocation(bool injected)
+        {
+            foreach(var activation in Activations)
+            {
+                if(injected ? activation.IsInjected : activation.IsConstructed)
+                    return activation.Location;
+            }
+
+            return null;
         }
 
         /// <summary>

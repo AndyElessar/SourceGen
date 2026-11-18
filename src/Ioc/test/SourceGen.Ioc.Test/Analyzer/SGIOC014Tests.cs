@@ -454,4 +454,48 @@ public class SGIOC014Tests
 
         await Assert.That(sgioc014).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC014_KeyedInstanceFirst_ThenConstructorRegistrationWithoutKey_ReportsDiagnostic()
+    {
+        // The constructed registration has no key, although the first registration of the type has one
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "default", Instance = nameof(Default))]
+            [IocRegister]
+            public class MyService([ServiceKey] string key)
+            {
+                public static readonly MyService Default = new("default");
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
+
+        await Assert.That(sgioc014).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC014_TwoRegistrationsWithoutKey_ReportsOnce()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Tags = ["a"])]
+            [IocRegister(Tags = ["b"])]
+            public class MyService([ServiceKey] string key) { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
+
+        await Assert.That(sgioc014).Count().IsEqualTo(1);
+    }
 }

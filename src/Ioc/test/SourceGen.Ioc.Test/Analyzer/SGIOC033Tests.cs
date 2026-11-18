@@ -173,4 +173,36 @@ public class SGIOC033Tests
 
         await Assert.That(sgioc033).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC033_InstanceFirst_ThenConstructorRegistration_ReportsAtConstructorRegistration()
+    {
+        // The Func is a constructor parameter, so it is reported at the registration that is constructed
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            public class Service(string name) : IService { }
+
+            [IocRegister(Key = "default", Instance = nameof(Default))]
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Func<string, IService> dependency)
+            {
+                public static readonly Consumer Default = new(static name => new Service(name));
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc033 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC033").ToList();
+
+        await Assert.That(sgioc033).Count().IsEqualTo(1);
+        await Assert.That(sgioc033[0].Location.SourceTree!.GetText().ToString(sgioc033[0].Location.SourceSpan))
+            .IsEqualTo("IocRegister(Lifetime = ServiceLifetime.Transient)");
+    }
 }

@@ -308,4 +308,33 @@ public class SGIOC002Tests
 
         await Assert.That(sgioc002).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC002_InstanceFirst_ThenConstructorRegistration_ReportsAtConstructorRegistration()
+    {
+        // The cycle runs through the constructor of the second registration, so it is reported there, not at the Instance
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "default", Instance = nameof(Default))]
+            [IocRegister(Tags = ["constructed"])]
+            public class ServiceA(ServiceB b)
+            {
+                public static readonly ServiceA Default = null!;
+            }
+
+            [IocRegister]
+            public class ServiceB(ServiceA a);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc002 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC002").ToList();
+        var locations = sgioc002.Select(static d => d.Location.SourceTree!.GetText().ToString(d.Location.SourceSpan)).ToList();
+
+        await Assert.That(locations).Count().IsEqualTo(2);
+        await Assert.That(locations).Contains("IocRegister(Tags = [\"constructed\"])");
+        await Assert.That(locations).Contains("IocRegister");
+    }
 }

@@ -479,4 +479,27 @@ public class SGIOC013Tests
         // No diagnostic because KeyType.Csharp skips type checking
         await Assert.That(sgioc013).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC013_LaterRegistrationWithMismatchedKeyType_ReportsOnce()
+    {
+        // Every keyed registration passes its own key: the int keys do not match the string parameter, the string key does
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "MyKey")]
+            [IocRegister(Key = 42)]
+            [IocRegister(Key = 7)]
+            public class MyService([ServiceKey] string key) { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013").ToList();
+
+        await Assert.That(sgioc013).Count().IsEqualTo(1);
+        await Assert.That(sgioc013[0].GetMessage()).Contains("int").And.Contains("string");
+    }
 }

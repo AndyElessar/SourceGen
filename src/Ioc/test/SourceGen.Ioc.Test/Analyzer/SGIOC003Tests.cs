@@ -675,4 +675,59 @@ public class SGIOC003Tests
         await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC003)).Count().IsEqualTo(1);
         await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC004)).IsEmpty();
     }
+
+    [Test]
+    public async Task SGIOC003_TransientRegistrationFirst_ThenSingletonRegistrationOfSameType_ReportsAtSingletonRegistration()
+    {
+        // Each registration of an implementation type has its own lifetime: only the Singleton one captures the Scoped service
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.Foo>(ServiceLifetime.Transient, Key = "a")]
+
+            namespace TestNamespace;
+
+            public interface IScopedDep { }
+
+            [IocRegister<IScopedDep>(Lifetime = ServiceLifetime.Scoped)]
+            public class ScopedDep : IScopedDep { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Foo(IScopedDep dep) { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+        await Assert.That(sgioc003[0].Location.SourceTree!.GetText().ToString(sgioc003[0].Location.SourceSpan))
+            .IsEqualTo("IocRegister(Lifetime = ServiceLifetime.Singleton)");
+    }
+
+    [Test]
+    public async Task SGIOC003_TwoSingletonRegistrationsOfSameType_ReportsAtEachRegistration()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
+            public class ScopedService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "a")]
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "b")]
+            public class SingletonService(ScopedService scoped) { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+        var locations = sgioc003.Select(static d => d.Location.SourceTree!.GetText().ToString(d.Location.SourceSpan)).ToList();
+
+        await Assert.That(locations).Count().IsEqualTo(2);
+        await Assert.That(locations).Contains("IocRegister(Lifetime = ServiceLifetime.Singleton, Key = \"a\")");
+        await Assert.That(locations).Contains("IocRegister(Lifetime = ServiceLifetime.Singleton, Key = \"b\")");
+    }
 }

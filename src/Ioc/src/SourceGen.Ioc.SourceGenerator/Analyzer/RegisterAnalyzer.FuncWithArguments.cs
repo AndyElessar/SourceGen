@@ -16,34 +16,41 @@ public sealed partial class RegisterAnalyzer
         AnalyzerContext analyzerContext,
         CancellationToken cancellationToken)
     {
+        // The diagnostic does not depend on the consumer's lifetime, so it is reported once, at the first registration that
+        // calls the constructor or injects the members
         if(serviceInfo.Constructor is { } constructor)
         {
+            var location = serviceInfo.GetFirstActivationLocation(injected: false);
             foreach(var parameter in constructor.Parameters)
             {
-                Analyze(parameter.Type);
+                Analyze(parameter.Type, location);
             }
         }
 
-        foreach(var (member, _) in serviceInfo.InjectedMembers)
+        if(!serviceInfo.InjectedMembers.IsEmpty)
         {
-            switch(member)
+            var location = serviceInfo.GetFirstActivationLocation(injected: true);
+            foreach(var (member, _) in serviceInfo.InjectedMembers)
             {
-                case IPropertySymbol property:
-                    Analyze(property.Type);
-                    break;
-                case IFieldSymbol field:
-                    Analyze(field.Type);
-                    break;
-                case IMethodSymbol method:
-                    foreach(var parameter in method.Parameters)
-                    {
-                        Analyze(parameter.Type);
-                    }
-                    break;
+                switch(member)
+                {
+                    case IPropertySymbol property:
+                        Analyze(property.Type, location);
+                        break;
+                    case IFieldSymbol field:
+                        Analyze(field.Type, location);
+                        break;
+                    case IMethodSymbol method:
+                        foreach(var parameter in method.Parameters)
+                        {
+                            Analyze(parameter.Type, location);
+                        }
+                        break;
+                }
             }
         }
 
-        void Analyze(ITypeSymbol type)
+        void Analyze(ITypeSymbol type, Location? location)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -55,7 +62,7 @@ public sealed partial class RegisterAnalyzer
 
             reportDiagnostic(Diagnostic.Create(
                 FuncWithArgumentsIgnoresLifetime,
-                serviceInfo.Location,
+                location,
                 serviceInfo.Type.Name,
                 funcType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
                 returnType.Name,
