@@ -39,9 +39,10 @@ public sealed partial class RegisterAnalyzer
     /// mapping does not match the implementation type, so the self-registration is constructed.
     /// </param>
     /// <param name="AsyncDecoratedRegistrations">
-    /// The (service type, key) pairs of this registration that an async decorator makes async-init. Unlike
-    /// <see cref="ServiceInfo.AsyncDecoratedRegistrations"/>, which merges every registration of the implementation type, it
-    /// is this registration's own, like the generator's per-registration <c>IsAsyncInit</c>.
+    /// The (service type, key) pairs of this registration that an async decorator makes async-init: this registration's own,
+    /// not those of the other registrations of the implementation type, like the generator's per-registration
+    /// <c>IsAsyncInit</c>. For an <c>Instance</c> registration, which is never async-init, they are the pairs whose <c>Func</c>
+    /// with input parameters is not generated, since it would decorate a new instance without calling those methods.
     /// </param>
     private sealed record DependencyRegistration(
         RegisteredDependency Dependency,

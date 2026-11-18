@@ -1569,6 +1569,106 @@ public class SGIOC030Tests
     }
 
     [Test]
+    [Arguments("IFoo<int> foo", "", true, 1)]
+    [Arguments("IFoo<int> foo", "", false, 1)]
+    [Arguments("Func<string, IFoo<int>> make", "", false, 1)]
+    [Arguments("IFoo<int> foo", ", Instance = nameof(Default)", false, 0)]
+    [Arguments("Func<string, IFoo<int>> make", ", Instance = nameof(Default)", false, 1)]
+    public async Task SGIOC030_ClosedFormOfUnboundServiceTypeWithAsyncDecorator_ReportsDiagnostic(string parameter, string instance, bool withAsyncInitRegistration, int expected)
+    {
+        // A closed implementation registered as an unbound service type is registered as its closed form IFoo<int>, which the
+        // open generic decorator, closed for it, makes async-init (the generator registers Task<IFoo<int>> only), or, for an
+        // Instance registration, keeps a Func with input parameters from constructing
+        var asyncInitRegistration = withAsyncInitRegistration
+            ? "[IocRegister(ServiceTypes = [typeof(IFoo<int>)])] public class Bar : IFoo<int> { [IocInject] public Task InitializeAsync() => Task.CompletedTask; }"
+            : "";
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo<T>;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo<>)], Decorators = [typeof(AsyncDecorator<>)]{{instance}})]
+            public class Foo : IFoo<int>
+            {
+                public static readonly Foo Default = new();
+            }
+
+            public class AsyncDecorator<T>(IFoo<T> inner) : IFoo<T>
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            {{asyncInitRegistration}}
+
+            [IocRegister]
+            public class Consumer({{parameter}});
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = AsyncDecoratorFeatures });
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030).ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    [Arguments("[FromKeyedServices(\"a\")] IFoo foo", "Instance = nameof(Default)", "", 0)]
+    [Arguments("[FromKeyedServices(\"a\")] Func<string, IFoo> make", "Instance = nameof(Default)", "", 0)]
+    [Arguments("[FromKeyedServices(\"a\")] IFoo foo", "Factory = nameof(Create)", "", 0)]
+    [Arguments("[FromKeyedServices(\"a\")] Func<string, IFoo> make", "Factory = nameof(Create)", "", 0)]
+    [Arguments("[FromKeyedServices(\"a\")] IFoo foo", "Instance = nameof(Default)", "AsyncDecorator", 0)]
+    [Arguments("[FromKeyedServices(\"a\")] Func<string, IFoo> make", "Instance = nameof(Default)", "AsyncDecorator", 1)]
+    [Arguments("[FromKeyedServices(\"a\")] IFoo foo", "Factory = nameof(Create)", "AsyncDecorator", 1)]
+    public async Task SGIOC030_SameTypeAndKeyRegisteredTwice_AsyncDecoratorDecidedPerRegistration(string parameter, string syncActivation, string instanceDecorator, int expected)
+    {
+        // An async decorator makes only its own registration async-init: the other registration of the same implementation
+        // type, service type and key is still resolved synchronously (such as AddKeyedSingleton<IFoo>("a", Foo.Default)) unless
+        // its own decorators have async inject methods, and its Func with input parameters is generated unless it has them
+        // (an Instance) or is async-init
+        var instanceDecorators = instanceDecorator.Length > 0 ? $", Decorators = [typeof({instanceDecorator})]" : "";
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister(Key = "a", ServiceTypes = [typeof(IFoo)], {{syncActivation}}, Tags = ["sync"]{{instanceDecorators}})]
+            [IocRegister(Key = "a", ServiceTypes = [typeof(IFoo)], Factory = nameof(Create), Tags = ["async"], Decorators = [typeof(AsyncDecorator)])]
+            public class Foo(string name) : IFoo
+            {
+                public static readonly Foo Default = new("");
+                public static Foo Create() => Default;
+            }
+
+            public class AsyncDecorator(IFoo inner) : IFoo
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Tags = ["sync"])]
+            public class Consumer({{parameter}});
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = AsyncDecoratorFeatures });
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030).ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(expected);
+    }
+
+    [Test]
     [Arguments("Func<string, IMyService> service", "AsyncDecorator", 1)]
     [Arguments("Lazy<Func<string, IMyService>> service", "AsyncDecorator", 1)]
     [Arguments("Func<string, MyService> service", "AsyncDecorator", 0)]

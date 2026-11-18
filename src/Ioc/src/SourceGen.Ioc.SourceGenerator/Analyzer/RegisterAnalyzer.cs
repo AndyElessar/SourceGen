@@ -912,44 +912,29 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         // Keyed by runtime type, so registrations whose tuple element names differ are the same service
         var serviceTypeStates = new Dictionary<ServiceSymbolKey, (bool HasAsync, bool HasSync, bool HasFuncAsync, bool HasFuncSync)>();
 
-        // Like the generator, an Instance is registered as is, without calling its inject methods, so it is never async-init.
-        // Decided per registration: the same implementation type can be an Instance under one key and constructed under another
-        Dictionary<INamedTypeSymbol, HashSet<ServiceSymbolKey>>? instanceRegistrations = null;
-        foreach(var registration in analyzerContext.Registrations)
+        // Decided per registration, like the generator's IsAsyncInit: the same implementation type can be an Instance under one
+        // registration and constructed under another, and an async decorator makes only its own registration async-init. An
+        // Instance is registered as is, without calling its inject methods or decorating it, so it is never async-init
+        Dictionary<INamedTypeSymbol, bool>? isAsyncInitByImplementation = null;
+        foreach(var registration in analyzerContext.DependencyRegistrations)
         {
-            if(!registration.HasInstance)
-                continue;
-
-            instanceRegistrations ??= new(RuntimeTypeSymbolComparer.Instance);
-            if(!instanceRegistrations.TryGetValue(registration.Implementation, out var instanceServiceTypes))
+            var isInstance = registration.Dependency.Activation.HasInstance;
+            var isAsyncInit = false;
+            if(!isInstance)
             {
-                instanceServiceTypes = [];
-                instanceRegistrations[registration.Implementation] = instanceServiceTypes;
+                var implementation = registration.Dependency.Type;
+                isAsyncInitByImplementation ??= new(SymbolEqualityComparer.Default);
+                if(!isAsyncInitByImplementation.TryGetValue(implementation, out isAsyncInit))
+                {
+                    isAsyncInit = AnalyzerHelpers.IsAsyncInitImplementation(implementation, analyzerContext.Features);
+                    isAsyncInitByImplementation[implementation] = isAsyncInit;
+                }
             }
 
-            instanceServiceTypes.UnionWith(registration.Registrations);
-        }
-
-        foreach(var serviceInfo in analyzerContext.RegisteredServices.Values)
-        {
-            var isAsyncInit = AnalyzerHelpers.IsAsyncInitImplementation(serviceInfo.Type, analyzerContext.Features);
-            HashSet<ServiceSymbolKey>? instanceServiceTypes = null;
-            instanceRegistrations?.TryGetValue(serviceInfo.Type, out instanceServiceTypes);
-
-            // Use pre-computed AllRegistrations (populated at collection time from attribute data) when
-            // available. This correctly handles assembly-level registrations where multiple IocRegisterFor
-            // attributes target the same impl type with different keys — the second and subsequent
-            // registrations are not stored in RegisteredServices but are recorded in AllRegistrations.
-            IEnumerable<ServiceSymbolKey> serviceTypes =
-                serviceInfo.AllRegistrations.IsEmpty
-                    ? CollectRegisteredServiceTypesForAnalysis(serviceInfo, analyzerContext.AttributeSymbols)
-                    : serviceInfo.AllRegistrations;
-
-            foreach(var serviceType in serviceTypes)
+            foreach(var serviceType in registration.Registrations)
             {
                 serviceTypeStates.TryGetValue(serviceType, out var state);
-                var isInstance = instanceServiceTypes?.Contains(serviceType) == true;
-                var isAsyncDecorated = serviceInfo.AsyncDecoratedRegistrations.Contains(serviceType);
+                var isAsyncDecorated = registration.AsyncDecoratedRegistrations.Contains(serviceType);
 
                 // The async decorators of an Instance registration only keep a Func with input parameters from constructing it
                 var isAsyncInitRegistration = !isInstance && (isAsyncInit || isAsyncDecorated);
@@ -976,40 +961,6 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         }
 
         return new(asyncOnlyServiceTypes.ToImmutable(), funcAsyncOnlyServiceTypes.ToImmutable());
-    }
-
-    private static HashSet<ServiceSymbolKey> CollectRegisteredServiceTypesForAnalysis(
-        ServiceInfo serviceInfo,
-        IocAttributeSymbols attributeSymbols)
-    {
-        var serviceTypes = new HashSet<ServiceSymbolKey>();
-        var hasRegistrationAttribute = false;
-
-        var implementationType = serviceInfo.Type;
-
-        foreach(var attribute in implementationType.GetAttributes())
-        {
-            var attrClass = attribute.AttributeClass;
-            if(attrClass is null || !AnalyzerHelpers.IsIoCRegistrationAttribute(attrClass, attributeSymbols))
-                continue;
-
-            hasRegistrationAttribute = true;
-            var (serviceKey, _, _) = attribute.GetKeyInfo();
-            foreach(var serviceType in AnalyzerHelpers.EnumerateRegisteredServiceTypes(implementationType, attribute))
-            {
-                serviceTypes.Add(new(serviceType, serviceKey));
-            }
-        }
-
-        if(!hasRegistrationAttribute)
-        {
-            foreach(var serviceType in AnalyzerHelpers.EnumerateImplicitServiceTypes(implementationType))
-            {
-                serviceTypes.Add(new(serviceType, serviceInfo.ServiceKey));
-            }
-        }
-
-        return serviceTypes;
     }
 
     /// <summary>

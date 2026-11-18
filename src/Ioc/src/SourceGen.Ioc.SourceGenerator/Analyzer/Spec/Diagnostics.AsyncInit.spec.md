@@ -29,6 +29,8 @@ Both require `AsyncMethodInject`.
 
 An `Instance` registration is never async-init, whatever methods its implementation type has: like the generator, which registers the instance as is without calling its inject methods (see [Classification Rules](../../Spec/Register.Injection.spec.md#classification-rules)), the analyzer MUST NOT report SGIOC027, SGIOC029 or SGIOC030 for it. Otherwise it would report an error for an accessor or dependency that the generated code resolves synchronously.
 
+Each registration is classified on its own, like the generator's per-registration `IsAsyncInit`: a decorator applies only to the registration whose `Decorators` (or best default settings) include it, so another registration of the same implementation type, service type and key, such as an `Instance` or a `Factory` registration without that decorator, still counts as a synchronous registration for SGIOC030.
+
 ---
 
 ## SGIOC027 - Error - Design - Partial accessor must return `Task<T>` for async-init service
