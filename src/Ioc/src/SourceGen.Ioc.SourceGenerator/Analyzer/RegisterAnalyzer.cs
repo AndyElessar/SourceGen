@@ -725,7 +725,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             var serviceInfo = kvp.Value;
 
             // SGIOC013/SGIOC014: Analyze ServiceKey parameter type mismatches
-            AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, constructedByFunc, analyzerContext.Assembly, context.CancellationToken);
+            AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, constructedByFunc, analyzerContext, context.CancellationToken);
 
             // SGIOC015: Analyze KeyValuePair/Dictionary key type mismatches
             AnalyzeKeyValuePairKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, analyzerContext, keyedServiceIndex, context.CancellationToken);
@@ -771,13 +771,24 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
                 asyncInitOnlyServiceTypes,
                 context.CancellationToken);
 
+            // Like the generator, the members listed in a registration's InjectMembers are injected like its [IocInject] members
+            if(!analyzerContext.InjectMembers.IsEmpty && serviceInfo.HasInjection)
+            {
+                AnalyzeListedInjectMembersSyncDependencies(
+                    context.ReportDiagnostic,
+                    serviceInfo,
+                    analyzerContext,
+                    asyncInitOnlyServiceTypes,
+                    context.CancellationToken);
+            }
+
             if(constructedByFunc.Count > 0)
             {
                 AnalyzeFuncConstructedSyncDependencies(
                     context.ReportDiagnostic,
                     serviceInfo,
                     constructedByFunc,
-                    analyzerContext.Assembly,
+                    analyzerContext,
                     asyncInitOnlyServiceTypes,
                     context.CancellationToken);
             }
@@ -963,65 +974,161 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     /// <see cref="CollectRegistrationsConstructedByFunc"/>), also with an Instance or a Factory: like the generator's
     /// <c>WriteFuncFactoryBody</c>, the <c>Func</c> resolves synchronously the parameters of the selected constructor, the
     /// injected properties and fields, and the parameters of the inject methods that do not return <c>Task</c>, except those
-    /// it passes one of its arguments to. Only what the other registrations of the type do not already analyze is analyzed:
-    /// the constructor when none is constructed, the injected members when none is injected.
+    /// it passes one of its arguments to. The members are those each registration injects: its <c>[IocInject]</c> members and
+    /// the members listed in its <c>InjectMembers</c> (see <see cref="GetFuncInjectedMembers"/>). Only what the other
+    /// registrations of the type do not already analyze is analyzed: the constructor when none is constructed, the
+    /// <c>[IocInject]</c> members when none is injected, and the listed members when the registration is not injected.
     /// </summary>
     private static void AnalyzeFuncConstructedSyncDependencies(
         Action<Diagnostic> reportDiagnostic,
         ServiceInfo serviceInfo,
         Dictionary<ServiceActivation, List<INamedTypeSymbol>> constructedByFunc,
-        IAssemblySymbol assembly,
+        AnalyzerContext analyzerContext,
         ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
         CancellationToken cancellationToken)
     {
-        if(serviceInfo.Constructor is not null && serviceInfo.HasInjection)
+        var hasListedMembers = !analyzerContext.InjectMembers.IsEmpty;
+        if(serviceInfo.Constructor is not null && serviceInfo.HasInjection && !hasListedMembers)
             return;
 
-        // The Func types that construct any registration of the type
-        List<INamedTypeSymbol>? funcTypes = null;
+        IMethodSymbol? constructor = null;
+        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers = default;
+        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> funcInjectedMembers = default;
+        ImmutableArray<ISymbol> unlistedMembers = default;
+        HashSet<Location>? reportedLocations = null;
         foreach(var activation in serviceInfo.Activations)
         {
-            if(!constructedByFunc.TryGetValue(activation, out var activationFuncTypes))
+            if(!constructedByFunc.TryGetValue(activation, out var funcTypes))
                 continue;
 
-            if(funcTypes is null)
-            {
-                funcTypes = activationFuncTypes;
+            // The listed members of an injected registration are analyzed with it, all resolved
+            var listedMembers = GetListedInjectMembers(analyzerContext, activation);
+            var analyzedListedMembers = activation.IsInjected ? [] : listedMembers;
+            if(serviceInfo.Constructor is not null && serviceInfo.HasInjection && analyzedListedMembers.IsEmpty)
                 continue;
+
+            if(constructor is null)
+            {
+                constructor = serviceInfo.Constructor ?? serviceInfo.Type.GetSelectedConstructor(analyzerContext.Assembly);
+                injectedMembers = serviceInfo.HasInjection ? serviceInfo.InjectedMembers : [.. serviceInfo.Type.GetInjectedMembers()];
+
+                // The Func never calls a Task-returning inject method, whatever the features
+                funcInjectedMembers = serviceInfo.HasInjection
+                    ? []
+                    : [.. injectedMembers.Where(static injected => injected.Member is not IMethodSymbol method || !AnalyzerHelpers.IsNonGenericTaskType(method.ReturnType))];
+                unlistedMembers = GetFuncInjectedMembers(injectedMembers, []);
+                reportedLocations = [];
             }
 
-            if(ReferenceEquals(funcTypes, activationFuncTypes))
+            // Each registration's Funcs pass their arguments to its own members; a dependency is reported once
+            var members = listedMembers.IsEmpty ? unlistedMembers : GetFuncInjectedMembers(injectedMembers, listedMembers);
+            Func<ISymbol, bool> isResolved = target => IsResolvedByAnyFunc(funcTypes, target, constructor, members);
+            void Report(Diagnostic diagnostic)
+            {
+                if(reportedLocations!.Add(diagnostic.Location))
+                    reportDiagnostic(diagnostic);
+            }
+
+            AnalyzeSyncDependenciesOnAsyncInitServices(
+                Report,
+                serviceInfo.Constructor is null ? constructor : null,
+                funcInjectedMembers,
+                asyncInitOnlyServiceTypes,
+                cancellationToken,
+                isResolved: isResolved);
+
+            AnalyzeListedMembersSyncDependencies(Report, analyzedListedMembers, injectedMembers, analyzerContext, asyncInitOnlyServiceTypes, cancellationToken, isResolved);
+        }
+    }
+
+    /// <summary>
+    /// SGIOC030 for the members listed in the <c>InjectMembers</c> of the registrations of a type that the container injects
+    /// (without an Instance), which it injects like their <c>[IocInject]</c> members. A dependency is reported once.
+    /// </summary>
+    private static void AnalyzeListedInjectMembersSyncDependencies(
+        Action<Diagnostic> reportDiagnostic,
+        ServiceInfo serviceInfo,
+        AnalyzerContext analyzerContext,
+        ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
+        CancellationToken cancellationToken)
+    {
+        HashSet<Location>? reportedLocations = null;
+        foreach(var activation in serviceInfo.Activations)
+        {
+            if(!activation.IsInjected)
                 continue;
 
-            // The lists are shared, so the Func types of another registration go to a copy
-            funcTypes = [.. funcTypes];
-            foreach(var funcType in activationFuncTypes)
+            var listedMembers = GetListedInjectMembers(analyzerContext, activation);
+            if(listedMembers.IsEmpty)
+                continue;
+
+            reportedLocations ??= [];
+            AnalyzeListedMembersSyncDependencies(
+                diagnostic =>
+                {
+                    if(reportedLocations.Add(diagnostic.Location))
+                        reportDiagnostic(diagnostic);
+                },
+                listedMembers,
+                serviceInfo.InjectedMembers,
+                analyzerContext,
+                asyncInitOnlyServiceTypes,
+                cancellationToken,
+                isResolved: null);
+        }
+    }
+
+    /// <summary>
+    /// SGIOC030 for the members listed in a registration's <c>InjectMembers</c> that are not <c>[IocInject]</c> members of the
+    /// same name, which the generator injects with the key of their element (<c>{ nameof(X), key }</c>), otherwise without a key,
+    /// reported at their element in <c>InjectMembers</c>.
+    /// </summary>
+    /// <param name="isResolved">
+    /// For a <c>Func</c> with input parameters, gets whether a parameter, or a property or field, is resolved instead of
+    /// receiving one of its arguments; the <c>Func</c> never calls a Task-returning method. <see langword="null"/> when the
+    /// container injects the members.
+    /// </param>
+    private static void AnalyzeListedMembersSyncDependencies(
+        Action<Diagnostic> reportDiagnostic,
+        ImmutableArray<(ISymbol Member, Location Location)> listedMembers,
+        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers,
+        AnalyzerContext analyzerContext,
+        ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
+        CancellationToken cancellationToken,
+        Func<ISymbol, bool>? isResolved)
+    {
+        foreach(var (member, location) in listedMembers)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if(IsInjectedMemberName(member, injectedMembers))
+                continue;
+
+            var key = location.SourceTree is { } tree && analyzerContext.InjectMemberKeys.TryGetValue((tree, location.SourceSpan), out var elementKey)
+                ? elementKey
+                : null;
+
+            switch(member)
             {
-                if(!funcTypes.Contains(funcType, RuntimeTypeSymbolComparer.Instance))
-                    funcTypes.Add(funcType);
+                case IPropertySymbol property when isResolved?.Invoke(property) != false:
+                    AnalyzeDependencyOnAsyncInitService(reportDiagnostic, property.Name, property.Type, location, key, asyncInitOnlyServiceTypes);
+                    break;
+
+                case IFieldSymbol field when isResolved?.Invoke(field) != false:
+                    AnalyzeDependencyOnAsyncInitService(reportDiagnostic, field.Name, field.Type, location, key, asyncInitOnlyServiceTypes);
+                    break;
+
+                case IMethodSymbol method when isResolved is null || !AnalyzerHelpers.IsNonGenericTaskType(method.ReturnType):
+                    AnalyzeParameterDependenciesOnAsyncInitServices(
+                        reportDiagnostic,
+                        method.Parameters,
+                        asyncInitOnlyServiceTypes,
+                        cancellationToken,
+                        methodKey: key,
+                        isResolved: isResolved);
+                    break;
             }
         }
-
-        if(funcTypes is null)
-            return;
-
-        var constructor = serviceInfo.Constructor ?? serviceInfo.Type.GetSelectedConstructor(assembly);
-        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers = serviceInfo.HasInjection
-            ? serviceInfo.InjectedMembers
-            : [.. serviceInfo.Type.GetInjectedMembers()];
-
-        // The Func never calls a Task-returning inject method, whatever the features
-        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> funcInjectedMembers = serviceInfo.HasInjection
-            ? []
-            : [.. injectedMembers.Where(static injected => injected.Member is not IMethodSymbol method || !AnalyzerHelpers.IsNonGenericTaskType(method.ReturnType))];
-
-        AnalyzeSyncDependenciesOnAsyncInitServices(
-            reportDiagnostic,
-            serviceInfo.Constructor is null ? constructor : null,
-            funcInjectedMembers,
-            asyncInitOnlyServiceTypes,
-            cancellationToken,
-            isResolved: target => IsResolvedByAnyFunc(funcTypes, target, constructor, injectedMembers));
     }
 
     /// <param name="decoratedParameterIndex">

@@ -18,7 +18,7 @@ public sealed partial class RegisterAnalyzer
         Action<Diagnostic> reportDiagnostic,
         ServiceInfo serviceInfo,
         Dictionary<ServiceActivation, List<INamedTypeSymbol>> constructedByFunc,
-        IAssemblySymbol assembly,
+        AnalyzerContext analyzerContext,
         CancellationToken cancellationToken)
     {
         // Check constructor parameters (using cached constructor) against the registrations that call the constructor: the
@@ -27,13 +27,13 @@ public sealed partial class RegisterAnalyzer
         var activations = serviceInfo.Activations;
         var funcConstructed = constructedByFunc.Count > 0 && activations.Any(constructedByFunc.ContainsKey);
         var constructor = serviceInfo.Constructor
-            ?? (funcConstructed ? serviceInfo.Type.GetSelectedConstructor(assembly) : null);
+            ?? (funcConstructed ? serviceInfo.Type.GetSelectedConstructor(analyzerContext.Assembly) : null);
 
         // The members of a type with only Instance or Factory registrations are not cached
         ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers = serviceInfo.InjectedMembers.IsEmpty && funcConstructed
             ? [.. serviceInfo.Type.GetInjectedMembers()]
             : serviceInfo.InjectedMembers;
-        var funcContext = funcConstructed ? new FuncConstruction(constructedByFunc, constructor, injectedMembers) : null;
+        var funcContext = funcConstructed ? new FuncConstruction(constructedByFunc, constructor, injectedMembers, analyzerContext) : null;
 
         if (constructor is not null)
         {
@@ -52,24 +52,88 @@ public sealed partial class RegisterAnalyzer
 
             AnalyzeServiceKeyParametersInMethod(reportDiagnostic, method.Parameters, activations, injected: true, cancellationToken, AnalyzerHelpers.IsNonGenericTaskType(method.ReturnType) ? null : funcContext);
         }
+
+        // Like the generator, the methods listed in a registration's InjectMembers are called like its [IocInject] methods, by
+        // the registrations that list them
+        if (!analyzerContext.InjectMembers.IsEmpty)
+            AnalyzeListedInjectMethods(reportDiagnostic, activations, injectedMembers, analyzerContext, cancellationToken, funcContext);
+    }
+
+    /// <summary>
+    /// SGIOC013/014 for the <c>[ServiceKey]</c> parameters of the methods listed in the <c>InjectMembers</c> of registrations,
+    /// against the registrations that list them (see <see cref="AnalyzeServiceKeyParametersInMethod"/>).
+    /// </summary>
+    private static void AnalyzeListedInjectMethods(
+        Action<Diagnostic> reportDiagnostic,
+        ImmutableArray<ServiceActivation> activations,
+        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers,
+        AnalyzerContext analyzerContext,
+        CancellationToken cancellationToken,
+        FuncConstruction? funcContext)
+    {
+        Dictionary<IMethodSymbol, ImmutableArray<ServiceActivation>>? listingActivations = null;
+        foreach (var activation in activations)
+        {
+            foreach (var (member, _) in GetListedInjectMembers(analyzerContext, activation))
+            {
+                if (member is not IMethodSymbol method || IsInjectedMemberName(method, injectedMembers))
+                    continue;
+
+                listingActivations ??= new(SymbolEqualityComparer.Default);
+                listingActivations[method] = listingActivations.TryGetValue(method, out var listing) ? listing.Add(activation) : [activation];
+            }
+        }
+
+        if (listingActivations is null)
+            return;
+
+        foreach (var kvp in listingActivations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var method = kvp.Key;
+            AnalyzeServiceKeyParametersInMethod(reportDiagnostic, method.Parameters, kvp.Value, injected: true, cancellationToken, AnalyzerHelpers.IsNonGenericTaskType(method.ReturnType) ? null : funcContext);
+        }
     }
 
     /// <summary>
     /// The registrations of a type that requested <c>Func</c>s with input parameters construct, with what the <c>Func</c>s
-    /// call: the type's selected constructor and its injected members.
+    /// call: the type's selected constructor and the members each registration injects (its <c>[IocInject]</c> members and
+    /// the members listed in its <c>InjectMembers</c>, see <see cref="GetFuncInjectedMembers"/>).
     /// </summary>
-    private sealed record FuncConstruction(
-        Dictionary<ServiceActivation, List<INamedTypeSymbol>> ConstructedByFunc,
-        IMethodSymbol? Constructor,
-        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> InjectedMembers)
+    private sealed class FuncConstruction(
+        Dictionary<ServiceActivation, List<INamedTypeSymbol>> constructedByFunc,
+        IMethodSymbol? constructor,
+        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers,
+        AnalyzerContext analyzerContext)
     {
+        private ImmutableArray<ISymbol> _injectedMembers;
+
         /// <summary>
         /// Gets whether a <c>Func</c> constructing <paramref name="activation"/> passes the registration's key to
         /// <paramref name="parameter"/>: one that does not pass one of its arguments to it instead.
         /// </summary>
         public bool PassesKey(ServiceActivation activation, IParameterSymbol parameter)
-            => ConstructedByFunc.TryGetValue(activation, out var funcTypes)
-                && IsResolvedByAnyFunc(funcTypes, parameter, Constructor, InjectedMembers);
+        {
+            if (!constructedByFunc.TryGetValue(activation, out var funcTypes))
+                return false;
+
+            var listedMembers = GetListedInjectMembers(analyzerContext, activation);
+            ImmutableArray<ISymbol> members;
+            if (listedMembers.IsEmpty)
+            {
+                if (_injectedMembers.IsDefault)
+                    _injectedMembers = GetFuncInjectedMembers(injectedMembers, []);
+
+                members = _injectedMembers;
+            }
+            else
+            {
+                members = GetFuncInjectedMembers(injectedMembers, listedMembers);
+            }
+
+            return IsResolvedByAnyFunc(funcTypes, parameter, constructor, members);
+        }
     }
 
     /// <summary>
@@ -81,7 +145,7 @@ public sealed partial class RegisterAnalyzer
         List<INamedTypeSymbol> funcTypes,
         ISymbol target,
         IMethodSymbol? constructor,
-        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers)
+        ImmutableArray<ISymbol> injectedMembers)
     {
         foreach (var funcType in funcTypes)
         {

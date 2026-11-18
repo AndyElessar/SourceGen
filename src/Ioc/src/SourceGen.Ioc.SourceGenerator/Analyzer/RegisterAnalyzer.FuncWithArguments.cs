@@ -459,11 +459,12 @@ public sealed partial class RegisterAnalyzer
     /// property, then each injected field, then each parameter of the inject methods that do not return <c>Task</c> takes the first unused
     /// argument of the same runtime type; the others are resolved, a <c>[ServiceKey]</c> parameter with the registration's key.
     /// </summary>
+    /// <param name="injectedMembers">The members the <c>Func</c> injects (see <see cref="GetFuncInjectedMembers"/>).</param>
     private static bool IsPassedFuncArgument(
         INamedTypeSymbol funcType,
         ISymbol target,
         IMethodSymbol? constructor,
-        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers)
+        ImmutableArray<ISymbol> injectedMembers)
     {
         var inputTypes = funcType.TypeArguments;
         Span<bool> used = stackalloc bool[inputTypes.Length - 1];
@@ -479,7 +480,7 @@ public sealed partial class RegisterAnalyzer
         // fields, each in declaration order
         for(var stage = 0; stage < 2; stage++)
         {
-            foreach(var (member, _) in injectedMembers)
+            foreach(var member in injectedMembers)
             {
                 var type = (stage, member) switch
                 {
@@ -496,7 +497,7 @@ public sealed partial class RegisterAnalyzer
             }
         }
 
-        foreach(var (member, _) in injectedMembers)
+        foreach(var member in injectedMembers)
         {
             // The Func never calls a Task-returning inject method, whatever the features
             if(member is not IMethodSymbol method || AnalyzerHelpers.IsNonGenericTaskType(method.ReturnType))
@@ -526,4 +527,53 @@ public sealed partial class RegisterAnalyzer
             return false;
         }
     }
+
+    /// <summary>
+    /// Gets the members a registration injects, like the generator's <c>ExtractAndMergeInjectionMembers</c>: its
+    /// <c>[IocInject]</c> members, then the members listed in its <c>InjectMembers</c> (see
+    /// <see cref="GetListedInjectMembers"/>) that are not <c>[IocInject]</c> members of the same name.
+    /// <see cref="IsPassedFuncArgument"/> takes them by stage, like <c>SortInjectionMembersByStage</c>.
+    /// </summary>
+    private static ImmutableArray<ISymbol> GetFuncInjectedMembers(
+        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers,
+        ImmutableArray<(ISymbol Member, Location Location)> listedMembers)
+    {
+        var members = ImmutableArray.CreateBuilder<ISymbol>(injectedMembers.Length + listedMembers.Length);
+        foreach(var (member, _) in injectedMembers)
+            members.Add(member);
+
+        foreach(var (member, _) in listedMembers)
+        {
+            if(!IsInjectedMemberName(member, injectedMembers))
+                members.Add(member);
+        }
+
+        return members.ToImmutable();
+    }
+
+    /// <summary>
+    /// Gets whether an <c>[IocInject]</c> member has the name of <paramref name="member"/>, which then replaces it in
+    /// <c>InjectMembers</c> (the generator's <c>MergeInjectionMembers</c>).
+    /// </summary>
+    private static bool IsInjectedMemberName(ISymbol member, ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers)
+    {
+        foreach(var (injected, _) in injectedMembers)
+        {
+            if(injected.Name == member.Name)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets the members listed in the <c>InjectMembers</c> of a registration's attribute, which the generator injects like its
+    /// <c>[IocInject]</c> members (empty without any).
+    /// </summary>
+    private static ImmutableArray<(ISymbol Member, Location Location)> GetListedInjectMembers(AnalyzerContext analyzerContext, ServiceActivation activation)
+        => !analyzerContext.InjectMembers.IsEmpty
+            && activation.Location is { SourceTree: { } tree } location
+            && analyzerContext.InjectMembers.TryGetValue((tree, location.SourceSpan), out var members)
+                ? members
+                : [];
 }

@@ -1003,6 +1003,7 @@ public sealed partial class RegisterAnalyzer
         {
             var element = elements[i];
             ExpressionSyntax? nameofExpr = null;
+            string? elementKey = null;
 
             if (IsNameofExpression(element))
             {
@@ -1061,6 +1062,18 @@ public sealed partial class RegisterAnalyzer
                             i));
                         continue;
                     }
+
+                    // Formatted like the generator's ParseInjectMemberElement, so it matches the keys of the registrations
+                    elementKey = context.SemanticModel.GetTypeInfo(nested[1], context.CancellationToken).Type is { } keyValueType
+                        ? RoslynExtensions.FormatPrimitiveConstant(keyValueType, keyConst.Value)
+                        : keyConst.Value.ToString();
+                }
+                else
+                {
+                    elementKey = nested[1] is InvocationExpressionSyntax keyNameof && IsNameofExpression(keyNameof)
+                        ? RoslynExtensions.ResolveNameofExpression(keyNameof.ArgumentList.Arguments[0].Expression, context.SemanticModel)
+                            ?? keyNameof.ArgumentList.Arguments[0].Expression.ToString()
+                        : nested[1].ToFullString().Trim();
                 }
 
                 nameofExpr = nested[0];
@@ -1102,6 +1115,7 @@ public sealed partial class RegisterAnalyzer
 
                         injectMembers ??= ImmutableArray.CreateBuilder<(ISymbol, Location)>();
                         injectMembers.Add((overload!, element.GetLocation()));
+                        AddElementKey(element, elementKey);
                         break;
                     case > 1:
                         context.ReportDiagnostic(Diagnostic.Create(
@@ -1152,11 +1166,18 @@ public sealed partial class RegisterAnalyzer
             {
                 injectMembers ??= ImmutableArray.CreateBuilder<(ISymbol, Location)>();
                 injectMembers.Add((member, element.GetLocation()));
+                AddElementKey(element, elementKey);
             }
         }
 
         if (injectMembers is not null)
             analyzerContext.InjectMembers[(attributeSyntax.SyntaxTree, attributeSyntax.Span)] = injectMembers.ToImmutable();
+
+        void AddElementKey(ExpressionSyntax element, string? key)
+        {
+            if (key is not null)
+                analyzerContext.InjectMemberKeys[(element.SyntaxTree, element.Span)] = key;
+        }
 
         static bool HasIocInjectMemberNamed(INamedTypeSymbol type, string name)
         {

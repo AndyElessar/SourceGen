@@ -1752,4 +1752,151 @@ public class SGIOC030Tests
 
         await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).IsEmpty();
     }
+
+    [Test]
+    [Arguments("Instance = nameof(TestNamespace.Foo.Default), ", "Func<string, Foo>", 1)]
+    [Arguments("Instance = nameof(TestNamespace.Foo.Default), ", "Func<AsyncDep, Foo>", 0)]
+    [Arguments("", "Func<AsyncDep, Foo>", 1)]
+    public async Task SGIOC030_InjectMembersProperty_ChecksResolvedProperty(string instance, string funcType, int expected)
+    {
+        // Like the generator, a member listed in InjectMembers is injected like an [IocInject] member: by the Func, which
+        // passes it an argument of its type, and by the container for a registration without Instance
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Foo), {{instance}}InjectMembers = [nameof(TestNamespace.Foo.Dep)])]
+
+            namespace TestNamespace;
+
+            [IocRegister]
+            public class AsyncDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            public class Foo(string name)
+            {
+                public static readonly Foo Default = new("");
+
+                public AsyncDep Dep { get; set; } = null!;
+            }
+
+            [IocRegister]
+            public class Consumer({{funcType}} make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(expected);
+        if(expected > 0)
+            await Assert.That(sgioc030[0].GetMessage()).Contains("'Dep'");
+    }
+
+    [Test]
+    public async Task SGIOC030_InjectMembersPropertyTakesFuncArgumentBeforeField_ReportsField()
+    {
+        // The listed property is injected before the [IocInject] field, so it takes the Func's argument, and the field is
+        // resolved synchronously
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Foo), Instance = nameof(TestNamespace.Foo.Default), InjectMembers = [nameof(TestNamespace.Foo.Prop)])]
+
+            namespace TestNamespace;
+
+            public interface IDep;
+
+            [IocRegister(ServiceTypes = [typeof(IDep)])]
+            public class AsyncDep : IDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            public class Foo
+            {
+                public static readonly Foo Default = new();
+
+                [IocInject]
+                public IDep Field = null!;
+
+                public IDep Prop { get; set; } = null!;
+            }
+
+            [IocRegister]
+            public class Consumer(Func<IDep, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("'Field'");
+    }
+
+    [Test]
+    [Arguments("public IDep Dep { get; set; } = null!;", "nameof(TestNamespace.Foo.Dep)", true, 0)]
+    [Arguments("public IDep Dep { get; set; } = null!;", "nameof(TestNamespace.Foo.Dep)", false, 1)]
+    [Arguments("public void Init(IDep dep) { }", "nameof(TestNamespace.Foo.Init)", true, 0)]
+    [Arguments("public void Init(IDep dep) { }", "nameof(TestNamespace.Foo.Init)", false, 1)]
+    public async Task SGIOC030_KeyedInjectMembersElement_UsesElementKey(string member, string nameofMember, bool hasSyncKeyedDep, int expected)
+    {
+        // Like the generator, a keyed InjectMembers element injects the member with its key, which an unkeyed method parameter
+        // takes too
+        var source = $$"""
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Foo), InjectMembers = [new object[] { {{nameofMember}}, "k" }])]
+
+            namespace TestNamespace;
+
+            public interface IDep;
+
+            [IocRegister(ServiceTypes = [typeof(IDep)]{{(hasSyncKeyedDep ? "" : ", Key = \"k\"")}})]
+            public class AsyncDep : IDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            {{(hasSyncKeyedDep ? "[IocRegister(ServiceTypes = [typeof(IDep)], Key = \"k\")]\npublic class SyncDep : IDep;" : "")}}
+
+            public class Foo
+            {
+                {{member}}
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).Count().IsEqualTo(expected);
+    }
 }

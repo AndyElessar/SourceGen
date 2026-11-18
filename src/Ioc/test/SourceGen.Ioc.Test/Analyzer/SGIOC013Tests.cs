@@ -1251,4 +1251,41 @@ public class SGIOC013Tests
 
         await Assert.That(sgioc013).IsEmpty();
     }
+
+    [Test]
+    [Arguments("Func<int, Foo>", "nameof(TestNamespace.Foo.Count)", 1)]
+    [Arguments("Func<int, int, Foo>", "nameof(TestNamespace.Foo.Count)", 0)]
+    [Arguments("Func<string, Foo>", "nameof(TestNamespace.Foo.Init)", 1)]
+    public async Task SGIOC013_InjectMembersOfInstanceConstructedByFunc_ReportsDiagnostic(string funcType, string injectMember, int expected)
+    {
+        // Like the generator, the Func injects the members listed in InjectMembers with the [IocInject] members: Count takes
+        // the int argument before Init's key parameter, which then receives the key "a"; a listed Init receives it too
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Foo), Key = "a", Instance = nameof(TestNamespace.Foo.Default), InjectMembers = [{{injectMember}}])]
+
+            namespace TestNamespace;
+
+            public class Foo
+            {
+                public static readonly Foo Default = new();
+
+                public int Count { get; set; }
+
+                {{(injectMember.Contains("Init") ? "" : "[IocInject]")}}
+                public void Init([ServiceKey] int key) { }
+            }
+
+            [IocRegister]
+            public class Consumer([FromKeyedServices("a")] {{funcType}} make);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(expected);
+    }
 }

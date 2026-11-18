@@ -1114,6 +1114,12 @@ public sealed partial class RegisterAnalyzer
         /// </summary>
         public ConcurrentDictionary<(SyntaxTree Tree, TextSpan Span), ImmutableArray<(ISymbol Member, Location Location)>> InjectMembers { get; } = new();
 
+        /// <summary>
+        /// The keys of the keyed elements (<c>{ nameof(X), key [, KeyType] }</c>) of <see cref="InjectMembers"/>, by the span of
+        /// the element, formatted like the generator's <c>ParseInjectMemberElement</c>. Populated with <see cref="InjectMembers"/>.
+        /// </summary>
+        public ConcurrentDictionary<(SyntaxTree Tree, TextSpan Span), string> InjectMemberKeys { get; } = new();
+
         private readonly ConcurrentDictionary<INamedTypeSymbol, TypeData> decoratorTypeData = new(SymbolEqualityComparer.Default);
 
         /// <summary>
