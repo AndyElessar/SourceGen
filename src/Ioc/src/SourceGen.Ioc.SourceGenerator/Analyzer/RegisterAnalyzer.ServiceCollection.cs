@@ -124,9 +124,11 @@ public sealed partial class RegisterAnalyzer
 
     /// <summary>
     /// Resolves every collected registration against the default settings and registers it for the CompilationEnd
-    /// analyses, in source order so that the analysis does not depend on the order of the symbol actions. Also reports the
-    /// checks that depend on the default settings: duplicated registrations with their effective tags (SGIOC011), and the
-    /// open types nested in a generic type the registrations would be registered as (SGIOC038).
+    /// analyses, in the generator's registration order (see <see cref="AnalyzerHelpers.GetGeneratorRegistrationPipeline"/>)
+    /// so that the analysis does not depend on the order of the symbol actions, and a later registration is the one the
+    /// generator adds later. Also reports the checks that depend on the default settings: duplicated registrations with their
+    /// effective tags (SGIOC011, at the later duplicate, which the generator adds later), and the open types nested in a generic type the
+    /// registrations would be registered as (SGIOC038).
     /// </summary>
     private static void ResolveRegistrations(
         Action<Diagnostic> reportDiagnostic,
@@ -134,10 +136,14 @@ public sealed partial class RegisterAnalyzer
         Dictionary<SyntaxTree, int> treeOrder,
         CancellationToken cancellationToken)
     {
-        var pending = analyzerContext.PendingRegistrations.ToArray();
-        Array.Sort(pending, (x, y) => GetSourceOrder(x.Location).CompareTo(GetSourceOrder(y.Location)));
+        var pending = analyzerContext.PendingRegistrations
+            .Select(registration => (Registration: registration, Order: new GeneratorRegistrationOrder(
+                AnalyzerHelpers.GetGeneratorRegistrationPipeline(registration.Attribute.AttributeClass!, analyzerContext.AttributeSymbols),
+                GetSourceOrder(registration.Location))))
+            .ToArray();
+        Array.Sort(pending, static (x, y) => x.Order.CompareTo(y.Order));
 
-        foreach(var (attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location) in pending)
+        foreach(var ((attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location), order) in pending)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -154,9 +160,6 @@ public sealed partial class RegisterAnalyzer
             // SGIOC038: Check the interfaces and base classes an open implementation is registered as
             AnalyzeImplicitOpenTypesNestedInGenericType(reportDiagnostic, analyzerContext, attribute, targetType, explicitServiceTypes, location);
 
-            var order = new GeneratorRegistrationOrder(
-                AnalyzerHelpers.GetGeneratorRegistrationPipeline(attribute.AttributeClass!, analyzerContext.AttributeSymbols),
-                GetSourceOrder(location));
             RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location, AnalyzerHelpers.GetEffectiveTags(tags), order);
         }
 
@@ -884,7 +887,7 @@ public sealed partial class RegisterAnalyzer
 
         /// <summary>
         /// Every registration with the (service type, key) pairs it registers, from which the <see cref="DependencyIndex"/>
-        /// is built. Filled at CompilationEnd, in source order.
+        /// is built. Filled at CompilationEnd, in the generator's registration order.
         /// </summary>
         public List<DependencyRegistration> DependencyRegistrations { get; } = [];
 
@@ -932,7 +935,7 @@ public sealed partial class RegisterAnalyzer
         /// Tracks registered (ImplementationType, Key, single Tag) tuples to detect duplicates (SGIOC011).
         /// Each tag is tracked separately; duplicates are detected when any single tag matches.
         /// Services without tags use an empty string tag for comparison.
-        /// Implementation types are compared as runtime types. Filled at CompilationEnd, in source order.
+        /// Implementation types are compared as runtime types. Filled at CompilationEnd, in the generator's registration order.
         /// </summary>
         public HashSet<(INamedTypeSymbol Type, string? Key, string Tag)> RegistrationKeys { get; } = new(new RegistrationKeyComparer());
 
@@ -1059,7 +1062,7 @@ public sealed partial class RegisterAnalyzer
         public string? ServiceKey { get; }
 
         /// <summary>
-        /// Every registration of this implementation type, in source order.
+        /// Every registration of this implementation type, in the generator's registration order.
         /// </summary>
         public ImmutableArray<ServiceActivation> Activations { get; private set; } = [];
 

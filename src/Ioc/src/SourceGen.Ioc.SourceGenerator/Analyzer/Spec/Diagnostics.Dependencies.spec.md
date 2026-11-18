@@ -18,9 +18,9 @@ An implementation type can have several registrations (for example with differen
 
 | Diagnostic | Registrations analyzed | Reported at |
 | --- | --- | --- |
-| SGIOC002 | The constructor, when any registration is constructor-activated | The first constructor-activated registration, once per cycle edge of the type |
+| SGIOC002 | The constructor, when any registration is constructor-activated | The first constructor-activated registration in the generator's registration order (see [Resolved Dependencies](#resolved-dependencies)), once per cycle edge of the type |
 | SGIOC003-005 | Each constructor-activated registration, with its own lifetime | That registration; a conflict is reported once per location |
-| SGIOC033 | The constructor when any registration is constructor-activated; the members when any registration has no `Instance` | The first registration that calls the constructor / injects the members (the diagnostic does not depend on the consumer's lifetime) |
+| SGIOC033 | The constructor when any registration is constructor-activated; the members when any registration has no `Instance` | The first registration, in the generator's registration order, that calls the constructor / injects the members (the diagnostic does not depend on the consumer's lifetime) |
 | SGIOC013/014 | Each registration that calls the method (see [Key Diagnostics](Diagnostics.Keys.spec.md)) | The `[ServiceKey]` parameter, once per problem |
 
 ```csharp

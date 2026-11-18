@@ -390,4 +390,33 @@ public class SGIOC002Tests
 
         await Assert.That(sgioc002).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC002_ConstructedRegistrationsOfSameType_ReportsAtFirstInGeneratorOrder()
+    {
+        // The generator adds [IocRegister] registrations before [IocRegisterFor<T>] ones, so the cycle is reported at
+        // [IocRegister], although the holder's registration comes first in source
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegisterFor<ServiceA>(Key = "k")]
+            public static class Registrations;
+
+            [IocRegister]
+            public class ServiceA(ServiceB b);
+
+            [IocRegister]
+            public class ServiceB(ServiceA a);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var locations = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC002")
+            .Select(static d => d.Location.SourceTree!.GetText().ToString(d.Location.SourceSpan))
+            .ToList();
+
+        await Assert.That(locations).Count().IsEqualTo(2);
+        await Assert.That(locations).All().Satisfy(static location => location.IsEqualTo("IocRegister"));
+    }
 }
