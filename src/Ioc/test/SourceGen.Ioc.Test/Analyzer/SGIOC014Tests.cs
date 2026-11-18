@@ -424,4 +424,153 @@ public class SGIOC014Tests
 
         await Assert.That(sgioc014).Count().IsEqualTo(0);
     }
+
+    [Test]
+    [Arguments("Instance = nameof(Default)")]
+    [Arguments("Factory = nameof(Create)")]
+    public async Task SGIOC014_InstanceOrFactoryConstructorServiceKeyParameter_NoKey_NoDiagnostic(string activation)
+    {
+        // Instance and Factory registrations are not constructed by the container, so the constructor's [ServiceKey]
+        // parameter receives no key
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister({{activation}})]
+            public class MyService
+            {
+                public static readonly MyService Default = new("default");
+
+                public MyService([ServiceKey] string key) { }
+
+                public static MyService Create() => Default;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
+
+        await Assert.That(sgioc014).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC014_KeyedInstanceFirst_ThenConstructorRegistrationWithoutKey_ReportsDiagnostic()
+    {
+        // The constructed registration has no key, although the first registration of the type has one
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.MyService>(Key = "default", Instance = nameof(TestNamespace.MyService.Default))]
+
+            namespace TestNamespace;
+
+            [IocRegister]
+            public class MyService([ServiceKey] string key)
+            {
+                public static readonly MyService Default = new("default");
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
+
+        await Assert.That(sgioc014).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC014_TwoRegistrationsWithoutKey_ReportsOnce()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.MyService>(Tags = ["b"])]
+
+            namespace TestNamespace;
+
+            [IocRegister(Tags = ["a"])]
+            public class MyService([ServiceKey] string key) { }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
+
+        await Assert.That(sgioc014).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("int", 1)]
+    [Arguments("string", 0)]
+    public async Task SGIOC014_InjectMethodOfUnkeyedInstanceConstructedByFunc_ReportsUnlessPassedArgument(string inputType, int expected)
+    {
+        // The Func constructs the Instance registration's type and calls its [Inject] methods: it passes its string argument
+        // to the [ServiceKey] parameter (s0.Init(arg0)), otherwise the key, but no key is registered
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Instance = nameof(Default))]
+            public class Foo
+            {
+                public static readonly Foo Default = new();
+
+                [IocInject]
+                public void Init([ServiceKey] string key) { }
+            }
+
+            [IocRegister]
+            public class Consumer(Func<{{inputType}}, Foo> factory);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
+
+        await Assert.That(sgioc014).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    [Arguments("Instance = nameof(Default)", "")]
+    [Arguments("Factory = nameof(Create)", "")]
+    [Arguments("Instance = nameof(Default)", "IEnumerable<")]
+    public async Task SGIOC014_ConstructedByFunc_ExplicitFuncRegistration_NoDiagnostic(string activation, string collection)
+    {
+        // An explicit Func<string, Foo> registration replaces the generated Func (ApplyExplicitWrapperSuppression), which then
+        // does not construct the Instance or Factory registration
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister({{activation}})]
+            public class Foo(string name, [ServiceKey] object key)
+            {
+                public static readonly Foo Default = new("", "");
+                public static Foo Create() => Default;
+            }
+
+            public static class Wrappers
+            {
+                public static readonly Func<string, Foo> Make = _ => Foo.Default;
+            }
+
+            [IocRegisterFor<Func<string, Foo>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Make")]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Consumer({{collection}}Func<string, Foo>{{(collection.Length > 0 ? ">" : "")}} make);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014")).IsEmpty();
+    }
 }

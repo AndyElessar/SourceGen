@@ -337,6 +337,50 @@ public class SGIOC030Tests
     }
 
     [Test]
+    [Arguments(", Key = \"a\"", 1)]
+    [Arguments("", 0)]
+    public async Task SGIOC030_KeyedInjectMethod_ParameterUsesMethodKey(string asyncServiceKey, int expectedCount)
+    {
+        // An unkeyed parameter of a keyed inject method resolves with the method's key, like the generator: it depends on the
+        // keyed async-init service, not on the unkeyed one
+        var source = $$"""
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IConsumer { }
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)]{{asyncServiceKey}})]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IConsumer)])]
+            public class Consumer : IConsumer
+            {
+                [IocInject(Key = "a")]
+                public void Initialize(IMyService service) { }
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(expectedCount);
+    }
+
+    [Test]
     public async Task SGIOC030_ConstructorRequestsKeyedSyncTypeForAsyncInitService_ReportsDiagnostic()
     {
         const string source = """
@@ -1476,5 +1520,592 @@ public class SGIOC030Tests
 
         await Assert.That(sgioc030).Count().IsEqualTo(1);
         await Assert.That(sgioc030[0].GetMessage()).Contains("'unkeyed'");
+    }
+
+    [Test]
+    [Arguments("Func<string, Foo>", 1)]
+    [Arguments("Func<AsyncDep, string, Foo>", 0)]
+    public async Task SGIOC030_InstanceConstructedByFuncWithArguments_ChecksResolvedParameters(string funcType, int expected)
+    {
+        // A Func with input parameters constructs Foo even for an Instance registration, resolving the parameters it does
+        // not pass one of its arguments to, and synchronously calls its non-Task inject methods
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister]
+            public class AsyncDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Instance = nameof(Default))]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static readonly Foo Default = new(null!, "");
+            }
+
+            [IocRegister]
+            public class Consumer({{funcType}} make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(expected);
+        if(expected > 0)
+            await Assert.That(sgioc030[0].GetMessage()).Contains("'dep'");
+    }
+
+    [Test]
+    [Arguments("Func<string, Foo>", 1)]
+    [Arguments("Func<AsyncDep, Foo>", 0)]
+    public async Task SGIOC030_InjectedPropertyOfInstanceConstructedByFunc_ChecksResolvedProperty(string funcType, int expected)
+    {
+        // The Func passes an argument of the property's type to the property, otherwise resolves it
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister]
+            public class AsyncDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Instance = nameof(Default))]
+            public class Foo(string name)
+            {
+                public static readonly Foo Default = new("");
+
+                [IocInject]
+                public AsyncDep Dep { get; set; } = null!;
+            }
+
+            [IocRegister]
+            public class Consumer({{funcType}} make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030");
+
+        await Assert.That(sgioc030).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task SGIOC030_FactoryRegistrationConstructedByFunc_ReportsDiagnostic()
+    {
+        // A Func with input parameters constructs Foo through its constructor, not its Factory
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister]
+            public class AsyncDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Factory = nameof(Create))]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static Foo Create() => new(null!, "");
+            }
+
+            [IocRegister]
+            public class Consumer(Func<string, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("'dep'");
+    }
+
+    [Test]
+    public async Task SGIOC030_InjectMethodOfInstanceConstructedByFunc_ReportsDiagnostic()
+    {
+        // The Func calls the synchronous inject methods of the Instance registration's type
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister]
+            public class AsyncDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Instance = nameof(Default))]
+            public class Foo(string name)
+            {
+                public static readonly Foo Default = new("");
+
+                [IocInject]
+                public void Init(AsyncDep dep) { }
+            }
+
+            [IocRegister]
+            public class Consumer(Func<string, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("'dep'");
+    }
+
+    [Test]
+    public async Task SGIOC030_FuncArgumentPassedToPropertyBeforeField_NoDiagnostic()
+    {
+        // Like the generator, which sorts the injected members by stage, the Func passes its argument to the injected
+        // property before the injected field declared before it, so the async-init IDep is never resolved synchronously
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDep;
+
+            [IocRegister(ServiceTypes = [typeof(IDep)])]
+            public class AsyncDep : IDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Key = "k", ServiceTypes = [typeof(IDep)])]
+            public class SyncDep : IDep;
+
+            [IocRegister(Instance = nameof(Default))]
+            public class Foo
+            {
+                public static readonly Foo Default = new();
+
+                [IocInject(Key = "k")]
+                public IDep Field = null!;
+
+                [IocInject]
+                public IDep Property { get; set; } = null!;
+            }
+
+            [IocRegister]
+            public class Consumer(Func<IDep, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("Instance = nameof(TestNamespace.Foo.Default), ", "Func<string, Foo>", 1)]
+    [Arguments("Instance = nameof(TestNamespace.Foo.Default), ", "Func<AsyncDep, Foo>", 0)]
+    [Arguments("", "Func<AsyncDep, Foo>", 1)]
+    public async Task SGIOC030_InjectMembersProperty_ChecksResolvedProperty(string instance, string funcType, int expected)
+    {
+        // Like the generator, a member listed in InjectMembers is injected like an [IocInject] member: by the Func, which
+        // passes it an argument of its type, and by the container for a registration without Instance
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Foo), {{instance}}InjectMembers = [nameof(TestNamespace.Foo.Dep)])]
+
+            namespace TestNamespace;
+
+            [IocRegister]
+            public class AsyncDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            public class Foo(string name)
+            {
+                public static readonly Foo Default = new("");
+
+                public AsyncDep Dep { get; set; } = null!;
+            }
+
+            [IocRegister]
+            public class Consumer({{funcType}} make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(expected);
+        if(expected > 0)
+            await Assert.That(sgioc030[0].GetMessage()).Contains("'Dep'");
+    }
+
+    [Test]
+    public async Task SGIOC030_InjectMembersPropertyTakesFuncArgumentBeforeField_ReportsField()
+    {
+        // The listed property is injected before the [IocInject] field, so it takes the Func's argument, and the field is
+        // resolved synchronously
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Foo), Instance = nameof(TestNamespace.Foo.Default), InjectMembers = [nameof(TestNamespace.Foo.Prop)])]
+
+            namespace TestNamespace;
+
+            public interface IDep;
+
+            [IocRegister(ServiceTypes = [typeof(IDep)])]
+            public class AsyncDep : IDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            public class Foo
+            {
+                public static readonly Foo Default = new();
+
+                [IocInject]
+                public IDep Field = null!;
+
+                public IDep Prop { get; set; } = null!;
+            }
+
+            [IocRegister]
+            public class Consumer(Func<IDep, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("'Field'");
+    }
+
+    [Test]
+    [Arguments("public IDep Dep { get; set; } = null!;", "nameof(TestNamespace.Foo.Dep)", true, 0)]
+    [Arguments("public IDep Dep { get; set; } = null!;", "nameof(TestNamespace.Foo.Dep)", false, 1)]
+    [Arguments("public void Init(IDep dep) { }", "nameof(TestNamespace.Foo.Init)", true, 0)]
+    [Arguments("public void Init(IDep dep) { }", "nameof(TestNamespace.Foo.Init)", false, 1)]
+    public async Task SGIOC030_KeyedInjectMembersElement_UsesElementKey(string member, string nameofMember, bool hasSyncKeyedDep, int expected)
+    {
+        // Like the generator, a keyed InjectMembers element injects the member with its key, which an unkeyed method parameter
+        // takes too
+        var source = $$"""
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Foo), InjectMembers = [new object[] { {{nameofMember}}, "k" }])]
+
+            namespace TestNamespace;
+
+            public interface IDep;
+
+            [IocRegister(ServiceTypes = [typeof(IDep)]{{(hasSyncKeyedDep ? "" : ", Key = \"k\"")}})]
+            public class AsyncDep : IDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            {{(hasSyncKeyedDep ? "[IocRegister(ServiceTypes = [typeof(IDep)], Key = \"k\")]\npublic class SyncDep : IDep;" : "")}}
+
+            public class Foo
+            {
+                {{member}}
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).Count().IsEqualTo(expected);
+    }
+
+    private const string ExplicitFuncFoo = """
+        using System;
+        using System.Collections.Generic;
+        using System.Threading.Tasks;
+        using Microsoft.Extensions.DependencyInjection;
+        using SourceGen.Ioc;
+
+        namespace TestNamespace;
+
+        [IocRegister]
+        public class AsyncDep
+        {
+            [IocInject]
+            public Task InitAsync() => Task.CompletedTask;
+        }
+
+        public static class Wrappers
+        {
+            public static readonly Func<string, Foo> Make = _ => null!;
+        }
+
+        """;
+
+    [Test]
+    [Arguments("", "", "", 0)]
+    [Arguments(", Tags = [\"A\"]", ", Tags = [\"A\"]", ", Tags = [\"A\"]", 0)]
+    [Arguments(", Key = \"a\"", "", "", 1)]
+    [Arguments(", Tags = [\"A\"]", "", "", 1)]
+    [Arguments(", Tags = [\"A\"]", ", Tags = [\"A\", \"B\"]", ", Tags = [\"A\", \"B\"]", 1)]
+    public async Task SGIOC030_InstanceConstructedByFunc_ExplicitFuncRegistration_FollowsGeneratedFunc(
+        string explicitArguments,
+        string fooArguments,
+        string consumerArguments,
+        int expected)
+    {
+        // Like the generator (ApplyExplicitWrapperSuppression), an explicit Func<string, Foo> under the same key that is always
+        // registered with Foo's registration replaces the generated Func, which then does not construct the Instance. With
+        // another key, tags it never shares (Foo untagged), or tags it only sometimes shares (Foo tagged A and B), the
+        // generated Func is still registered and constructs Foo
+        var source = ExplicitFuncFoo + $$"""
+            [IocRegister(Instance = nameof(Default){{fooArguments}})]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static readonly Foo Default = new(null!, "");
+            }
+
+            [IocRegisterFor<Func<string, Foo>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Make"{{explicitArguments}})]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient{{consumerArguments}})]
+            public class Consumer(Func<string, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, analyzerConfigOptions: analyzerConfigOptions);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).Count().IsEqualTo(expected);
+        await Assert.That(generatedSource!.Contains("new global::TestNamespace.Foo(")).IsEqualTo(expected > 0);
+    }
+
+    [Test]
+    [Arguments("ServiceLifetime.Scoped", "")]
+    [Arguments("ServiceLifetime.Singleton", ", Key = \"KeyedService.AnyKey\", KeyType = KeyType.Csharp")]
+    public async Task SGIOC030_InstanceConstructedByFunc_ExplicitFuncRegistrationNotRegistered_ReportsDiagnostic(string explicitLifetime, string keyArguments)
+    {
+        // Like the generator, an explicit Func registration that the Register output does not register (an Instance that is
+        // not Singleton, SGIOC009) or that MS.DI does not resolve as a single service (under KeyedService.AnyKey) does not
+        // replace the generated Func, which still constructs Foo
+        var source = ExplicitFuncFoo + $$"""
+            [IocRegister(Instance = nameof(Default){{keyArguments}})]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static readonly Foo Default = new(null!, "");
+            }
+
+            [IocRegisterFor<Func<string, Foo>>({{explicitLifetime}}, Instance = "global::TestNamespace.Wrappers.Make"{{keyArguments}})]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Consumer(Func<string, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, analyzerConfigOptions: analyzerConfigOptions);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("new global::TestNamespace.Foo(");
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("IEnumerable<Func<string, Foo>>")]
+    [Arguments("Func<string, Foo>[]")]
+    public async Task SGIOC030_InstanceConstructedByFuncCollection_ExplicitFuncRegistration_NoDiagnostic(string dependency)
+    {
+        // The collection of an explicitly registered Func<string, Foo> contains the explicit registration only
+        var source = ExplicitFuncFoo + $$"""
+            [IocRegister(Instance = nameof(Default))]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static readonly Foo Default = new(null!, "");
+            }
+
+            [IocRegisterFor<Func<string, Foo>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Make")]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Consumer({{dependency}} makes);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC030_FactoryConstructedByFunc_ExplicitFuncRegistration_NoDiagnostic()
+    {
+        var source = ExplicitFuncFoo + """
+            [IocRegister(Factory = nameof(Create))]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static Foo Create() => new(null!, "");
+            }
+
+            [IocRegisterFor<Func<string, Foo>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Make")]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Consumer(Func<string, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("[IocRegisterFor<Func<string, Foo>>(ServiceLifetime.Singleton, Instance = \"global::TestNamespace.Wrappers.Make\")]", "", 0)]
+    [Arguments("", "(ExplicitOnly = true)][IocRegisterFor<Consumer>", 0)]
+    [Arguments("", "", 1)]
+    public async Task SGIOC030_InstanceConstructedByFunc_ContainerOnly_FollowsContainer(string explicitRegistration, string containerArguments, int expected)
+    {
+        // Without the Register output, only a container constructs a Func: not when Func<string, Foo> is registered explicitly
+        // (it resolves that registration), nor when Foo is not one of its registrations (it resolves the Func from the
+        // fallback provider)
+        var source = ExplicitFuncFoo + $$"""
+            [IocRegister(Instance = nameof(Default))]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static readonly Foo Default = new(null!, "");
+            }
+
+            {{explicitRegistration}}
+            public static class Registrations;
+
+            public class Consumer(Func<string, Foo> make);
+
+            [IocRegisterFor<Consumer>]
+            public static class ConsumerRegistration;
+
+            [IocContainer{{containerArguments}}]
+            public partial class AppContainer;
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, analyzerConfigOptions: analyzerConfigOptions);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container");
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).Count().IsEqualTo(expected);
+        await Assert.That(generatedSource!.Contains("new global::TestNamespace.Foo(")).IsEqualTo(expected > 0);
     }
 }

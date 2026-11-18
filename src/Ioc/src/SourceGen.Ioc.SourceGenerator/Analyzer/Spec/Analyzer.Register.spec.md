@@ -8,7 +8,7 @@ Pipeline of `RegisterAnalyzer`: registration validation, dependency/lifetime che
 2. Queue SGIOC026 if `AsyncMethodInject` enabled without `MethodInject`
 3. Build `IocAttributeSymbols` cache
 4. Early exit if no registration attributes present
-5. Build concurrent state: `RegisteredServices`, `ServiceTypeIndex`, and the bags of pending registrations, type-level `[IocRegisterDefaults]` and `[IocImportModule]` attributes. `RegisteredServices` and `ServiceTypeIndex` are keyed by runtime type (`RuntimeTypeSymbolComparer`), like the generator and `ContainerAnalyzer`: tuple element names are not compared, so a dependency on `IHandler<(Entity A, string B)>` finds a registration of `IHandler<(Entity X, string Y)>` (SGIOC002-005, 033). `KeyedServiceIndex` (SGIOC015), the async-init pairs (SGIOC030), the service types of a registration and `ServiceSymbolKey` (whose equality uses `RuntimeTypeSymbolComparer`) compare service types the same way.
+5. Build concurrent state: `RegisteredServices` and the bags of pending registrations, type-level `[IocRegisterDefaults]` and `[IocImportModule]` attributes. `RegisteredServices` is keyed by runtime type (`RuntimeTypeSymbolComparer`), like the generator and `ContainerAnalyzer`: tuple element names are not compared. The `DependencyIndex` built at CompilationEnd (SGIOC002-005, 033) compares service types the same way through `ServiceSymbolKey`, so a dependency on `IHandler<(Entity A, string B)>` finds a registration of `IHandler<(Entity X, string Y)>`. `KeyedServiceIndex` (SGIOC015), the async-init pairs (SGIOC030), the service types of a registration and `ServiceSymbolKey` (whose equality uses `RuntimeTypeSymbolComparer`) compare service types the same way.
 6. Construct `AnalyzerContext`
 7. Pre-collect assembly-level `IocRegisterFor` attributes as pending registrations, indexed by their syntax (tree and span) for the attribute syntax action
 8. Build `IocAttributeNameFilter` from the IoC attribute names
@@ -17,7 +17,7 @@ Pipeline of `RegisterAnalyzer`: registration validation, dependency/lifetime che
 
 | Action Type | Handler | Purpose | Diagnostics |
 | :---------- | :------ | :------ | :---------- |
-| Symbol (NamedType) | `CollectAndValidateNamedType` | Collect pending registrations, type-level `[IocRegisterDefaults]` and `[IocImportModule]`; validate target type, explicit service types and the explicit lifetime of an `Instance` | SGIOC001, 009, 032 |
+| Symbol (NamedType) | `CollectAndValidateNamedType` | Collect pending registrations, type-level `[IocRegisterDefaults]` and `[IocImportModule]`, and the containers the generator implements (`[IocContainer]` on a `partial class`, with the Container feature), whose partial accessors can request a `Func` with input parameters; validate target type, explicit service types and the explicit lifetime of an `Instance` | SGIOC001, 009, 032 |
 | Symbol (NamedType) | `AnalyzeImportedOpenRegistrations` | Imported open generic registrations the compiled assembly cannot construct | SGIOC001 |
 | Symbol (Property/Field/Method) | `AnalyzeInjectAttribute` | Validate `[IocInject]` usage and feature gating | SGIOC007, 022, 028 |
 | Symbol (Method) | `AnalyzeDuplicatedKeyedServiceAttributes` | Duplicate keyed-service parameter attributes | SGIOC006 |
@@ -36,11 +36,12 @@ The descriptors of the diagnostics reported at compilation end are tagged `Compi
 ## CompilationEnd: AnalyzeAllDependencies
 
 1. Collect the default settings (`CollectDefaults`, see [Default Settings](#default-settings)) and report duplicated defaults of the compiled assembly (SGIOC012)
-2. Resolve every pending registration against the default settings, in source order (`ResolveRegistrations` → `RegisterService`): effective lifetime, service types, decorators and best default index; report duplicated registrations with their effective tags (SGIOC011), and the open types nested in a generic type that an open implementation would be registered as (SGIOC038)
-3. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
-4. Decorated parameters of the decorators matched while resolving registrations (SGIOC034/035)
-5. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037), service types that the mapping of a generic factory does not match (SGIOC039), open generic registrations whose open registration is not registered because their closed types call the Factory (SGIOC042), and implementation types that cannot be constructed without a Factory or Instance (SGIOC001)
-6. Build async-init-only pairs → sync dependency analysis of services and applied decorators (SGIOC030)
+2. Resolve every pending registration against the default settings, in the generator's registration order (`[IocRegister]`, `[IocRegister<T>]`, `[IocRegisterFor]`, `[IocRegisterFor<T>]`, each in source order; see `AnalyzerHelpers.GetGeneratorRegistrationPipeline`) (`ResolveRegistrations` → `RegisterService`): effective lifetime, service types, decorators and best default index; report duplicated registrations with their effective tags (SGIOC011), and the open types nested in a generic type that an open implementation would be registered as (SGIOC038)
+3. Build the `DependencyIndex` from the recorded `DependencyRegistrations` (the registrations each (service type, key) resolves to, see [Resolved Dependencies](Diagnostics.Dependencies.spec.md#resolved-dependencies)) and the registrations a requested `Func` with input parameters constructs (`CollectRegistrationsConstructedByFunc`)
+4. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
+5. Decorated parameters of the decorators matched while resolving registrations (SGIOC034/035)
+6. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037), service types that the mapping of a generic factory does not match (SGIOC039), open generic registrations whose open registration is not registered because their closed types call the Factory (SGIOC042), and implementation types that cannot be constructed without a Factory or Instance (SGIOC001)
+7. Build async-init-only pairs → sync dependency analysis of services, of the registrations a requested `Func` with input parameters constructs, and of applied decorators (SGIOC030)
 
 ## Default Settings
 
@@ -57,6 +58,7 @@ A registration matches the settings of its base classes, then its interfaces (ex
 | :--- | :------------- |
 | `RegisterAnalyzer.ServiceCollection.cs` | `AnalyzerContext`, `ServiceInfo`, pending registrations, default settings collection, registration resolution/indexing, assembly-level scan |
 | `IocAttributeNameFilter.cs` | Syntactic attribute name pre-check for the attribute syntax action |
+| `RegisterAnalyzer.DependencyIndex.cs` | `DependencyIndex`: the registrations each (service type, key) resolves to, per tag, in the generator's registration order and the Register output's tag-group order; `GeneratorRegistrationOrder`, `DependencyRegistration` |
 | `RegisterAnalyzer.DependencyAnalysis.cs` | `DependencyGraph` (cached constructor dependencies + Tarjan SCC pruning), circular dependency DFS within an SCC, lifetime conflicts, `TryUnwrapServiceType` (private wrapper unwrap) |
 | `RegisterAnalyzer.DuplicatedRegistration.cs` | Duplicate registration detection (SGIOC011); SGIOC012 is reported by `CollectDefaults` |
 | `RegisterAnalyzer.AttributeUsage.cs` | Inject/factory/instance/generic factory/inject-members validation |

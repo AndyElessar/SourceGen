@@ -94,6 +94,25 @@ public sealed class ExplicitCollectionRegistrationTests
     [Test]
     [Arguments(false)]
     [Arguments(true)]
+    public async Task ExplicitBclCollectionInstances_WinForGetServiceAndInjection(bool useSwitchStatement)
+    {
+        IServiceProvider provider = useSwitchStatement ? new ExplicitBclCollectionSwitchContainer() : new ExplicitBclCollectionContainer();
+        await using var disposable = (IAsyncDisposable)provider;
+
+        await Assert.That(provider.GetService(typeof(List<Lazy<IExplicitBclCollectionHandler>>))).IsSameReferenceAs(ExplicitBclCollections.Lazies);
+        await Assert.That(provider.GetService(typeof(IEnumerable<Lazy<IExplicitBclCollectionHandler>>))).IsSameReferenceAs(ExplicitBclCollections.Lazies);
+        await Assert.That(provider.GetService(typeof(Dictionary<string, IExplicitBclCollectionHandler>))).IsSameReferenceAs(ExplicitBclCollections.Dictionary);
+        await Assert.That(provider.GetService(typeof(IReadOnlyDictionary<string, IExplicitBclCollectionHandler>))).IsSameReferenceAs(ExplicitBclCollections.Dictionary);
+
+        var consumer = provider.GetRequiredService<ExplicitBclCollectionConsumer>();
+
+        await Assert.That(consumer.Lazies).IsSameReferenceAs(ExplicitBclCollections.Lazies);
+        await Assert.That(consumer.Dictionary).IsSameReferenceAs(ExplicitBclCollections.Dictionary);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
     public async Task ExplicitWrapperRegistrations_WinForGetServiceAndInjection(bool useSwitchStatement)
     {
         IServiceProvider provider = useSwitchStatement ? new ExplicitWrapperSwitchContainer() : new ExplicitWrapperContainer();

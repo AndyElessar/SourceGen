@@ -88,6 +88,8 @@ public sealed partial class RegisterAnalyzer
                     analyzerContext.TypeLevelDefaultAttributes.Add(attribute);
                 else if(AnalyzerHelpers.IsIocImportModuleAttribute(attributeClass, analyzerContext.AttributeSymbols))
                     analyzerContext.ModuleImportAttributes.Add(attribute);
+                else if(IsGeneratedContainer(attribute, attributeClass, analyzerContext, context.CancellationToken))
+                    analyzerContext.Containers.Add((typeSymbol, attribute));
 
                 continue;
             }
@@ -123,10 +125,26 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
+    /// Gets whether an attribute is the <c>[IocContainer]</c> of a container the generator implements, like its container
+    /// pipeline: the Container feature is enabled, and the attribute is on a class declaration with the <c>partial</c> modifier.
+    /// </summary>
+    private static bool IsGeneratedContainer(
+        AttributeData attribute,
+        INamedTypeSymbol attributeClass,
+        AnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
+        => (analyzerContext.Features & IocFeatures.Container) != 0
+            && AnalyzerHelpers.IsAttributeMatch(attributeClass, analyzerContext.AttributeSymbols.IocContainerAttribute)
+            && attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).Parent?.Parent is ClassDeclarationSyntax declaration
+            && declaration.Modifiers.Any(SyntaxKind.PartialKeyword);
+
+    /// <summary>
     /// Resolves every collected registration against the default settings and registers it for the CompilationEnd
-    /// analyses, in source order so that the analysis does not depend on the order of the symbol actions. Also reports the
-    /// checks that depend on the default settings: duplicated registrations with their effective tags (SGIOC011), and the
-    /// open types nested in a generic type the registrations would be registered as (SGIOC038).
+    /// analyses, in the generator's registration order (see <see cref="AnalyzerHelpers.GetGeneratorRegistrationPipeline"/>)
+    /// so that the analysis does not depend on the order of the symbol actions, and a later registration is the one the
+    /// generator adds later. Also reports the checks that depend on the default settings: duplicated registrations with their
+    /// effective tags (SGIOC011, at the later duplicate, which the generator adds later), and the open types nested in a generic type the
+    /// registrations would be registered as (SGIOC038).
     /// </summary>
     private static void ResolveRegistrations(
         Action<Diagnostic> reportDiagnostic,
@@ -134,10 +152,14 @@ public sealed partial class RegisterAnalyzer
         Dictionary<SyntaxTree, int> treeOrder,
         CancellationToken cancellationToken)
     {
-        var pending = analyzerContext.PendingRegistrations.ToArray();
-        Array.Sort(pending, (x, y) => GetSourceOrder(x.Location).CompareTo(GetSourceOrder(y.Location)));
+        var pending = analyzerContext.PendingRegistrations
+            .Select(registration => (Registration: registration, Order: new GeneratorRegistrationOrder(
+                AnalyzerHelpers.GetGeneratorRegistrationPipeline(registration.Attribute.AttributeClass!, analyzerContext.AttributeSymbols),
+                GetSourceOrder(registration.Location))))
+            .ToArray();
+        Array.Sort(pending, static (x, y) => x.Order.CompareTo(y.Order));
 
-        foreach(var (attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location) in pending)
+        foreach(var ((attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location), order) in pending)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -154,7 +176,8 @@ public sealed partial class RegisterAnalyzer
             // SGIOC038: Check the interfaces and base classes an open implementation is registered as
             AnalyzeImplicitOpenTypesNestedInGenericType(reportDiagnostic, analyzerContext, attribute, targetType, explicitServiceTypes, location);
 
-            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location);
+            // Unlike SGIOC011, the dependency index keeps the registrations without tags apart from those tagged ""
+            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location, tags.Length == 0 ? [] : [.. tags], order);
         }
 
         (int Tree, int Position) GetSourceOrder(Location? location)
@@ -231,7 +254,9 @@ public sealed partial class RegisterAnalyzer
         string? key,
         ITypeSymbol? keyTypeSymbol,
         List<INamedTypeSymbol> explicitServiceTypes,
-        Location? location)
+        Location? location,
+        ImmutableArray<string> tags,
+        GeneratorRegistrationOrder order)
     {
         // Skip registration if type is invalid
         if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
@@ -270,7 +295,83 @@ public sealed partial class RegisterAnalyzer
         // starting from the dependencies of closed registrations; SGIOC039: the service types of generic factories
         analyzerContext.Registrations.Add(new(targetType, registrations, decorators, attribute, hasFactory, hasInstance, bestDefaultIndex, location));
 
-        RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations);
+        // Like the generator's ProcessRegistrationCore, a closed implementation is registered as each closed form of an unbound
+        // service type it implements or inherits
+        var isSelfConstructed = false;
+        var isOpenImplementation = IsOpenGenericImplementation(targetType);
+        var dependencyRegistrations = isOpenImplementation ? registrations : CloseUnboundServiceTypes(targetType, registrations);
+
+        // Like the generator's CreateServiceRegistrations, the own generic factory of a closed registration is closed for each
+        // registered type: a type its mapping does not match is not registered (SGIOC039), except the implementation type
+        // itself, which is constructed instead
+        if(hasFactory && !hasInstance && !isOpenImplementation
+            && GetFactory(analyzerContext, attribute).Factory is { TypeParameterCount: > 0 } genericFactory)
+        {
+            var isConstructible = targetType.IsConstructibleIn(analyzerContext.Assembly);
+            isSelfConstructed = isConstructible && IocSourceGenerator.CloseGenericFactory(genericFactory, targetType.GetTypeData()) is null;
+            dependencyRegistrations = [.. dependencyRegistrations.Where(registration =>
+                IocSourceGenerator.CloseGenericFactory(genericFactory, registration.ServiceType.GetTypeData()) is not null
+                || (isConstructible && RuntimeTypeSymbolComparer.Instance.Equals(registration.ServiceType, targetType)))];
+        }
+
+        RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory && !isSelfConstructed, hasFactory, hasInstance, registrations, dependencyRegistrations, asyncDecoratedRegistrations, tags, order);
+
+        static bool IsOpenGenericImplementation(INamedTypeSymbol type)
+            => type.IsUnboundGenericType || type is { IsGenericType: true, IsDefinition: true };
+    }
+
+    /// <summary>
+    /// Replaces each unbound service type of a closed implementation, such as <c>typeof(IHandler&lt;&gt;)</c>, with the closed
+    /// forms of it that the implementation implements or inherits (<c>IHandler&lt;Task&lt;Entity&gt;&gt;</c>), like the
+    /// generator's <c>ProcessRegistrationCore</c>. An unbound service type without such a form is kept, and is not registered
+    /// (SGIOC032). Returns <paramref name="registrations"/> itself when none is unbound.
+    /// </summary>
+    private static ImmutableArray<ServiceSymbolKey> CloseUnboundServiceTypes(INamedTypeSymbol implementation, ImmutableArray<ServiceSymbolKey> registrations)
+    {
+        ImmutableArray<ServiceSymbolKey>.Builder? closed = null;
+        for(var i = 0; i < registrations.Length; i++)
+        {
+            var registration = registrations[i];
+            if(!registration.ServiceType.IsUnboundGenericType)
+            {
+                closed?.Add(registration);
+                continue;
+            }
+
+            if(closed is null)
+            {
+                closed = ImmutableArray.CreateBuilder<ServiceSymbolKey>(registrations.Length);
+                for(var j = 0; j < i; j++)
+                    closed.Add(registrations[j]);
+            }
+
+            var definition = registration.ServiceType.OriginalDefinition;
+            var hasForm = false;
+            foreach(var form in implementation.AllInterfaces.Concat(EnumerateBaseClasses(implementation)))
+            {
+                if(!SymbolEqualityComparer.Default.Equals(form.OriginalDefinition, definition))
+                    continue;
+
+                hasForm = true;
+                closed.Add(new(form, registration.Key));
+            }
+
+            if(!hasForm)
+                closed.Add(registration);
+        }
+
+        if(closed is null)
+            return registrations;
+
+        // A closed form also listed as a closed service type, or of two unbound service types, is registered once
+        var distinct = ImmutableArray.CreateBuilder<ServiceSymbolKey>(closed.Count);
+        foreach(var registration in closed)
+        {
+            if(!distinct.Contains(registration))
+                distinct.Add(registration);
+        }
+
+        return distinct.ToImmutable();
     }
 
     /// <summary>
@@ -612,8 +713,13 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
-    /// Registers a service and builds the service type index for fast lookups.
+    /// Records a registration on the <see cref="ServiceInfo"/> of its implementation type, and as a candidate dependency of
+    /// the (service type, key) pairs it registers (see <see cref="DependencyIndex"/>).
     /// </summary>
+    /// <param name="hasFactory">Whether the implementation type itself is created by a Factory, not constructed.</param>
+    /// <param name="serviceTypesHaveFactory">Whether the other service types are created by a Factory.</param>
+    /// <param name="dependencyRegistrations">The (service type, key) pairs the generator registers (see <c>RegisterService</c>).</param>
+    /// <param name="order">The position of the registration in the generator's registration order.</param>
     private static void RegisterServiceWithIndex(
         AnalyzerContext analyzerContext,
         INamedTypeSymbol targetType,
@@ -622,48 +728,40 @@ public sealed partial class RegisterAnalyzer
         string? serviceKey,
         ITypeSymbol? keyTypeSymbol,
         bool hasFactory,
+        bool serviceTypesHaveFactory,
         bool hasInstance,
         ImmutableArray<ServiceSymbolKey> registrations,
-        ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations)
+        ImmutableArray<ServiceSymbolKey> dependencyRegistrations,
+        ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations,
+        ImmutableArray<string> tags,
+        GeneratorRegistrationOrder order)
     {
+        var hasKey = serviceKey is not null;
+        var activation = new ServiceActivation(lifetime, location, hasKey, keyTypeSymbol, hasFactory, hasInstance);
+
         // Same implementation type already registered (e.g., multiple assembly-level IocRegisterFor
         // attributes targeting the same impl type with different keys). Record the additional
-        // (service type, key) pairs on the existing entry so SGIOC030 analysis sees all registrations.
-        if(analyzerContext.RegisteredServices.TryGetValue(targetType, out var existingInfo))
+        // (service type, key) pairs and the registration's own activation on the existing entry,
+        // so the analyses see every registration, not only the first one. The registrations are
+        // recorded one after another at CompilationEnd (ResolveRegistrations).
+        if(analyzerContext.RegisteredServices.TryGetValue(targetType, out var serviceInfo))
         {
-            existingInfo.AddRegistrations(registrations, asyncDecoratedRegistrations);
-            return;
+            serviceInfo.AddRegistrations(registrations, asyncDecoratedRegistrations);
+            serviceInfo.AddActivation(activation, analyzerContext.Assembly);
+        }
+        else
+        {
+            serviceInfo = new ServiceInfo(targetType, serviceKey, activation, registrations, asyncDecoratedRegistrations, analyzerContext.Assembly);
+            analyzerContext.RegisteredServices[targetType] = serviceInfo;
         }
 
-        var hasKey = serviceKey is not null;
-        var serviceInfo = new ServiceInfo(targetType, lifetime, location, serviceKey, keyTypeSymbol, hasKey, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations, analyzerContext.Assembly);
-        if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
-        {
-            // Another registration of the type was added concurrently
-            analyzerContext.RegisteredServices[targetType].AddRegistrations(registrations, asyncDecoratedRegistrations);
-            return;
-        }
-
-        // Only build type index for non-keyed services.
-        // Keyed services are resolved by key + type, not by type alone,
-        // so including them in the type-only index could lead to false positive
-        // circular dependency (SGIOC002) or lifetime conflict (SGIOC003-005) diagnostics.
-        if(hasKey)
-            return;
-
-        // Build index for interfaces
-        foreach(var iface in targetType.AllInterfaces)
-        {
-            analyzerContext.ServiceTypeIndex.TryAdd(iface, serviceInfo);
-        }
-
-        // Build index for base classes
-        var baseType = targetType.BaseType;
-        while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
-        {
-            analyzerContext.ServiceTypeIndex.TryAdd(baseType, serviceInfo);
-            baseType = baseType.BaseType;
-        }
+        analyzerContext.DependencyRegistrations.Add(new(
+            new(serviceInfo, activation),
+            activation with { HasFactory = serviceTypesHaveFactory },
+            dependencyRegistrations,
+            asyncDecoratedRegistrations,
+            tags,
+            order));
     }
 
     /// <summary>
@@ -875,7 +973,6 @@ public sealed partial class RegisterAnalyzer
     private sealed class AnalyzerContext(
         IocAttributeSymbols attributeSymbols,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices,
-        ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
         IocFeatures features,
         ServiceLifetime fallbackLifetime,
         IAssemblySymbol assembly)
@@ -893,10 +990,10 @@ public sealed partial class RegisterAnalyzer
         public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> RegisteredServices { get; } = registeredServices;
 
         /// <summary>
-        /// Index mapping service types (interfaces/base classes) to their implementations.
-        /// Enables O(1) lookup instead of O(n) linear search.
+        /// Every registration with the (service type, key) pairs it registers, from which the <see cref="DependencyIndex"/>
+        /// is built. Filled at CompilationEnd, in the generator's registration order.
         /// </summary>
-        public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> ServiceTypeIndex { get; } = serviceTypeIndex;
+        public List<DependencyRegistration> DependencyRegistrations { get; } = [];
 
         /// <summary>
         /// The registrations collected by the symbol and compilation start actions, resolved against the default settings at
@@ -909,6 +1006,12 @@ public sealed partial class RegisterAnalyzer
 
         /// <summary>The IocImportModuleAttribute of the compilation, whose modules' default settings apply to registrations.</summary>
         public ConcurrentBag<AttributeData> ModuleImportAttributes { get; } = [];
+
+        /// <summary>
+        /// The containers the generator implements (see <see cref="IsGeneratedContainer"/>), with their <c>[IocContainer]</c>,
+        /// whose partial accessors request services like dependencies. Collected by the symbol action.
+        /// </summary>
+        public ConcurrentBag<(INamedTypeSymbol Type, AttributeData Attribute)> Containers { get; } = [];
 
         /// <summary>
         /// Default settings of the compiled assembly, then of the imported modules, using DefaultSettingsMap for efficient
@@ -942,7 +1045,7 @@ public sealed partial class RegisterAnalyzer
         /// Tracks registered (ImplementationType, Key, single Tag) tuples to detect duplicates (SGIOC011).
         /// Each tag is tracked separately; duplicates are detected when any single tag matches.
         /// Services without tags use an empty string tag for comparison.
-        /// Implementation types are compared as runtime types. Filled at CompilationEnd, in source order.
+        /// Implementation types are compared as runtime types. Filled at CompilationEnd, in the generator's registration order.
         /// </summary>
         public HashSet<(INamedTypeSymbol Type, string? Key, string Tag)> RegistrationKeys { get; } = new(new RegistrationKeyComparer());
 
@@ -1012,6 +1115,12 @@ public sealed partial class RegisterAnalyzer
         /// </summary>
         public ConcurrentDictionary<(SyntaxTree Tree, TextSpan Span), ImmutableArray<(ISymbol Member, Location Location)>> InjectMembers { get; } = new();
 
+        /// <summary>
+        /// The keys of the keyed elements (<c>{ nameof(X), key [, KeyType] }</c>) of <see cref="InjectMembers"/>, by the span of
+        /// the element, formatted like the generator's <c>ParseInjectMemberElement</c>. Populated with <see cref="InjectMembers"/>.
+        /// </summary>
+        public ConcurrentDictionary<(SyntaxTree Tree, TextSpan Span), string> InjectMemberKeys { get; } = new();
+
         private readonly ConcurrentDictionary<INamedTypeSymbol, TypeData> decoratorTypeData = new(SymbolEqualityComparer.Default);
 
         /// <summary>
@@ -1030,36 +1139,48 @@ public sealed partial class RegisterAnalyzer
         }
     }
 
+    /// <summary>
+    /// One registration of an implementation type: its lifetime, location, key, and how the container activates it.
+    /// </summary>
+    /// <param name="Lifetime">The effective lifetime of the registration.</param>
+    /// <param name="Location">The location of the registration attribute.</param>
+    /// <param name="HasKey">Whether a Key is specified (regardless of KeyType).</param>
+    /// <param name="KeyTypeSymbol">The type of the Key, or null if no Key is specified or KeyType is Csharp.</param>
+    /// <param name="HasFactory">Whether a Factory method is specified.</param>
+    /// <param name="HasInstance">Whether an Instance is specified.</param>
+    private readonly record struct ServiceActivation(
+        ServiceLifetime Lifetime,
+        Location? Location,
+        bool HasKey,
+        ITypeSymbol? KeyTypeSymbol,
+        bool HasFactory,
+        bool HasInstance)
+    {
+        /// <summary>
+        /// Gets whether the container calls the constructor: the registration has neither Instance nor Factory.
+        /// </summary>
+        public bool IsConstructed => !HasInstance && !HasFactory;
+
+        /// <summary>
+        /// Gets whether the container injects the members: the registration has no Instance (the generator calls the inject
+        /// methods of an async-init factory result).
+        /// </summary>
+        public bool IsInjected => !HasInstance;
+    }
+
     private sealed record ServiceInfo
     {
         public INamedTypeSymbol Type { get; }
-        public ServiceLifetime Lifetime { get; }
-        public Location? Location { get; }
 
         /// <summary>
-        /// The registration key string, or null if the service is unkeyed.
+        /// The key string of the first registration, or null if it is unkeyed.
         /// </summary>
         public string? ServiceKey { get; }
 
         /// <summary>
-        /// The type symbol of the registration key, or null if no key is specified or KeyType is Csharp.
+        /// Every registration of this implementation type, in the generator's registration order.
         /// </summary>
-        public ITypeSymbol? KeyTypeSymbol { get; }
-
-        /// <summary>
-        /// Indicates whether a Key is specified (regardless of KeyType).
-        /// </summary>
-        public bool HasKey { get; }
-
-        /// <summary>
-        /// Indicates whether a Factory method is specified.
-        /// </summary>
-        public bool HasFactory { get; }
-
-        /// <summary>
-        /// Indicates whether an Instance is specified.
-        /// </summary>
-        public bool HasInstance { get; }
+        public ImmutableArray<ServiceActivation> Activations { get; private set; } = [];
 
         /// <summary>
         /// All (service type, key) pairs from every registration that maps to this implementation type.
@@ -1067,57 +1188,97 @@ public sealed partial class RegisterAnalyzer
         /// where <see cref="RegisteredServices"/> only stores the first entry per implementation type.
         /// Used by SGIOC030 analysis to correctly identify all async-init-only service type/key pairs.
         /// </summary>
-        public ImmutableArray<ServiceSymbolKey> AllRegistrations => _allRegistrations;
-
-        private ImmutableArray<ServiceSymbolKey> _allRegistrations;
+        public ImmutableArray<ServiceSymbolKey> AllRegistrations { get; private set; }
 
         /// <summary>
         /// The (service type, key) pairs of <see cref="AllRegistrations"/> that a decorator with async inject methods makes
         /// async-init, even when the implementation type is not (SGIOC030).
         /// </summary>
-        public ImmutableArray<ServiceSymbolKey> AsyncDecoratedRegistrations => _asyncDecoratedRegistrations;
-
-        private ImmutableArray<ServiceSymbolKey> _asyncDecoratedRegistrations;
+        public ImmutableArray<ServiceSymbolKey> AsyncDecoratedRegistrations { get; private set; }
 
         /// <summary>
-        /// Cached constructor to avoid repeated GetSelectedConstructor lookups.
+        /// Cached constructor to avoid repeated GetSelectedConstructor lookups; null unless a registration of this
+        /// implementation type has neither Instance nor Factory, since the container constructs only such a registration.
         /// </summary>
-        public IMethodSymbol? Constructor { get; }
+        public IMethodSymbol? Constructor { get; private set; }
 
         /// <summary>
-        /// Cached list of members with [IocInject] or [Inject] attribute to avoid repeated GetMembers() and attribute lookups.
+        /// Cached list of members with [IocInject] or [Inject] attribute to avoid repeated GetMembers() and attribute lookups;
+        /// empty unless a registration of this implementation type has no Instance, since the container does not inject an Instance.
         /// </summary>
-        public ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> InjectedMembers { get; }
+        public ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> InjectedMembers { get; private set; } = [];
+
+        /// <summary>
+        /// Gets whether a registration of this implementation type has neither Instance nor Factory, so the container calls
+        /// its constructor.
+        /// </summary>
+        public bool HasConstructorActivation { get; private set; }
+
+        /// <summary>Gets whether a registration of this implementation type has no Instance, so the container injects its members.</summary>
+        public bool HasInjection { get; private set; }
+
+        /// <summary>
+        /// Serializes the writes of <see cref="AddActivation"/> and <see cref="AddRegistrations"/>. The properties are read
+        /// without it, once every registration has been recorded at CompilationEnd.
+        /// </summary>
+        private readonly object _gate = new();
 
         public ServiceInfo(
             INamedTypeSymbol type,
-            ServiceLifetime lifetime,
-            Location? location,
             string? serviceKey,
-            ITypeSymbol? keyTypeSymbol,
-            bool hasKey,
-            bool hasFactory,
-            bool hasInstance,
+            ServiceActivation activation,
             ImmutableArray<ServiceSymbolKey> registrations,
             ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations,
             IAssemblySymbol assembly)
         {
             Type = type;
-            Lifetime = lifetime;
-            Location = location;
-            _allRegistrations = registrations;
-            _asyncDecoratedRegistrations = asyncDecoratedRegistrations;
+            AllRegistrations = registrations;
+            AsyncDecoratedRegistrations = asyncDecoratedRegistrations;
             ServiceKey = serviceKey;
-            KeyTypeSymbol = keyTypeSymbol;
-            HasKey = hasKey;
-            HasFactory = hasFactory;
-            HasInstance = hasInstance;
 
-            // Cache constructor lookup
-            Constructor = type.GetSelectedConstructor(assembly);
+            AddActivation(activation, assembly);
+        }
 
-            // Cache injected members
-            InjectedMembers = [.. type.GetInjectedMembers()];
+        /// <summary>
+        /// Records a registration of this implementation type, so <see cref="Activations"/>, <see cref="Constructor"/> and
+        /// <see cref="InjectedMembers"/> cover every registration of the type, not only the first one.
+        /// </summary>
+        public void AddActivation(ServiceActivation activation, IAssemblySymbol assembly)
+        {
+            lock(_gate)
+            {
+                Activations = Activations.Add(activation);
+
+                // Like the generator, an Instance or Factory registration is not constructed, so its constructor has no dependencies
+                if(activation.IsConstructed && !HasConstructorActivation)
+                {
+                    HasConstructorActivation = true;
+                    Constructor = Type.GetSelectedConstructor(assembly);
+                }
+
+                // An Instance is not injected; a Factory's result keeps its injected members, since the generator calls the inject
+                // methods of an async-init factory result
+                if(activation.IsInjected && !HasInjection)
+                {
+                    HasInjection = true;
+                    InjectedMembers = [.. Type.GetInjectedMembers()];
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the location of the first registration that the container constructs (<paramref name="injected"/> false) or
+        /// injects (<paramref name="injected"/> true), where a dependency of its constructor or injected members is reported.
+        /// </summary>
+        public Location? GetFirstActivationLocation(bool injected)
+        {
+            foreach(var activation in Activations)
+            {
+                if(injected ? activation.IsInjected : activation.IsConstructed)
+                    return activation.Location;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -1125,10 +1286,13 @@ public sealed partial class RegisterAnalyzer
         /// </summary>
         public void AddRegistrations(ImmutableArray<ServiceSymbolKey> registrations, ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations)
         {
-            ImmutableInterlocked.Update(ref _allRegistrations, static (current, added) => current.AddRange(added), registrations);
+            lock(_gate)
+            {
+                AllRegistrations = AllRegistrations.AddRange(registrations);
 
-            if(!asyncDecoratedRegistrations.IsEmpty)
-                ImmutableInterlocked.Update(ref _asyncDecoratedRegistrations, static (current, added) => current.AddRange(added), asyncDecoratedRegistrations);
+                if(!asyncDecoratedRegistrations.IsEmpty)
+                    AsyncDecoratedRegistrations = AsyncDecoratedRegistrations.AddRange(asyncDecoratedRegistrations);
+            }
         }
     }
 }

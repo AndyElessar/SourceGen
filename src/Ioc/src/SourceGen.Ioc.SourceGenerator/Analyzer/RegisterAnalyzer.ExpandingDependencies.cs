@@ -349,6 +349,16 @@ partial class RegisterAnalyzer
     private static (IMethodSymbol? Method, FactoryMethodData? Factory) GetEffectiveFactory(AnalyzerContext analyzerContext, AnalyzedRegistration registration)
         => GetEffectiveFactoryAttribute(analyzerContext, registration) is { } attribute ? GetFactory(analyzerContext, attribute) : default;
 
+    /// <summary>
+    /// Gets the method of a registration's effective factory (see <see cref="GetEffectiveFactory"/>), without building its
+    /// <see cref="FactoryMethodData"/>.
+    /// </summary>
+    private static IMethodSymbol? GetEffectiveFactoryMethod(AnalyzerContext analyzerContext, AnalyzedRegistration registration)
+        => GetEffectiveFactoryAttribute(analyzerContext, registration) is { ApplicationSyntaxReference: { } syntax }
+            && analyzerContext.FactoryMethods.TryGetValue((syntax.SyntaxTree, syntax.Span), out var method)
+                ? method
+                : null;
+
     /// <summary>Gets the attribute whose Factory is the effective factory of a registration (see <see cref="GetEffectiveFactory"/>).</summary>
     private static AttributeData? GetEffectiveFactoryAttribute(AnalyzerContext analyzerContext, AnalyzedRegistration registration)
     {

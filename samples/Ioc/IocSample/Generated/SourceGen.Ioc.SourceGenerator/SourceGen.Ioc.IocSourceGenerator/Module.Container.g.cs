@@ -49,7 +49,6 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
 
         // Initialize eager singletons
         GetTestQueryHandler();
-        GetConsumer();
         GetExternal();
         GetGenericRequestHandler_Entity();
         GetGenericRequestHandler_Entity3();
@@ -73,7 +72,6 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         _fallbackScopeOwner = fallbackScopeOwner;
         _isRootScope = false;
         _testQueryHandler = parent._testQueryHandler;
-        _consumer = parent._consumer;
         _external = parent._external;
         _genericRequestHandler_Entity = parent._genericRequestHandler_Entity;
         _genericRequestHandler_Entity3 = parent._genericRequestHandler_Entity3;
@@ -110,17 +108,6 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
         var instance = new global::IocSample.TestQueryHandler();
 
         _testQueryHandler = instance;
-        return instance;
-    }
-
-    private global::IocSample.Consumer _consumer = null!;
-    private global::IocSample.Consumer GetConsumer() => _consumer ?? CreateConsumer();
-
-    private global::IocSample.Consumer CreateConsumer()
-    {
-        var instance = new global::IocSample.Consumer(new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication), _func_IWrapperService_string_wrapperService_string, new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", GetKeyed__Key_()), GetAllKvp_object_IKeyed_Dictionary(), GetAllKvp_object_IKeyed_Dictionary(), GetServices<global::System.Lazy<global::IocSample.IWrapperService<string>>>());
-
-        _consumer = instance;
         return instance;
     }
 
@@ -451,6 +438,11 @@ partial class Module : global::SourceGen.Ioc.IIocContainer<global::IocSample.Mod
     private global::IocSample.DependentClass2 GetDependentClass2()
     {
         return new global::IocSample.DependentClass2(GetDependency__1_());
+    }
+
+    private global::IocSample.Consumer GetConsumer()
+    {
+        return new global::IocSample.Consumer(new global::System.Lazy<global::IocSample.IWrapperService<int>>(() => GetWrapperService_int(), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication), _func_IWrapperService_string_wrapperService_string, new global::System.Collections.Generic.KeyValuePair<string, global::IocSample.IKeyed>("Key", GetKeyed__Key_()), GetAllKvp_object_IKeyed_Dictionary(), GetAllKvp_object_IKeyed_Dictionary(), GetServices<global::System.Lazy<global::IocSample.IWrapperService<string>>>());
     }
 
     private global::IocSample.Dependency GetDependency__1_()

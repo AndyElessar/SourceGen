@@ -8,7 +8,8 @@ internal sealed class WrapperService<T> : IWrapperService<T>
 {
 }
 
-[IocRegister(ServiceLifetime.Singleton)]
+// Transient: a Singleton would capture the transient WrapperService through Lazy<T> (SGIOC004)
+[IocRegister(ServiceLifetime.Transient)]
 internal sealed class Consumer(
     Lazy<IWrapperService<int>> wrapperService, 
     Func<IWrapperService<string>> factory,

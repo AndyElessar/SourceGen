@@ -140,4 +140,182 @@ public class SGIOC033Tests
         await Assert.That(sgioc033).Count().IsEqualTo(1);
         await Assert.That(sgioc033[0].GetMessage()).Contains("registered as Singleton");
     }
+
+    [Test]
+    [Arguments("Instance = nameof(Default)")]
+    [Arguments("Factory = nameof(Create)")]
+    public async Task SGIOC033_FuncWithArguments_InConstructorOfInstanceOrFactory_NoDiagnostic(string activation)
+    {
+        // Instance and Factory registrations are not constructed by the container, so their constructor parameters are not resolved
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            public class Service(string name) : IService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, {{activation}})]
+            public class Consumer(Func<string, IService> dependency)
+            {
+                public static readonly Consumer Default = new(static name => new Service(name));
+
+                public static Consumer Create() => Default;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc033 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC033);
+
+        await Assert.That(sgioc033).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC033_InstanceFirst_ThenConstructorRegistration_ReportsAtConstructorRegistration()
+    {
+        // The Func is a constructor parameter, so it is reported at the registration that is constructed
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.Consumer>(Key = "default", Instance = nameof(TestNamespace.Consumer.Default))]
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
+            public class Service(string name) : IService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Func<string, IService> dependency)
+            {
+                public static readonly Consumer Default = new(static name => new Service(name));
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc033 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC033").ToList();
+
+        await Assert.That(sgioc033).Count().IsEqualTo(1);
+        await Assert.That(sgioc033[0].Location.SourceTree!.GetText().ToString(sgioc033[0].Location.SourceSpan))
+            .IsEqualTo("IocRegister(Lifetime = ServiceLifetime.Transient)");
+    }
+
+    [Test]
+    public async Task SGIOC033_KeyedRegistrationFirst_ThenNonKeyedRegistrationOfInterface_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.Foo>(ServiceLifetime.Transient, Key = "a", ServiceTypes = [typeof(TestNamespace.IFoo)])]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister<IFoo>(Lifetime = ServiceLifetime.Singleton)]
+            public class Foo(string name) : IFoo;
+
+            [IocRegister]
+            public class Consumer(Func<string, IFoo> factory);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc033 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC033").ToList();
+
+        await Assert.That(sgioc033).Count().IsEqualTo(1);
+        await Assert.That(sgioc033[0].GetMessage()).Contains("registered as Singleton");
+    }
+
+    [Test]
+    public async Task SGIOC033_KeyedFunc_UsesKeyedTransientRegistration_NoDiagnostic()
+    {
+        // The keyed Func creates the keyed Transient registration, not the non-keyed Singleton one
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister<IFoo>(Lifetime = ServiceLifetime.Singleton)]
+            public class Foo(int x) : IFoo;
+
+            [IocRegisterFor<Foo>(ServiceLifetime.Transient, Key = "a", ServiceTypes = [typeof(IFoo)])]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Bar([FromKeyedServices("a")] Func<int, IFoo> factory);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc033 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC033");
+
+        await Assert.That(sgioc033).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC033_KeyedFunc_OfKeyedSingletonOnly_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister<IFoo>(Lifetime = ServiceLifetime.Singleton, Key = "a")]
+            public class Foo(int x) : IFoo;
+
+            [IocRegister]
+            public class Bar([FromKeyedServices("a")] Func<int, IFoo> factory);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc033 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC033");
+
+        await Assert.That(sgioc033).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC033_KeyedInjectMethod_ParameterUsesMethodKey()
+    {
+        // An unkeyed parameter of a keyed inject method resolves with the method's key
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister<IFoo>(Lifetime = ServiceLifetime.Singleton, Key = "a")]
+            public class Foo(int x) : IFoo;
+
+            [IocRegister]
+            public class Consumer
+            {
+                [IocInject(Key = "a")]
+                public void Init(Func<int, IFoo> factory) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc033 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC033");
+
+        await Assert.That(sgioc033).Count().IsEqualTo(1);
+    }
 }

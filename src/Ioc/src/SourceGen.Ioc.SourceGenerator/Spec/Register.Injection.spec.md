@@ -91,7 +91,7 @@ One `Lazy<T>` / parameterless `Func<T>` registration is emitted per registration
 |Keyed|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<Impl>(key)`|
 |Keyed, with its own instance|`services.AddKeyedXXX<Lazy<T>>(key, (sp, key) => ...)`|`sp.GetRequiredKeyedService<T>(key)`|
 
-A service type has its own instance when decorators wrap it, or a factory it does not share with the implementation type creates it: a generic factory, or a factory of an async-init registration. An `Instance` registration is never decorated, so its wrappers resolve the implementation type.
+A service type has its own instance when decorators wrap it, or a factory it does not share with the implementation type creates it: a generic factory, or a factory of an async-init registration. The instance of an `Instance` registration is never decorated, so its `Lazy<T>` / parameterless `Func<T>` wrappers resolve the implementation type.
 
 A keyed registration MUST NOT emit a non-keyed wrapper registration.
 

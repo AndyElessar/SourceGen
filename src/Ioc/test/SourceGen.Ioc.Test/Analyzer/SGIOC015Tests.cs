@@ -606,4 +606,64 @@ public class SGIOC015Tests
         await Assert.That(sgioc015).Count().IsEqualTo(1);
         await Assert.That(sgioc015[0].GetMessage()).Contains("kvp").And.Contains("int");
     }
+
+    [Test]
+    public async Task SGIOC015_NonKeyedRegistrationFirst_ThenKeyedRegistrationWithMismatchedKey_ReportsDiagnostic()
+    {
+        // The keyed registration is a candidate, although the first registration of the type has no key
+        const string source = """
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister]
+            public class ServiceA : IService { }
+
+            [IocRegisterFor<ServiceA>(Key = 42)]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Consumer(KeyValuePair<string, IService> kvp)
+            {
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc015 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC015");
+
+        await Assert.That(sgioc015).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC015_FactoryRegistrationFirst_ThenConstructorRegistration_ReportsDiagnostic()
+    {
+        // The second registration of the consumer is constructed, although the first one is created by its factory
+        const string source = """
+            using System.Collections.Generic;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.Consumer>(Key = "factory", Factory = nameof(TestNamespace.Consumer.Create))]
+
+            namespace TestNamespace;
+
+            public interface IService { }
+
+            [IocRegister(Key = "Key1")]
+            public class ServiceA : IService { }
+
+            [IocRegister]
+            public class Consumer(KeyValuePair<int, IService> kvp)
+            {
+                public static Consumer Create() => null!;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc015 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC015");
+
+        await Assert.That(sgioc015).Count().IsEqualTo(1);
+    }
 }

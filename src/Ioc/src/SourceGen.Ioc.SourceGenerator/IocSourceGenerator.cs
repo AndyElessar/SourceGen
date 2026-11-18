@@ -207,6 +207,8 @@ public sealed partial class IocSourceGenerator : IIncrementalGenerator
         var basicRegistrationResults3 = defaultSettingsImplTypeRegistrations
             .Select(static (registrations, ct) => ProcessSingleRegistrationFromDefaults(registrations, ct));
 
+        // The order of these pipelines decides which registration of a (service type, key) is the last one; the analyzer
+        // mirrors it (AnalyzerHelpers.GetGeneratorRegistrationPipeline), so keep both in sync
         var allBasicResults = CollectAndConcat(
             basicRegistrationResults1,
             basicRegistrationResults1_T1,

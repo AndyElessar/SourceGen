@@ -196,3 +196,51 @@ public sealed partial class ExplicitSingleWrapperContainer;
 [IocRegisterFor<ExplicitSingleWrapperConsumer>(ServiceLifetime.Transient)]
 [IocContainer(ExplicitOnly = true, UseSwitchStatement = true)]
 public sealed partial class ExplicitSingleWrapperSwitchContainer;
+
+/// <summary>
+/// Service whose BCL collections are registered directly with <c>Instance</c>. It is not
+/// <see cref="IExplicitCollectionHandler"/>, whose collection service types other test cases register, so the constructor
+/// parameters of the collections resolve to these registrations.
+/// </summary>
+public interface IExplicitBclCollectionHandler;
+
+internal sealed class FirstExplicitBclCollectionHandler : IExplicitBclCollectionHandler;
+
+internal sealed class SecondExplicitBclCollectionHandler : IExplicitBclCollectionHandler;
+
+/// <summary>
+/// BCL collections registered directly with <c>Instance</c>: their <c>List(IEnumerable&lt;T&gt;)</c> /
+/// <c>Dictionary(IDictionary&lt;TKey, TValue&gt;, IEqualityComparer&lt;TKey&gt;)</c> constructors resolve to the registrations
+/// themselves, which is not a circular dependency (SGIOC002), since an Instance registration is never constructed.
+/// </summary>
+public static class ExplicitBclCollections
+{
+    public static readonly List<Lazy<IExplicitBclCollectionHandler>> Lazies = [];
+
+    public static readonly Dictionary<string, IExplicitBclCollectionHandler> Dictionary = [];
+}
+
+/// <summary>Consumer of the BCL collections registered with <c>Instance</c>.</summary>
+public sealed class ExplicitBclCollectionConsumer(
+    IEnumerable<Lazy<IExplicitBclCollectionHandler>> lazies,
+    IReadOnlyDictionary<string, IExplicitBclCollectionHandler> dictionary)
+{
+    public IEnumerable<Lazy<IExplicitBclCollectionHandler>> Lazies { get; } = lazies;
+    public IReadOnlyDictionary<string, IExplicitBclCollectionHandler> Dictionary { get; } = dictionary;
+}
+
+[IocRegisterFor<FirstExplicitBclCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitBclCollectionHandler)])]
+[IocRegisterFor<SecondExplicitBclCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitBclCollectionHandler)])]
+[IocRegisterFor<List<Lazy<IExplicitBclCollectionHandler>>>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<Lazy<IExplicitBclCollectionHandler>>)], Instance = "ExplicitBclCollections.Lazies")]
+[IocRegisterFor<Dictionary<string, IExplicitBclCollectionHandler>>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IReadOnlyDictionary<string, IExplicitBclCollectionHandler>)], Instance = "ExplicitBclCollections.Dictionary")]
+[IocRegisterFor<ExplicitBclCollectionConsumer>(ServiceLifetime.Transient)]
+[IocContainer(ExplicitOnly = true)]
+public sealed partial class ExplicitBclCollectionContainer;
+
+[IocRegisterFor<FirstExplicitBclCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitBclCollectionHandler)])]
+[IocRegisterFor<SecondExplicitBclCollectionHandler>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IExplicitBclCollectionHandler)])]
+[IocRegisterFor<List<Lazy<IExplicitBclCollectionHandler>>>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IEnumerable<Lazy<IExplicitBclCollectionHandler>>)], Instance = "ExplicitBclCollections.Lazies")]
+[IocRegisterFor<Dictionary<string, IExplicitBclCollectionHandler>>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IReadOnlyDictionary<string, IExplicitBclCollectionHandler>)], Instance = "ExplicitBclCollections.Dictionary")]
+[IocRegisterFor<ExplicitBclCollectionConsumer>(ServiceLifetime.Transient)]
+[IocContainer(ExplicitOnly = true, UseSwitchStatement = true)]
+public sealed partial class ExplicitBclCollectionSwitchContainer;

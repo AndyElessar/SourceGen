@@ -236,4 +236,30 @@ public class SGIOC038Tests
         await Assert.That(sgioc018).Count().IsEqualTo(1);
         await Assert.That(sgioc018[0].GetMessage()).Contains("INode<string>");
     }
+
+    [Test]
+    public async Task SGIOC038_UnboundImplementationWithRegisterAllInterfaces_ReportsInterfaceNestedInGenericType()
+    {
+        // The interfaces of an unbound implementation (typeof(Repo<>)) are those of its definition
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Repo<>), ServiceLifetime.Scoped, RegisterAllInterfaces = true)]
+
+            namespace TestNamespace;
+
+            public class Outer<T>
+            {
+                public interface INode;
+            }
+
+            public class Repo<T> : Outer<T>.INode;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc038 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC038).ToList();
+
+        await Assert.That(sgioc038).Count().IsEqualTo(1);
+    }
 }

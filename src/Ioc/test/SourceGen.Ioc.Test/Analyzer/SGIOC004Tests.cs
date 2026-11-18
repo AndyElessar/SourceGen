@@ -242,4 +242,149 @@ public class SGIOC004Tests
         await Assert.That(sgioc004).Count().IsEqualTo(1);
         await Assert.That(sgioc004[0].GetMessage()).Contains("SingletonService").And.Contains("TransientHandler");
     }
+
+    [Test]
+    public async Task SGIOC004_SingletonInstanceWithTransientConstructorParameter_NoDiagnostic()
+    {
+        // An Instance registration is never constructed, so its constructor does not capture the transient service
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class TransientService;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Instance = nameof(Default))]
+            public class SingletonService
+            {
+                public static readonly SingletonService Default = new(new TransientService());
+
+                public SingletonService(TransientService transient) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004");
+
+        await Assert.That(sgioc004).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC004_SingletonFactoryWithTransientConstructorParameter_NoDiagnostic()
+    {
+        // A Factory registration is created by its factory method, so its constructor does not capture the transient service
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class TransientService;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Factory = nameof(Create))]
+            public class SingletonService
+            {
+                public SingletonService(TransientService transient) { }
+
+                public static SingletonService Create() => new(new TransientService());
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004");
+
+        await Assert.That(sgioc004).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments("Instance = nameof(TestNamespace.SingletonService.Default)")]
+    [Arguments("Factory = nameof(TestNamespace.SingletonService.Create)")]
+    public async Task SGIOC004_InstanceOrFactoryFirst_ThenConstructorRegistrationOfSameType_ReportsDiagnostic(string activation)
+    {
+        // The non-keyed registration is constructed, although the first registration of the type is not
+        var source = $$"""
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.SingletonService>(ServiceLifetime.Singleton, Key = "special", {{activation}})]
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class TransientService;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService
+            {
+                public static readonly SingletonService Default = new(new TransientService());
+
+                public SingletonService(TransientService transient) { }
+
+                public static SingletonService Create() => new(new TransientService());
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004").ToList();
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
+        await Assert.That(sgioc004[0].Location.SourceTree!.GetText().ToString(sgioc004[0].Location.SourceSpan))
+            .IsEqualTo("IocRegister(Lifetime = ServiceLifetime.Singleton)");
+    }
+
+    [Test]
+    public async Task SGIOC004_SingletonInstanceFirst_ThenTransientConstructorRegistration_NoDiagnostic()
+    {
+        // The Singleton registration is an Instance, and the constructed registration is Transient, so nothing is captured
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.Foo>(Key = "default", Instance = nameof(TestNamespace.Foo.Default))]
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class TransientService;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Foo(TransientService transient)
+            {
+                public static readonly Foo Default = new(new TransientService());
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004");
+
+        await Assert.That(sgioc004).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC004_KeyedSingletonFirst_ThenNonKeyedTransientDependency_ReportsDiagnostic()
+    {
+        // The non-keyed dependency resolves to the non-keyed Transient registration, not the keyed Singleton one
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.TransientService>(ServiceLifetime.Singleton, Key = "cached")]
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class TransientService;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService(TransientService transient);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004");
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
+    }
 }

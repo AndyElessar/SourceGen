@@ -486,4 +486,105 @@ public class SGIOC011Tests
             await Assert.That(sgioc011[0].Location.GetLineSpan().StartLinePosition.Line).IsEqualTo(3);
         }
     }
+
+    [Test]
+    public async Task SGIOC011_RegisterForBeforeRegisterInSource_ReportsAtRegisterFor()
+    {
+        // The generator adds [IocRegister] registrations before [IocRegisterFor<T>] ones, so the holder's registration is the
+        // later one that takes effect, although it comes first in source
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegisterFor<Foo>]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Foo;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
+
+        await Assert.That(sgioc011).Count().IsEqualTo(1);
+        await Assert.That(sgioc011[0].Location.SourceTree!.GetText().ToString(sgioc011[0].Location.SourceSpan))
+            .IsEqualTo("IocRegisterFor<Foo>");
+    }
+
+    [Test]
+    public async Task SGIOC011_GenericRegisterBeforeRegisterInSource_ReportsAtGenericRegister()
+    {
+        // [IocRegister<T>] registrations come after [IocRegister] ones in the generator's order
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister<IFoo>]
+            [IocRegister]
+            public class Foo : IFoo;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
+
+        await Assert.That(sgioc011).Count().IsEqualTo(1);
+        await Assert.That(sgioc011[0].Location.SourceTree!.GetText().ToString(sgioc011[0].Location.SourceSpan))
+            .IsEqualTo("IocRegister<IFoo>");
+    }
+
+    [Test]
+    public async Task SGIOC011_GenericRegisterForBeforeRegisterForInSource_ReportsAtGenericRegisterFor()
+    {
+        // [IocRegisterFor<T>] registrations come after [IocRegisterFor] ones in the generator's order
+        const string source = """
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.Foo>]
+            [assembly: IocRegisterFor(typeof(TestNamespace.Foo))]
+
+            namespace TestNamespace;
+
+            public class Foo;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc011 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011").ToList();
+
+        await Assert.That(sgioc011).Count().IsEqualTo(1);
+        await Assert.That(sgioc011[0].Location.SourceTree!.GetText().ToString(sgioc011[0].Location.SourceSpan))
+            .IsEqualTo("IocRegisterFor<TestNamespace.Foo>");
+    }
+
+    [Test]
+    public async Task SGIOC011_PartlyOverlappingTags_RecordsEveryTagOfDuplicate()
+    {
+        // B duplicates A on "x", and C duplicates B on "y": every tag of B is recorded, although B is reported for "x"
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Tags = ["x"])]
+            public class Foo;
+
+            [IocRegisterFor(typeof(Foo), Tags = ["x", "y"])]
+            public static class RegistrationsB;
+
+            [IocRegisterFor<Foo>(Tags = ["y"])]
+            public static class RegistrationsC;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var locations = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC011")
+            .Select(static d => d.Location.SourceTree!.GetText().ToString(d.Location.SourceSpan))
+            .ToList();
+
+        await Assert.That(locations).Count().IsEqualTo(2);
+        await Assert.That(locations).Contains("IocRegisterFor(typeof(Foo), Tags = [\"x\", \"y\"])");
+        await Assert.That(locations).Contains("IocRegisterFor<Foo>(Tags = [\"y\"])");
+    }
 }

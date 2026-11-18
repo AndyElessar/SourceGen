@@ -52,11 +52,12 @@ When TagOnly=false, the registration is considered to have an empty tag for comp
 
 **Analysis:**
 
-- Runs at compilation end, once the default settings are known (`ResolveRegistrations`), over the registrations in source order, so the later duplicate is reported.
+- Runs at compilation end, once the default settings are known (`ResolveRegistrations`), over the registrations in the generator's registration order: `[IocRegister]`, `[IocRegister<T>]`, `[IocRegisterFor]` and `[IocRegisterFor<T>]` registrations, in this order, each in source order (see `AnalyzerHelpers.GetGeneratorRegistrationPipeline`). The later duplicate in that order is reported: the generator adds it later, so it takes effect in the container output and, when both have the same tags, in the Register output (which groups registrations by their tags, see [Resolved Dependencies](Diagnostics.Dependencies.spec.md#resolved-dependencies)); for example, `[IocRegisterFor<Foo>]` on a type declared before `[IocRegister] class Foo` is reported, not `[IocRegister]`.
+- The `ImplementationTypes` of `[IocRegisterDefaults]`, which the generator adds after all of them, are not checked.
 - Collects all registrations and builds an index of `(ImplementationType, Key, Tag)`. Implementation types are compared as runtime types (`RuntimeTypeSymbolComparer`), so `Impl<(int A, int B)>` and `Impl<(int X, int Y)>` are the same implementation type.
 - The tags of a registration without `Tags` are those of its best `[IocRegisterDefaults]`, like the generator (see [Default Settings](Analyzer.Register.spec.md#default-settings)).
 - When `TagOnly=false`, automatically adds an empty string as an additional Tag.
-- Checks each effective Tag; reports if the same combination already exists.
+- Checks and records each effective Tag; reports once if the same combination already exists for any of them. Every Tag is recorded, also after a duplicate is found, so a later registration that duplicates this one on another Tag is reported too (for example, `["x"]`, then `["x", "y"]`, then `["y"]` reports the second and the third).
 
 ---
 
