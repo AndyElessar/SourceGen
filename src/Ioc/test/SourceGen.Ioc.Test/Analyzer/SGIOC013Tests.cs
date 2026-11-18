@@ -1288,4 +1288,213 @@ public class SGIOC013Tests
 
         await Assert.That(sgioc013).Count().IsEqualTo(expected);
     }
+
+    [Test]
+    [Arguments("Lazy<Func<string, Foo>>", "[IocContainer]", 1)]
+    [Arguments("Func<Func<string, Foo>>", "[IocContainer]", 1)]
+    [Arguments("KeyValuePair<string, Func<string, Foo>>", "[IocContainer]", 1)]
+    [Arguments("Lazy<Lazy<Func<string, Foo>>>", "[IocContainer]", 1)]
+    [Arguments("Task<Func<string, Foo>>", "[IocContainer]", 0)]
+    [Arguments("Lazy<IEnumerable<Func<string, Foo>>>", "[IocContainer]", 0)]
+    [Arguments("Lazy<Func<string, Foo>>", "[IocContainer(ExplicitOnly = true)]", 0)]
+    [Arguments("Lazy<Func<string, Foo>>", "", 0)]
+    public async Task SGIOC013_InstanceConstructedByNestedFuncInContainer_ReportsDiagnostic(string dependencyType, string container, int expected)
+    {
+        // Like the generator, a container constructs a Func with input parameters inline inside Lazy, a parameterless Func or a
+        // KeyValuePair, for its own registrations; the Register output resolves the inner Func, which it does not register
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo([ServiceKey] int key)
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            [IocRegister]
+            public class Consumer([FromKeyedServices("a")] {{dependencyType}} make);
+
+            {{(container.Length == 0 ? "" : container + "\npublic partial class AppContainer;")}}
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    [Arguments("[IocInject(Key = \"a\")] public partial Lazy<Func<string, Foo>> Make();")]
+    [Arguments("[IocInject(Key = \"a\")] public partial KeyValuePair<string, Func<string, Foo>> Make { get; }")]
+    public async Task SGIOC013_InstanceConstructedByNestedFuncInContainerAccessor_ReportsDiagnostic(string accessor)
+    {
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo([ServiceKey] int key)
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            [IocContainer]
+            public partial class AppContainer
+            {
+                {{accessor}}
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC013_InstanceConstructedByNestedFuncInContainerInjectedProperty_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo([ServiceKey] int key)
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            [IocRegister]
+            public class Consumer
+            {
+                [IocInject(Key = "a")]
+                public Lazy<Func<string, Foo>> Make { get; set; } = null!;
+            }
+
+            [IocContainer]
+            public partial class AppContainer;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("[IocRegister] public class Consumer { [IocInject(Key = \"a\")] public void Init(Lazy<Func<string, Foo>> make) { } }")]
+    [Arguments("[IocRegister(Factory = nameof(Create))] public class Consumer { public static Consumer Create([FromKeyedServices(\"a\")] Lazy<Func<string, Foo>> make) => new(); }")]
+    [Arguments("[IocRegister(Instance = nameof(Default))] public class Bar([FromKeyedServices(\"a\")] Lazy<Func<string, Foo>> make) { public static readonly Bar Default = new(null!); }\n[IocRegister] public class Consumer(Func<int, Bar> make);")]
+    [Arguments("[IocRegister(Instance = nameof(Default))] public class Bar([FromKeyedServices(\"a\")] Lazy<Func<string, Foo>> make) { public static readonly Bar Default = new(null!); }\n[IocRegister] public class Consumer(Lazy<Func<int, Bar>> make);")]
+    [Arguments("public interface IHandler<T>;\n[IocRegister(ServiceTypes = [typeof(IHandler<int>)], Decorators = [typeof(Deco<>)])] public class Handler : IHandler<int>;\npublic class Deco<T>(IHandler<T> inner, [FromKeyedServices(\"a\")] Lazy<Func<string, Foo>> make) : IHandler<T>;")]
+    [Arguments("public interface IHandler;\n[IocRegister(ServiceTypes = [typeof(IHandler)], Decorators = [typeof(Deco)])] public class Handler : IHandler;\npublic class Deco(IHandler inner, [FromKeyedServices(\"a\")] Lazy<Func<string, Foo>> make) : IHandler;")]
+    [Arguments("public interface IBar;\n[IocRegister(Instance = nameof(Default), ServiceTypes = [typeof(IBar)], Decorators = [typeof(Deco)])] public class Bar(int id) : IBar { public static readonly Bar Default = new(0); }\npublic class Deco(IBar inner, [FromKeyedServices(\"a\")] Lazy<Func<string, Foo>> make) : IBar;\n[IocRegister] public class Consumer(Func<int, IBar> make);", 1)]
+    [Arguments("public interface IBar;\n[IocRegister(Instance = nameof(Default), ServiceTypes = [typeof(IBar)], Decorators = [typeof(Deco)])] public class Bar(int id) : IBar { public static readonly Bar Default = new(0); }\npublic class Deco(IBar inner, [FromKeyedServices(\"a\")] Lazy<Func<string, Foo>> make) : IBar;\n[IocRegister] public class Consumer(IBar bar);", 0)]    public async Task SGIOC013_InstanceConstructedByNestedFuncInContainerDependency_ReportsDiagnostic(string declarations, int expected = 1)
+    {
+        // Like the generator, the container resolves inline the dependencies of an inject method, a factory, a decorator (an
+        // open generic one closed for the service type), and of an Instance registration that a Func constructs, but not of an
+        // Instance registration resolved as is
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo([ServiceKey] int key)
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            {{declarations}}
+
+            [IocContainer]
+            public partial class AppContainer;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    [Arguments("[IocContainer(ExplicitOnly = true)]\n[IocRegisterFor(typeof(Consumer))]\n[IocRegisterFor(typeof(Foo), Key = \"a\", Instance = nameof(Foo.Default))]", 1)]
+    [Arguments("[IocContainer(IncludeTags = [\"app\"])]", 1)]
+    [Arguments("[IocContainer(IncludeTags = [\"other\"])]", 0)]
+    public async Task SGIOC013_InstanceConstructedByNestedFuncInContainerScope_ReportsDiagnostic(string container, int expected)
+    {
+        // Only the registrations of the container resolve their dependencies there
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default), Tags = ["app", "other"])]
+            public class Foo([ServiceKey] int key)
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            [IocRegister(Tags = ["app"])]
+            public class Consumer([FromKeyedServices("a")] Lazy<Func<string, Foo>> make);
+
+            {{container}}
+            public partial class AppContainer;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task SGIOC013_InstanceConstructedByNestedFuncInContainerInjectMembers_ReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Consumer), InjectMembers = [new object[] { nameof(TestNamespace.Consumer.Make), "a" }])]
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo([ServiceKey] int key)
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            public class Consumer
+            {
+                public Lazy<Func<string, Foo>> Make { get; set; } = null!;
+            }
+
+            [IocContainer]
+            public partial class AppContainer;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(1);
+    }
 }

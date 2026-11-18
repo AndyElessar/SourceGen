@@ -125,8 +125,8 @@ public sealed partial class RegisterAnalyzer
     /// members, [IocInject] and InjectMembers, also with an Instance) or an applied decorator, directly or as the element of a
     /// collection; it is registered for every closed, not async-init registration of <c>TReturn</c> (an unbound service type
     /// registers its closed forms), and constructs the implementation type with the registration's key even for an Instance or
-    /// Factory registration. The return type of a partial accessor of a generated container constructs only a registration of
-    /// that container (see <see cref="AddConstructedByContainerAccessors"/>). The parameters of a
+    /// Factory registration. The return type of a partial accessor of a generated container, and a Func nested in another
+    /// wrapper, construct only a registration of a container (see <see cref="AddConstructedByContainers"/>). The parameters of a
     /// generic factory are scanned as declared, not closed for each service type. Each registration maps to the distinct requested <c>Func</c>
     /// types that construct it, whose input parameters the generator passes to the parameters of their type (see
     /// <see cref="IsPassedFuncArgument"/>).
@@ -212,10 +212,10 @@ public sealed partial class RegisterAnalyzer
             }
         }
 
-        // The generated containers implement their partial accessors (TransformContainer.ExtractPartialAccessors), whose Funcs
-        // construct a registration of the container itself, not the Register output's registrations
+        // The generated containers construct the Funcs of their partial accessors and the Funcs nested in another wrapper inline,
+        // from their own registrations
         if(!analyzerContext.Containers.IsEmpty)
-            AddConstructedByContainerAccessors(analyzerContext, constructed, cancellationToken);
+            AddConstructedByContainers(analyzerContext, constructed, cancellationToken);
 
         return constructed;
 
@@ -272,25 +272,37 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
-    /// Adds the registrations that the <c>Func</c> with input parameters returned by a partial accessor of a generated container
-    /// constructs. Like the generator (<c>ResolvePartialAccessorDependencies</c>, <c>MultiParamFuncDependency</c>), the
-    /// accessor's <c>Func</c> constructs the last registration of its return type and key (from its <c>[IocInject]</c>) among
-    /// the container's own registrations (<c>ExplicitOnly</c>: the <c>[IocRegisterFor]</c> on the container, in their order;
-    /// otherwise every registration, with <c>IncludeTags</c> those with one of them), unless that registration is async-init
-    /// or the container registers the <c>Func</c> type itself. Otherwise, and for a collection of <c>Func</c>s, the container
-    /// resolves it from the fallback provider, where the Register output registers no <c>Func</c> for an accessor.
+    /// Adds the registrations that a generated container constructs with a <c>Func</c> with input parameters that the Register
+    /// output does not register: the return type of a partial accessor (<c>ResolvePartialAccessorDependencies</c>), and a
+    /// <c>Func</c> nested in another wrapper that the container constructs inline while the Register output resolves the inner
+    /// <c>Func</c> (see <see cref="AddConstructedByContainerFunc"/>). Like the generator's container entries, the container
+    /// resolves the dependencies (see <see cref="CollectContainerFuncDependencies"/>) of its registrations without an
+    /// Instance, and of the Instance registrations a <c>Func</c> constructs (<c>MultiParamFuncDependency</c>), until no more
+    /// is constructed.
     /// </summary>
-    private static void AddConstructedByContainerAccessors(
+    private static void AddConstructedByContainers(
         AnalyzerContext analyzerContext,
         Dictionary<ServiceActivation, List<INamedTypeSymbol>> constructed,
         CancellationToken cancellationToken)
     {
         // The registrations by the span of their attribute, built for the first ExplicitOnly container
         Dictionary<(SyntaxTree Tree, TextSpan Span), DependencyRegistration>? registrationsBySpan = null;
+        Dictionary<Location, List<(INamedTypeSymbol Type, string? Key)>>? dependencies = null;
 
         foreach(var (container, containerAttribute) in analyzerContext.Containers)
         {
-            List<DependencyRegistration>? scope = null;
+            var scope = GetContainerRegistrations(analyzerContext, container, containerAttribute, ref registrationsBySpan);
+            dependencies ??= CollectContainerFuncDependencies(analyzerContext, cancellationToken);
+
+            // The registrations whose dependencies the container resolves
+            var resolved = new HashSet<Location>();
+            var pending = new Queue<Location>();
+            foreach(var registration in scope)
+            {
+                if(!registration.Dependency.Activation.HasInstance && registration.Dependency.Activation.Location is { } location && resolved.Add(location))
+                    pending.Enqueue(location);
+            }
+
             foreach(var member in container.GetMembers())
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -301,35 +313,26 @@ public sealed partial class RegisterAnalyzer
                     IPropertySymbol { IsStatic: false, IsPartialDefinition: true, GetMethod: not null } property => property.Type,
                     _ => null
                 };
-                if(type is null || !TryGetFuncWithArgumentsReturnType(type, out var funcType, out var returnType))
+                if(type is INamedTypeSymbol namedType && ConstructsFuncInline(namedType))
+                    ResolveFuncConstructed(AddConstructedByContainerFunc(analyzerContext, constructed, scope, namedType, GetAccessorKey(member)));
+            }
+
+            while(pending.Count > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if(!dependencies.TryGetValue(pending.Dequeue(), out var consumerDependencies))
                     continue;
 
-                scope ??= GetContainerRegistrations(analyzerContext, container, containerAttribute, ref registrationsBySpan);
+                foreach(var (type, key) in consumerDependencies)
+                    ResolveFuncConstructed(AddConstructedByContainerFunc(analyzerContext, constructed, scope, type, key));
+            }
 
-                var serviceKey = new ServiceSymbolKey(returnType, GetAccessorKey(member));
-                var funcKey = new ServiceSymbolKey(funcType, serviceKey.Key);
-                DependencyRegistration? winner = null;
-                var hasFuncRegistration = false;
-                foreach(var registration in scope)
-                {
-                    if(IsOpenGeneric(registration))
-                        continue;
-
-                    if(registration.Registrations.Contains(serviceKey))
-                        winner = registration;
-                    else if(registration.Registrations.Contains(funcKey))
-                        hasFuncRegistration = true;
-                }
-
-                if(winner is null
-                    || hasFuncRegistration
-                    || IsAsyncInit(analyzerContext, winner)
-                    || winner.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceKey))
-                {
-                    continue;
-                }
-
-                AddConstructingFunc(constructed, winner.Dependency.Activation, funcType);
+            // A Func constructs an Instance registration inline, resolving its dependencies too
+            void ResolveFuncConstructed(DependencyRegistration? registration)
+            {
+                if(registration?.Dependency.Activation is { HasInstance: true, Location: { } location } && resolved.Add(location))
+                    pending.Enqueue(location);
             }
         }
 
@@ -344,6 +347,226 @@ public sealed partial class RegisterAnalyzer
 
             return null;
         }
+    }
+
+    /// <summary>
+    /// Adds the registration that a container constructs for a dependency of <paramref name="type"/> and
+    /// <paramref name="key"/> that is a <c>Func</c> with input parameters or nests one inline (see
+    /// <see cref="ConstructsFuncInline"/>). Like the generator (<c>ResolveWrapperDependencyForContainerEntryModel</c>,
+    /// <c>MultiParamFuncDependency</c>), a wrapper type the container registers itself resolves as that registration, at any
+    /// level; otherwise the <c>Func</c> constructs the last registration of its return type and the key among the container's
+    /// own registrations (<paramref name="scope"/>), unless it is async-init. Otherwise the container resolves it from the
+    /// fallback provider. Returns the constructed registration, if any.
+    /// </summary>
+    private static DependencyRegistration? AddConstructedByContainerFunc(
+        AnalyzerContext analyzerContext,
+        Dictionary<ServiceActivation, List<INamedTypeSymbol>> constructed,
+        List<DependencyRegistration> scope,
+        INamedTypeSymbol type,
+        string? key)
+    {
+        var current = type;
+        while(true)
+        {
+            if(IsRegisteredIn(scope, new ServiceSymbolKey(current, key)))
+                return null;
+
+            if(TryGetFuncWithArgumentsReturnType(current, out var funcType, out var returnType))
+            {
+                var serviceKey = new ServiceSymbolKey(returnType, key);
+                DependencyRegistration? winner = null;
+                foreach(var registration in scope)
+                {
+                    if(!IsOpenGeneric(registration) && registration.Registrations.Contains(serviceKey))
+                        winner = registration;
+                }
+
+                if(winner is null
+                    || IsAsyncInit(analyzerContext, winner)
+                    || winner.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceKey))
+                {
+                    return null;
+                }
+
+                AddConstructingFunc(constructed, winner.Dependency.Activation, funcType);
+                return winner;
+            }
+
+            if(!TryGetInlineWrapperInnerType(current, out var inner))
+                return null;
+
+            current = inner;
+        }
+
+        static bool IsRegisteredIn(List<DependencyRegistration> scope, ServiceSymbolKey serviceKey)
+        {
+            foreach(var registration in scope)
+            {
+                if(!IsOpenGeneric(registration) && registration.Registrations.Contains(serviceKey))
+                    return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Gets whether a container constructs a <c>Func</c> with input parameters for a dependency of <paramref name="type"/>: it is
+    /// such a <c>Func</c>, or nests one in <c>Lazy&lt;T&gt;</c>, a parameterless <c>Func&lt;T&gt;</c> or
+    /// <c>KeyValuePair&lt;TKey, T&gt;</c>, which the container builds inline (<c>ResolveInnerDependencyForContainerEntryModel</c>).
+    /// A collection, <c>Task&lt;T&gt;</c> or a dictionary of them is resolved from the fallback provider.
+    /// </summary>
+    private static bool ConstructsFuncInline(INamedTypeSymbol type)
+    {
+        var current = type;
+        while(true)
+        {
+            if(TryGetFuncWithArgumentsReturnType(current, out _, out _))
+                return true;
+
+            if(!TryGetInlineWrapperInnerType(current, out var inner))
+                return false;
+
+            current = inner;
+        }
+    }
+
+    /// <summary>
+    /// Gets the type that a container resolves inline inside <c>Lazy&lt;T&gt;</c>, a parameterless <c>Func&lt;T&gt;</c> or
+    /// <c>KeyValuePair&lt;TKey, T&gt;</c>.
+    /// </summary>
+    private static bool TryGetInlineWrapperInnerType(
+        INamedTypeSymbol type,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out INamedTypeSymbol? inner)
+    {
+        inner = null;
+        if(!type.IsGenericType)
+            return false;
+
+        var definition = type.OriginalDefinition;
+        var index = definition.MetadataName switch
+        {
+            "Lazy`1" or "Func`1" when definition.ContainingType is null
+                && definition.ContainingNamespace is { Name: "System", ContainingNamespace.IsGlobalNamespace: true } => 0,
+            "KeyValuePair`2" when IsCollectionsGenericTopLevelType(definition) => 1,
+            _ => -1
+        };
+
+        if(index < 0)
+            return false;
+
+        inner = type.TypeArguments[index] as INamedTypeSymbol;
+        return inner is not null;
+    }
+
+    /// <summary>
+    /// Collects, by the location of each closed registration, its dependencies that are a <c>Func</c> with input parameters
+    /// or nest one inline (see <see cref="ConstructsFuncInline"/>), with their key. Like the generator's container entries
+    /// and <c>MultiParamFuncDependency</c>: the parameters of the effective factory method, otherwise of the constructor (both
+    /// when a generic factory's mapping does not match the implementation type), the <c>[IocInject]</c> members and the
+    /// members listed in <c>InjectMembers</c>, and the constructor parameters and <c>[IocInject]</c> members of the decorators
+    /// applied to its service types (an open generic decorator closed for the service type).
+    /// </summary>
+    private static Dictionary<Location, List<(INamedTypeSymbol Type, string? Key)>> CollectContainerFuncDependencies(
+        AnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
+    {
+        var dependencies = new Dictionary<Location, List<(INamedTypeSymbol Type, string? Key)>>();
+        foreach(var registration in analyzerContext.Registrations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if(registration.IsOpenGeneric || registration.Location is not { } consumer)
+                continue;
+
+            List<(INamedTypeSymbol Type, string? Key)>? consumerDependencies = null;
+            var factoryMethod = GetEffectiveFactoryMethod(analyzerContext, registration);
+            if(factoryMethod is not null)
+                AddParameters(factoryMethod.Parameters, methodKey: null);
+
+            if(factoryMethod is null || IsSelfConstructedByGenericFactory(analyzerContext, registration, factoryMethod))
+                AddParameters(registration.Implementation.GetSelectedConstructor(analyzerContext.Assembly)?.Parameters ?? [], methodKey: null);
+
+            ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers = [.. registration.Implementation.GetInjectedMembers()];
+            foreach(var (member, injectAttribute) in injectedMembers)
+                AddMember(member, injectAttribute.GetKeyInfo().Key);
+
+            if(registration.Attribute.ApplicationSyntaxReference is { } syntax
+                && analyzerContext.InjectMembers.TryGetValue((syntax.SyntaxTree, syntax.Span), out var listedMembers))
+            {
+                foreach(var (member, location) in listedMembers)
+                {
+                    if(!IsInjectedMemberName(member, injectedMembers))
+                        AddMember(member, analyzerContext.InjectMemberKeys.TryGetValue((location.SourceTree!, location.SourceSpan), out var key) ? key : null);
+                }
+            }
+
+            // Like AnalyzeDecorators, the decorators that have a parameter for the decorated instance of a service type, other
+            // than the implementation type itself
+            if(!registration.Decorators.IsEmpty)
+            {
+                HashSet<INamedTypeSymbol>? appliedDecorators = null;
+                foreach(var serviceKey in registration.Registrations)
+                {
+                    var serviceType = serviceKey.ServiceType;
+                    if(SymbolEqualityComparer.Default.Equals(serviceType, registration.Implementation))
+                        continue;
+
+                    var serviceTypeData = serviceType.GetTypeData();
+                    foreach(var decorator in registration.Decorators)
+                    {
+                        if(!AnalyzerHelpers.TryGetDecoratedParameterIndexes(analyzerContext.GetDecoratorTypeData(decorator), serviceTypeData, out var parameterIndexes)
+                            || parameterIndexes.IsEmpty)
+                        {
+                            continue;
+                        }
+
+                        var definition = decorator.IsUnboundGenericType ? decorator.OriginalDefinition : decorator;
+                        (appliedDecorators ??= new(SymbolEqualityComparer.Default)).Add(TryConstructDecorator(definition, serviceType) ?? definition);
+                    }
+                }
+
+                foreach(var decorator in appliedDecorators ?? [])
+                {
+                    AddParameters(decorator.GetSelectedConstructor(analyzerContext.Assembly)?.Parameters ?? [], methodKey: null);
+                    foreach(var (member, injectAttribute) in decorator.GetInjectedMembers())
+                        AddMember(member, injectAttribute.GetKeyInfo().Key);
+                }
+            }
+
+            if(consumerDependencies is not null)
+                dependencies[consumer] = consumerDependencies;
+
+            void AddMember(ISymbol member, string? key)
+            {
+                switch(member)
+                {
+                    case IPropertySymbol property:
+                        Add(property.Type, key);
+                        break;
+                    case IFieldSymbol field:
+                        Add(field.Type, key);
+                        break;
+                    case IMethodSymbol method:
+                        AddParameters(method.Parameters, key);
+                        break;
+                }
+            }
+
+            void AddParameters(ImmutableArray<IParameterSymbol> parameters, string? methodKey)
+            {
+                foreach(var parameter in parameters)
+                    Add(parameter.Type, parameter.GetServiceKeyAndAttributeInfo().ServiceKey ?? methodKey);
+            }
+
+            void Add(ITypeSymbol type, string? key)
+            {
+                if(type is INamedTypeSymbol namedType && ConstructsFuncInline(namedType))
+                    (consumerDependencies ??= []).Add((namedType, key));
+            }
+        }
+
+        return dependencies;
     }
 
     /// <summary>
