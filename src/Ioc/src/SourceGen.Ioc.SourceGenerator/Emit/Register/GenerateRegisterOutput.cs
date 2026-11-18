@@ -54,8 +54,6 @@ partial class IocSourceGenerator
         mainWriter.WriteLine("{");
         mainWriter.Indentation++;
 
-        var context = new RegisterWriteContext(model.AsyncInitServices);
-
         bool isFirstGroup = true;
         foreach(var group in model.TagGroups)
         {
@@ -64,6 +62,12 @@ partial class IocSourceGenerator
                 mainWriter.WriteLine();
             }
             isFirstGroup = false;
+
+            var context = new RegisterWriteContext(
+                group.AsyncInitServices,
+                group.AsyncInitFallbackServices,
+                group.ExplicitWrapperServices,
+                group.ExplicitWrapperFallbackServices);
 
             if(group.Tags.Length == 0)
             {
@@ -119,7 +123,7 @@ partial class IocSourceGenerator
         }
 
         WriteLazyRegistrations(writer, lazyEntries);
-        WriteFuncRegistrations(writer, funcEntries);
+        WriteFuncRegistrations(writer, funcEntries, context);
         WriteKvpRegistrations(writer, kvpEntries);
 
         writer.Indentation--;
@@ -148,7 +152,7 @@ partial class IocSourceGenerator
         }
 
         WriteLazyRegistrations(writer, lazyEntries);
-        WriteFuncRegistrations(writer, funcEntries);
+        WriteFuncRegistrations(writer, funcEntries, context);
         WriteKvpRegistrations(writer, kvpEntries);
 
         writer.Indentation--;
