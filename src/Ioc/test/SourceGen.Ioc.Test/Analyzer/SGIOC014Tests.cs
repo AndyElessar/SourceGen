@@ -535,6 +535,49 @@ public class SGIOC014Tests
     }
 
     [Test]
+    [Arguments("AsyncDecorator", 0)]
+    [Arguments("SyncDecorator", 1)]
+    public async Task SGIOC014_InstanceWithAsyncDecoratorRequestedByFunc_ReportsOnlyWhenConstructed(string decorator, int expected)
+    {
+        // No Func with input parameters is generated for the decorated service type of an Instance registration whose
+        // decorator has async inject methods, so it does not construct the type and resolve its [ServiceKey] parameter
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister(ServiceTypes = [typeof(IFoo)], Instance = nameof(Default), Decorators = [typeof({{decorator}})])]
+            public class Foo([ServiceKey] string key) : IFoo
+            {
+                public static readonly Foo Default = new("");
+            }
+
+            public class AsyncDecorator(IFoo inner) : IFoo
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            public class SyncDecorator(IFoo inner) : IFoo;
+
+            [IocRegister]
+            public class Consumer(Func<int, IFoo> factory);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject" });
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
+
+        await Assert.That(sgioc014).Count().IsEqualTo(expected);
+    }
+
+    [Test]
     [Arguments("Instance = nameof(Default)", "")]
     [Arguments("Factory = nameof(Create)", "")]
     [Arguments("Instance = nameof(Default)", "IEnumerable<")]

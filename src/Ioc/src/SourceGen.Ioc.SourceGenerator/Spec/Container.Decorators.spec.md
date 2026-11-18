@@ -13,7 +13,7 @@ With `ThreadSafeStrategy.CompareExchange`, a decorated instance that loses the r
 
 Registrations whose service type is the implementation type are not split; their single resolver applies the decorators.
 
-Like the Register output, decorators are not applied to the instance of an `Instance` registration: every resolution returns the instance as is. A `Func<T1, ..., TReturn>` with input parameters constructs a new implementation instance and wraps it in the registration's decorators; the async inject methods of those decorators are not called (see [Register Decorators](Register.Decorators.spec.md)).
+Like the Register output, decorators are not applied to the instance of an `Instance` registration: every resolution returns the instance as is. A `Func<T1, ..., TReturn>` with input parameters constructs a new implementation instance and wraps it in the decorators applied to its return type, so a `Func` returning the implementation type does not decorate it. When a decorator applied to the service type has async inject methods, the container MUST resolve the service type's `Func` from the fallback provider instead, like for an async-init service (see [Register Decorators](Register.Decorators.spec.md)); the analyzer reports a partial accessor that returns it with SGIOC046.
 
 The decorated instance MUST be passed to the same constructor parameter as in the Register output, and decorators without such a parameter are skipped (see [Decorated Parameter](Register.Decorators.spec.md#decorated-parameter)). The other parameters are resolved like the implementation's dependencies.
 

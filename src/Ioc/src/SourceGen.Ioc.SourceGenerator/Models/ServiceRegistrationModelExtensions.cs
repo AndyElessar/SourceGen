@@ -30,22 +30,18 @@ internal static class ServiceRegistrationModelExtensions
         /// Gets whether a decorator applied to the service type has an async injection method, so the decorated service type
         /// is resolved as <c>Task&lt;T&gt;</c> even when the implementation type is not.
         /// </summary>
-        public bool HasAsyncDecorators
-        {
-            get
-            {
-                if(!registration.AppliesDecorators)
-                    return false;
+        public bool HasAsyncDecorators =>
+            registration.AppliesDecorators && HasAsyncDecoratorMethod(registration.Decorators);
 
-                foreach(var decorator in registration.Decorators)
-                {
-                    if(decorator.InjectionMembers is { } members && HasAsyncMethod(members))
-                        return true;
-                }
-
-                return false;
-            }
-        }
+        /// <summary>
+        /// Gets whether the instance that a <c>Func</c> with input parameters constructs for the service type needs async
+        /// initialization, so such a Func is not generated: the registration is async-init, or it is an <c>Instance</c>
+        /// registration (never async-init, since its instance is not decorated) and a decorator that the Func applies to the
+        /// new instance has an async injection method.
+        /// </summary>
+        public bool IsAsyncInitWhenConstructedByFunc =>
+            registration.IsAsyncInit
+            || (registration.Instance is not null && HasAsyncDecoratorMethod(registration.Decorators));
 
         /// <summary>
         /// Gets whether a service type alias calls its own factory instead of resolving the implementation type's instance.
@@ -72,6 +68,17 @@ internal static class ServiceRegistrationModelExtensions
         /// a decorated instance, or the result of a generic factory. The instance is typed as the service type.
         /// </summary>
         public bool HasOwnServiceInstance => registration.AppliesDecorators || registration.HasOwnFactoryInstance;
+    }
+
+    private static bool HasAsyncDecoratorMethod(ImmutableEquatableArray<TypeData> decorators)
+    {
+        foreach(var decorator in decorators)
+        {
+            if(decorator.InjectionMembers is { } members && HasAsyncMethod(members))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool HasAsyncMethod(ImmutableEquatableArray<InjectionMemberData> members)

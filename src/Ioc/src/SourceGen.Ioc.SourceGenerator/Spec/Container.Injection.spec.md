@@ -90,7 +90,7 @@ instance.Initialize(GetFileLogger__file_(), GetConsoleLogger__console_());
 
 When a registration contains one or more async inject methods, the container MUST switch that implementation path from synchronous `T` resolution to asynchronous `Task<T>` resolution. A decorator with async inject methods switches only the decorated service type's path (see [Async Decorators](Container.Decorators.spec.md#async-decorators)).
 
-A `Func<T1, ..., TReturn>` with input parameters of an async-init service is not supported: it constructs the instance synchronously, so the container MUST resolve it from the fallback provider instead of constructing an uninitialized instance.
+A `Func<T1, ..., TReturn>` with input parameters of an async-init service is not supported: it constructs the instance synchronously, so the container MUST resolve it from the fallback provider instead of constructing an uninitialized instance. The same applies to a service type of an `Instance` registration that a decorator with async inject methods is applied to, whose `Func` would construct and decorate a new instance (see [Decorators](Container.Decorators.spec.md)); a `Func` that returns its implementation type constructs it undecorated.
 
 ### Resolution Rules
 

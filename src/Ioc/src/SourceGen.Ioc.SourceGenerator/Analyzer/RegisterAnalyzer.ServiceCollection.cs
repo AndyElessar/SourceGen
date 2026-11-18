@@ -287,9 +287,9 @@ public sealed partial class RegisterAnalyzer
         if(decorators.IsEmpty && bestDefaultIndex >= 0)
             decorators = analyzerContext.DefaultDecorators[bestDefaultIndex];
 
-        var asyncDecoratedRegistrations = hasInstance
-            ? []
-            : AnalyzeDecorators(analyzerContext, decorators, targetType, registrations);
+        // The instance of an Instance registration is not decorated, so its decorators are not analyzed (SGIOC030/034/035)
+        if(!hasInstance)
+            AnalyzeDecorators(analyzerContext, decorators, targetType, registrations, recordUsages: true);
 
         // SGIOC036/SGIOC037: open generic registrations are closed on demand for the dependencies the generator discovers,
         // starting from the dependencies of closed registrations; SGIOC039: the service types of generic factories
@@ -314,7 +314,12 @@ public sealed partial class RegisterAnalyzer
                 || (isConstructible && RuntimeTypeSymbolComparer.Instance.Equals(registration.ServiceType, targetType)))];
         }
 
-        RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory && !isSelfConstructed, hasFactory, hasInstance, registrations, dependencyRegistrations, asyncDecoratedRegistrations, tags, order);
+        // The registered (service type, key) pairs, with the closed forms of unbound service types, that an async decorator makes
+        // async-init; for an Instance registration, whose Func with input parameters decorates a new instance, those for which
+        // that Func is not generated
+        var asyncDecoratedRegistrations = AnalyzeDecorators(analyzerContext, decorators, targetType, dependencyRegistrations, recordUsages: false);
+
+        RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory && !isSelfConstructed, hasFactory, hasInstance, dependencyRegistrations, asyncDecoratedRegistrations, tags, order);
 
         static bool IsOpenGenericImplementation(INamedTypeSymbol type)
             => type.IsUnboundGenericType || type is { IsGenericType: true, IsDefinition: true };
@@ -512,16 +517,19 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
-    /// Matches the decorators to the registration's service types with the generator's rules, recording each match in
-    /// <see cref="AnalyzerContext.DecoratorUsages"/> (SGIOC034/SGIOC035) and each applied decorator in
-    /// <see cref="AnalyzerContext.AppliedDecorators"/> (SGIOC030). Returns the (service type, key) pairs that an applied
-    /// decorator with async inject methods makes async-init (SGIOC030).
+    /// Matches the decorators to the registration's service types with the generator's rules. With
+    /// <paramref name="recordUsages"/>, records each match in <see cref="AnalyzerContext.DecoratorUsages"/> (SGIOC034/SGIOC035)
+    /// and each applied decorator in <see cref="AnalyzerContext.AppliedDecorators"/> (SGIOC030). Returns the (service type,
+    /// key) pairs that an applied decorator with async inject methods makes async-init (SGIOC030); for an <c>Instance</c>
+    /// registration, whose instance is not decorated, those whose <c>Func</c> with input parameters is not generated, since it
+    /// would decorate a new instance.
     /// </summary>
     private static ImmutableArray<ServiceSymbolKey> AnalyzeDecorators(
         AnalyzerContext analyzerContext,
         ImmutableArray<INamedTypeSymbol> decorators,
         INamedTypeSymbol targetType,
-        ImmutableArray<ServiceSymbolKey> registrations)
+        ImmutableArray<ServiceSymbolKey> registrations,
+        bool recordUsages)
     {
         if(decorators.IsEmpty)
             return [];
@@ -543,19 +551,25 @@ public sealed partial class RegisterAnalyzer
                 if(!AnalyzerHelpers.TryGetDecoratedParameterIndexes(analyzerContext.GetDecoratorTypeData(decorator), serviceTypeData, out var parameterIndexes))
                     continue;
 
-                analyzerContext.DecoratorUsages
-                    .GetOrAdd(definition, static _ => new(SymbolEqualityComparer.Default))
-                    .TryAdd(serviceTypeForDiagnostics, parameterIndexes);
+                if(recordUsages)
+                {
+                    analyzerContext.DecoratorUsages
+                        .GetOrAdd(definition, static _ => new(SymbolEqualityComparer.Default))
+                        .TryAdd(serviceTypeForDiagnostics, parameterIndexes);
+                }
 
                 // The generator skips a decorator without a parameter for the decorated instance
                 if(parameterIndexes.IsEmpty)
                     continue;
 
-                // An open generic decorator is analyzed as closed for the service type, so its dependencies have closed types
-                var appliedDecorator = TryConstructDecorator(definition, serviceType) ?? definition;
-                analyzerContext.AppliedDecorators
-                    .GetOrAdd(appliedDecorator, static _ => new())
-                    .TryAdd(parameterIndexes[0], 0);
+                if(recordUsages)
+                {
+                    // An open generic decorator is analyzed as closed for the service type, so its dependencies have closed types
+                    var appliedDecorator = TryConstructDecorator(definition, serviceType) ?? definition;
+                    analyzerContext.AppliedDecorators
+                        .GetOrAdd(appliedDecorator, static _ => new())
+                        .TryAdd(parameterIndexes[0], 0);
+                }
 
                 isAsyncDecorated |= AnalyzerHelpers.IsAsyncInitImplementation(decorator, analyzerContext.Features);
             }
@@ -730,7 +744,6 @@ public sealed partial class RegisterAnalyzer
         bool hasFactory,
         bool serviceTypesHaveFactory,
         bool hasInstance,
-        ImmutableArray<ServiceSymbolKey> registrations,
         ImmutableArray<ServiceSymbolKey> dependencyRegistrations,
         ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations,
         ImmutableArray<string> tags,
@@ -740,18 +753,17 @@ public sealed partial class RegisterAnalyzer
         var activation = new ServiceActivation(lifetime, location, hasKey, keyTypeSymbol, hasFactory, hasInstance);
 
         // Same implementation type already registered (e.g., multiple assembly-level IocRegisterFor
-        // attributes targeting the same impl type with different keys). Record the additional
-        // (service type, key) pairs and the registration's own activation on the existing entry,
-        // so the analyses see every registration, not only the first one. The registrations are
+        // attributes targeting the same impl type with different keys). Record the registration's own
+        // activation on the existing entry, so the analyses see every registration, not only the first one; its (service type,
+        // key) pairs are recorded on its DependencyRegistration. The registrations are
         // recorded one after another at CompilationEnd (ResolveRegistrations).
         if(analyzerContext.RegisteredServices.TryGetValue(targetType, out var serviceInfo))
         {
-            serviceInfo.AddRegistrations(registrations, asyncDecoratedRegistrations);
             serviceInfo.AddActivation(activation, analyzerContext.Assembly);
         }
         else
         {
-            serviceInfo = new ServiceInfo(targetType, serviceKey, activation, registrations, asyncDecoratedRegistrations, analyzerContext.Assembly);
+            serviceInfo = new ServiceInfo(targetType, serviceKey, activation, analyzerContext.Assembly);
             analyzerContext.RegisteredServices[targetType] = serviceInfo;
         }
 
@@ -1183,20 +1195,6 @@ public sealed partial class RegisterAnalyzer
         public ImmutableArray<ServiceActivation> Activations { get; private set; } = [];
 
         /// <summary>
-        /// All (service type, key) pairs from every registration that maps to this implementation type.
-        /// Populated during collection to capture all registrations including assembly-level duplicates
-        /// where <see cref="RegisteredServices"/> only stores the first entry per implementation type.
-        /// Used by SGIOC030 analysis to correctly identify all async-init-only service type/key pairs.
-        /// </summary>
-        public ImmutableArray<ServiceSymbolKey> AllRegistrations { get; private set; }
-
-        /// <summary>
-        /// The (service type, key) pairs of <see cref="AllRegistrations"/> that a decorator with async inject methods makes
-        /// async-init, even when the implementation type is not (SGIOC030).
-        /// </summary>
-        public ImmutableArray<ServiceSymbolKey> AsyncDecoratedRegistrations { get; private set; }
-
-        /// <summary>
         /// Cached constructor to avoid repeated GetSelectedConstructor lookups; null unless a registration of this
         /// implementation type has neither Instance nor Factory, since the container constructs only such a registration.
         /// </summary>
@@ -1218,7 +1216,7 @@ public sealed partial class RegisterAnalyzer
         public bool HasInjection { get; private set; }
 
         /// <summary>
-        /// Serializes the writes of <see cref="AddActivation"/> and <see cref="AddRegistrations"/>. The properties are read
+        /// Serializes the writes of <see cref="AddActivation"/>. The properties are read
         /// without it, once every registration has been recorded at CompilationEnd.
         /// </summary>
         private readonly object _gate = new();
@@ -1227,13 +1225,9 @@ public sealed partial class RegisterAnalyzer
             INamedTypeSymbol type,
             string? serviceKey,
             ServiceActivation activation,
-            ImmutableArray<ServiceSymbolKey> registrations,
-            ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations,
             IAssemblySymbol assembly)
         {
             Type = type;
-            AllRegistrations = registrations;
-            AsyncDecoratedRegistrations = asyncDecoratedRegistrations;
             ServiceKey = serviceKey;
 
             AddActivation(activation, assembly);
@@ -1279,20 +1273,6 @@ public sealed partial class RegisterAnalyzer
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// Adds the (service type, key) pairs of another registration of this implementation type.
-        /// </summary>
-        public void AddRegistrations(ImmutableArray<ServiceSymbolKey> registrations, ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations)
-        {
-            lock(_gate)
-            {
-                AllRegistrations = AllRegistrations.AddRange(registrations);
-
-                if(!asyncDecoratedRegistrations.IsEmpty)
-                    AsyncDecoratedRegistrations = AsyncDecoratedRegistrations.AddRange(asyncDecoratedRegistrations);
-            }
         }
     }
 }

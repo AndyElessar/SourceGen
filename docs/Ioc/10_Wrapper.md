@@ -144,7 +144,7 @@ services.AddScoped<global::System.Func<string, global::MyNamespace.IService>>((g
 > [!NOTE]
 > The generator matches Func input types (`string` in this example) to the implementation constructor parameters by type. Unmatched constructor parameters (`ILogger`) are resolved from the service provider automatically.
 
-- Decorators of the service are applied to every created instance; the Func arguments are passed to the implementation only, and decorator dependencies are resolved from the service provider.
+- Decorators of the service are applied to every created instance; the Func arguments are passed to the implementation only, and decorator dependencies are resolved from the service provider. When a decorator has async inject methods, the Func is not generated, since it cannot await them (see [Async Decorators](06_Decorator.md#async-decorators)).
 - For a keyed service, inject `[FromKeyedServices(key)] Func<T1, ..., TReturn>`. A `[ServiceKey]` parameter of the implementation receives the key.
 - The generated container behaves the same way.
 

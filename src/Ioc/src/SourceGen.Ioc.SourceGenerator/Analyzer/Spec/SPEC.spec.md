@@ -51,6 +51,6 @@ Format: ID - Level - Category - Description
 | [Key](Diagnostics.Keys.spec.md) | SGIOC013, SGIOC014, SGIOC015 |
 | [Factory](Diagnostics.Factory.spec.md) | SGIOC008, SGIOC016, SGIOC017, SGIOC039, SGIOC042, SGIOC044 |
 | [Container](Diagnostics.Container.spec.md) | SGIOC018, SGIOC019, SGIOC020, SGIOC021, SGIOC025, SGIOC031, SGIOC045 |
-| [Async-init](Diagnostics.AsyncInit.spec.md) | SGIOC026, SGIOC027, SGIOC029, SGIOC030 |
+| [Async-init](Diagnostics.AsyncInit.spec.md) | SGIOC026, SGIOC027, SGIOC029, SGIOC030, SGIOC046 |
 | [Decorator](Diagnostics.Decorators.spec.md) | SGIOC034, SGIOC035 |
 | [Generic Dependency](Diagnostics.Generics.spec.md) | SGIOC036, SGIOC037 |
