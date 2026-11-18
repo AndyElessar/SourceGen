@@ -56,7 +56,7 @@ public sealed partial class RegisterAnalyzer
         // Like the generator, the methods listed in a registration's InjectMembers are called like its [IocInject] methods, by
         // the registrations that list them
         if (!analyzerContext.InjectMembers.IsEmpty)
-            AnalyzeListedInjectMethods(reportDiagnostic, activations, injectedMembers, analyzerContext, cancellationToken, funcContext);
+            AnalyzeListedInjectMethods(reportDiagnostic, activations, injectedMembers, analyzerContext, funcContext, cancellationToken);
     }
 
     /// <summary>
@@ -68,8 +68,8 @@ public sealed partial class RegisterAnalyzer
         ImmutableArray<ServiceActivation> activations,
         ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers,
         AnalyzerContext analyzerContext,
-        CancellationToken cancellationToken,
-        FuncConstruction? funcContext)
+        FuncConstruction? funcContext,
+        CancellationToken cancellationToken)
     {
         Dictionary<IMethodSymbol, ImmutableArray<ServiceActivation>>? listingActivations = null;
         foreach (var activation in activations)
