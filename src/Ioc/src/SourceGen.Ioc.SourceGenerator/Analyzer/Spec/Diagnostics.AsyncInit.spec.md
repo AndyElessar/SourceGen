@@ -23,7 +23,7 @@ Report when `SourceGenIocFeatures` enables `AsyncMethodInject` without also enab
 SGIOC027, SGIOC029 and SGIOC030 treat a registered (service type, key) pair as async-init when:
 
 - its implementation type has `[IocInject]` methods returning non-generic `Task`, or
-- a decorator applied to the service type has such methods. The decorators are the registration's own `Decorators`, otherwise those of its best `[IocRegisterDefaults]` (like the generator); `Instance` registrations are never async-init, since their instance is not decorated, but a `Func` with input parameters would decorate a new instance, so it is not generated for their service types that such a decorator is applied to (see SGIOC030). A decorator applies to the service types the generator decorates with it, matched with the generator's own rules (`TryCloseDecorator`: implemented service type, closed generic constraints), so a decorator never makes the implementation type itself, or a service type it cannot decorate, async-init.
+- a decorator applied to the service type has such methods. The decorators are the registration's own `Decorators`, otherwise those of its best `[IocRegisterDefaults]` (like the generator); `Instance` registrations are never async-init, since their instance is not decorated, but a `Func` with input parameters would decorate a new instance, so it is not generated for their service types that such a decorator is applied to (see SGIOC030 and SGIOC046). A decorator applies to the service types the generator decorates with it, matched with the generator's own rules (`TryCloseDecorator`: implemented service type, closed generic constraints), so a decorator never makes the implementation type itself, or a service type it cannot decorate, async-init.
 
 Both require `AsyncMethodInject`.
 
@@ -82,3 +82,19 @@ Report when a consumer requests `TService` but the matched registration can only
 - Partial accessors are handled separately by `SGIOC027` and `SGIOC029`.
 
 **Message format:** `'{MemberName}' requires '{ServiceType}' but this service is async-init (its implementation or a decorator has async inject methods) and no synchronous registration exists. Use 'Task<{ServiceType}>'.`
+
+---
+
+## SGIOC046 - Error - Design - Func with input parameters is not generated for an Instance with async decorators
+
+Report when a partial accessor of a generated container returns a `Func<T1, ..., TReturn>` with input parameters that the container does not construct because the registration it resolves for `TReturn` is an `Instance` registration that a decorator with async inject methods is applied to (see [Async-init Registrations](#async-init-registrations)).
+
+**Analysis:**
+
+- Reported by the RegisterAnalyzer, which selects the container's registrations and resolves the accessor like the generator (see [Analyzed Registrations](Diagnostics.Dependencies.spec.md#analyzed-registrations)): the containers the generator implements (Container feature, `partial class`), with their own registrations (`ExplicitOnly`: the `[IocRegisterFor]` on the container class; otherwise every registration, with `IncludeTags` only those with one of them), in the generator's registration order. Applies regardless of the `IntegrateServiceProvider` setting, like SGIOC027/029: the container resolves such a `Func` from the fallback provider (see [Container Decorators](../../Spec/Container.Decorators.spec.md)), and the Register output does not register it either.
+- The accessor type is the `Func` itself, or nests it in `Lazy<T>`, a parameterless `Func<T>` or `KeyValuePair<TKey, T>`, which the container builds inline (for example `Lazy<Func<string, IMyService>>`). A collection or `Task<T>` of such a `Func` is not reported, since the container resolves it from the fallback provider in any case, and neither is an accessor when the container registers one of the wrapper types itself.
+- The last of the container's registrations of `TReturn` and the accessor's key MUST be an `Instance` registration whose decorators (its own `Decorators`, otherwise those of its best `[IocRegisterDefaults]`) include one with async inject methods that applies to `TReturn`, matched like [Async-init Registrations](#async-init-registrations). When another registration is last, the container constructs the `Func` from it. Requires `AsyncMethodInject`.
+- When any registration of `TReturn` and the key is async-init, the ContainerAnalyzer reports SGIOC029 for the accessor instead, so it is reported once.
+- `TService`, `Lazy<TService>`, `Func<TService>`, `Task<TService>` and a `Func` with input parameters that returns the implementation type are not reported: the container resolves the instance, or constructs the undecorated implementation type.
+
+**Message format:** `Partial accessor '{MemberName}' returns '{ReturnType}', but the container does not construct a Func with input parameters for '{ServiceType}': a decorator applied to it has async inject methods, which the Func cannot await, so it is resolved from the fallback provider`

@@ -304,16 +304,10 @@ public sealed partial class RegisterAnalyzer
                     pending.Enqueue(location);
             }
 
-            foreach(var member in container.GetMembers())
+            foreach(var (member, type) in EnumeratePartialAccessors(container))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var type = member switch
-                {
-                    IMethodSymbol { IsStatic: false, IsPartialDefinition: true, ReturnsVoid: false, Parameters.Length: 0, IsGenericMethod: false, MethodKind: MethodKind.Ordinary } method => method.ReturnType,
-                    IPropertySymbol { IsStatic: false, IsPartialDefinition: true, GetMethod: not null } property => property.Type,
-                    _ => null
-                };
                 if(type is INamedTypeSymbol namedType && ConstructsFuncInline(namedType))
                     ResolveFuncConstructed(AddConstructedByContainerFunc(analyzerContext, constructed, scope, namedType, GetAccessorKey(member)));
             }
@@ -337,16 +331,103 @@ public sealed partial class RegisterAnalyzer
             }
         }
 
-        // Like the generator's ExtractKeyFromInjectAttribute
-        static string? GetAccessorKey(ISymbol member)
+    }
+
+    /// <summary>
+    /// Gets the partial accessors of a generated container: its non-static, parameterless partial methods that return a value
+    /// and its partial properties with a getter, with their declared type.
+    /// </summary>
+    private static IEnumerable<(ISymbol Member, ITypeSymbol Type)> EnumeratePartialAccessors(INamedTypeSymbol container)
+    {
+        foreach(var member in container.GetMembers())
         {
-            foreach(var attribute in member.GetAttributes())
+            var type = member switch
             {
-                if(attribute.AttributeClass?.IsInject == true)
-                    return attribute.GetKeyInfo().Key;
+                IMethodSymbol { IsStatic: false, IsPartialDefinition: true, ReturnsVoid: false, Parameters.Length: 0, IsGenericMethod: false, MethodKind: MethodKind.Ordinary } method => method.ReturnType,
+                IPropertySymbol { IsStatic: false, IsPartialDefinition: true, GetMethod: not null } property => property.Type,
+                _ => null
+            };
+            if(type is not null)
+                yield return (member, type);
+        }
+    }
+
+    /// <summary>
+    /// Gets the key of a partial accessor, like the generator's ExtractKeyFromInjectAttribute.
+    /// </summary>
+    private static string? GetAccessorKey(ISymbol member)
+    {
+        foreach(var attribute in member.GetAttributes())
+        {
+            if(attribute.AttributeClass?.IsInject == true)
+                return attribute.GetKeyInfo().Key;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// SGIOC046: Reports the partial accessors of the generated containers whose <c>Func</c> with input parameters (also nested
+    /// inline, see <see cref="ConstructsFuncInline"/>) the container resolves from the fallback provider because the
+    /// registration it resolves for the return type (see <see cref="FindContainerFuncRegistration"/>) is an <c>Instance</c>
+    /// registration whose decorators applied to it have async inject methods. When any registration of the return type and the
+    /// key is async-init, the ContainerAnalyzer reports SGIOC029 for the accessor instead.
+    /// </summary>
+    private static void AnalyzeContainerAccessorFuncsOfAsyncDecoratedInstances(
+        Action<Diagnostic> reportDiagnostic,
+        AnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
+    {
+        if(analyzerContext.Containers.IsEmpty
+            || !analyzerContext.DependencyRegistrations.Any(static registration =>
+                registration.Dependency.Activation.HasInstance && !registration.Dependency.Info.AsyncDecoratedRegistrations.IsEmpty))
+        {
+            return;
+        }
+
+        Dictionary<(SyntaxTree Tree, TextSpan Span), DependencyRegistration>? registrationsBySpan = null;
+        foreach(var (container, containerAttribute) in analyzerContext.Containers)
+        {
+            List<DependencyRegistration>? scope = null;
+            foreach(var (member, type) in EnumeratePartialAccessors(container))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if(type is not INamedTypeSymbol namedType || !ConstructsFuncInline(namedType))
+                    continue;
+
+                scope ??= GetContainerRegistrations(analyzerContext, container, containerAttribute, ref registrationsBySpan);
+                if(FindContainerFuncRegistration(scope, namedType, GetAccessorKey(member), out _, out var serviceKey) is not { } winner
+                    || !winner.Dependency.Activation.HasInstance
+                    || !winner.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceKey)
+                    || HasAsyncInitRegistration(analyzerContext, serviceKey))
+                {
+                    continue;
+                }
+
+                reportDiagnostic(Diagnostic.Create(
+                    AccessorFuncOfAsyncDecoratedInstance,
+                    member.Locations.FirstOrDefault(),
+                    member.Name,
+                    namedType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    serviceKey.ServiceType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+            }
+        }
+
+        // Like the ContainerAnalyzer's BuildAsyncInitServiceKeys, which reports SGIOC029 when any registration is async-init
+        static bool HasAsyncInitRegistration(AnalyzerContext analyzerContext, ServiceSymbolKey serviceKey)
+        {
+            foreach(var registration in analyzerContext.DependencyRegistrations)
+            {
+                if(!registration.Dependency.Activation.HasInstance
+                    && registration.Registrations.Contains(serviceKey)
+                    && (IsAsyncInit(analyzerContext, registration) || registration.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceKey)))
+                {
+                    return true;
+                }
             }
 
-            return null;
+            return false;
         }
     }
 
@@ -366,15 +447,41 @@ public sealed partial class RegisterAnalyzer
         INamedTypeSymbol type,
         string? key)
     {
+        if(FindContainerFuncRegistration(scope, type, key, out var funcType, out var serviceKey) is not { } winner
+            || IsAsyncInit(analyzerContext, winner)
+            || winner.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceKey))
+        {
+            return null;
+        }
+
+        AddConstructingFunc(constructed, winner.Dependency.Activation, funcType!);
+        return winner;
+    }
+
+    /// <summary>
+    /// Finds the registration that a container resolves for the <c>Func</c> with input parameters of a dependency of
+    /// <paramref name="type"/> and <paramref name="key"/> (see <see cref="AddConstructedByContainerFunc"/>): the last
+    /// registration of its return type and the key among <paramref name="scope"/>, or <see langword="null"/> when the container
+    /// registers one of the wrapper types itself, has no registration of the return type, or no such <c>Func</c> is nested inline.
+    /// </summary>
+    private static DependencyRegistration? FindContainerFuncRegistration(
+        List<DependencyRegistration> scope,
+        INamedTypeSymbol type,
+        string? key,
+        out INamedTypeSymbol? funcType,
+        out ServiceSymbolKey serviceKey)
+    {
+        funcType = null;
+        serviceKey = default;
         var current = type;
         while(true)
         {
             if(IsRegisteredIn(scope, new ServiceSymbolKey(current, key)))
                 return null;
 
-            if(TryGetFuncWithArgumentsReturnType(current, out var funcType, out var returnType))
+            if(TryGetFuncWithArgumentsReturnType(current, out funcType, out var returnType))
             {
-                var serviceKey = new ServiceSymbolKey(returnType, key);
+                serviceKey = new ServiceSymbolKey(returnType, key);
                 DependencyRegistration? winner = null;
                 foreach(var registration in scope)
                 {
@@ -382,14 +489,6 @@ public sealed partial class RegisterAnalyzer
                         winner = registration;
                 }
 
-                if(winner is null
-                    || IsAsyncInit(analyzerContext, winner)
-                    || winner.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceKey))
-                {
-                    return null;
-                }
-
-                AddConstructingFunc(constructed, winner.Dependency.Activation, funcType);
                 return winner;
             }
 

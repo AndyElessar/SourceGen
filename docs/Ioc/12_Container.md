@@ -976,6 +976,7 @@ partial class TestContainer
 |SGIOC029|Error|Partial accessor targets an async-init service with a return type other than `Task<T>` (for example `ValueTask<T>` or `Lazy<Task<T>>`).|
 |SGIOC031|Warning|Container is not generated because `Container` is not enabled in `SourceGenIocFeatures`.|
 |SGIOC045|Warning|Container creates a transient service that implements `IDisposable` or `IAsyncDisposable` (its implementation type, or the return type of its `Factory`) but never disposes it. Dispose it in the caller, or register it as `Scoped` or `Singleton`.|
+|SGIOC046|Error|Partial accessor returns a `Func<T1, ..., TReturn>` with input parameters (also nested in `Lazy<T>`, `Func<T>` or `KeyValuePair<TKey, T>`) for a service type of an `Instance` registration whose decorator has async inject methods. The Func cannot await them, so the container does not construct it and resolves it from the fallback provider.|
 
 ---
 

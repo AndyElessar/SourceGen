@@ -511,8 +511,23 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "nameof() of a method names its method group and cannot choose an overload. When more than one overload is static, accessible, returns a value and, when generic, has a type mapping ([IocGenericFactory] or GenericFactoryTypeMapping), including overloads inherited from base classes, the Factory is ambiguous: its parameters are not resolved, and it is called by its path with the service provider only, like a Factory given as a string. Give the factory method a unique name.");
 
+    /// <summary>
+    /// SGIOC046: A container partial accessor returns a Func with input parameters that the container does not construct,
+    /// because a decorator applied to the service type of the Instance registration it resolves has async inject methods.
+    /// </summary>
+    public static readonly DiagnosticDescriptor AccessorFuncOfAsyncDecoratedInstance = new(
+        id: "SGIOC046",
+        title: "Func with input parameters is not generated for an Instance with async decorators",
+        messageFormat: "Partial accessor '{0}' returns '{1}', but the container does not construct a Func with input parameters for '{2}': a decorator applied to it has async inject methods, which the Func cannot await, so it is resolved from the fallback provider",
+        category: Constants.Category_Design,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The instance of an Instance registration is not decorated, but a Func<T1, ..., TReturn> with input parameters constructs a new instance and wraps it in the decorators applied to TReturn. It cannot await their async inject methods, so, like for an async-init service, the container does not construct it and resolves the Func from the fallback provider (the Register output does not register it).",
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
+        AccessorFuncOfAsyncDecoratedInstance,
         FactoryOpenGenericNotRegisteredOpen,
         InjectMembersAmbiguousMethodGroup,
         FactoryAmbiguousMethodGroup,
@@ -717,6 +732,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         var graph = new DependencyGraph(analyzerContext, dependencyIndex);
         var keyedServiceIndex = new KeyedServiceIndex(analyzerContext);
         var constructedByFunc = CollectRegistrationsConstructedByFunc(analyzerContext, context.CancellationToken);
+
+        // SGIOC046: Partial accessors whose Func with input parameters the container does not construct
+        AnalyzeContainerAccessorFuncsOfAsyncDecoratedInstances(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
 
         foreach(var kvp in analyzerContext.RegisteredServices)
         {
