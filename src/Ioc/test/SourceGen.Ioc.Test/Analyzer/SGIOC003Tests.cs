@@ -1066,4 +1066,39 @@ public class SGIOC003Tests
 
         await Assert.That(sgioc003).Count().IsEqualTo(1);
     }
+
+    [Test]
+    public async Task SGIOC003_GenericFactoryOfUnboundServiceType_RegistersClosedForm()
+    {
+        // typeof(IHandler<>) registers Handler as IHandler<Task<Entity>>, which the generic factory's mapping matches
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+
+            public class Entity;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IHandler<Task<int>>), typeof(int))]
+                public static IHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IHandler<>)], Factory = nameof(FactoryContainer.Create))]
+            public sealed class Handler : IHandler<Task<Entity>>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(IHandler<Task<Entity>> handler);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
 }

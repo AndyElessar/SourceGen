@@ -88,6 +88,8 @@ public sealed partial class RegisterAnalyzer
                     analyzerContext.TypeLevelDefaultAttributes.Add(attribute);
                 else if(AnalyzerHelpers.IsIocImportModuleAttribute(attributeClass, analyzerContext.AttributeSymbols))
                     analyzerContext.ModuleImportAttributes.Add(attribute);
+                else if(IsGeneratedContainer(attribute, attributeClass, analyzerContext, context.CancellationToken))
+                    analyzerContext.Containers.Add(typeSymbol);
 
                 continue;
             }
@@ -121,6 +123,20 @@ public sealed partial class RegisterAnalyzer
             analyzerContext.PendingRegistrations.Add(new(attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location));
         }
     }
+
+    /// <summary>
+    /// Gets whether an attribute is the <c>[IocContainer]</c> of a container the generator implements, like its container
+    /// pipeline: the Container feature is enabled, and the attribute is on a class declaration with the <c>partial</c> modifier.
+    /// </summary>
+    private static bool IsGeneratedContainer(
+        AttributeData attribute,
+        INamedTypeSymbol attributeClass,
+        AnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
+        => (analyzerContext.Features & IocFeatures.Container) != 0
+            && AnalyzerHelpers.IsAttributeMatch(attributeClass, analyzerContext.AttributeSymbols.IocContainerAttribute)
+            && attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).Parent?.Parent is ClassDeclarationSyntax declaration
+            && declaration.Modifiers.Any(SyntaxKind.PartialKeyword);
 
     /// <summary>
     /// Resolves every collected registration against the default settings and registers it for the CompilationEnd
@@ -279,17 +295,21 @@ public sealed partial class RegisterAnalyzer
         // starting from the dependencies of closed registrations; SGIOC039: the service types of generic factories
         analyzerContext.Registrations.Add(new(targetType, registrations, decorators, attribute, hasFactory, hasInstance, bestDefaultIndex, location));
 
+        // Like the generator's ProcessRegistrationCore, a closed implementation is registered as each closed form of an unbound
+        // service type it implements or inherits
+        var isSelfConstructed = false;
+        var isOpenImplementation = IsOpenGenericImplementation(targetType);
+        var dependencyRegistrations = isOpenImplementation ? registrations : CloseUnboundServiceTypes(targetType, registrations);
+
         // Like the generator's CreateServiceRegistrations, the own generic factory of a closed registration is closed for each
         // registered type: a type its mapping does not match is not registered (SGIOC039), except the implementation type
         // itself, which is constructed instead
-        var isSelfConstructed = false;
-        var dependencyRegistrations = registrations;
-        if(hasFactory && !hasInstance && !IsOpenGenericImplementation(targetType)
+        if(hasFactory && !hasInstance && !isOpenImplementation
             && GetFactory(analyzerContext, attribute).Factory is { TypeParameterCount: > 0 } genericFactory)
         {
             var isConstructible = targetType.IsConstructibleIn(analyzerContext.Assembly);
             isSelfConstructed = isConstructible && IocSourceGenerator.CloseGenericFactory(genericFactory, targetType.GetTypeData()) is null;
-            dependencyRegistrations = [.. registrations.Where(registration =>
+            dependencyRegistrations = [.. dependencyRegistrations.Where(registration =>
                 IocSourceGenerator.CloseGenericFactory(genericFactory, registration.ServiceType.GetTypeData()) is not null
                 || (isConstructible && RuntimeTypeSymbolComparer.Instance.Equals(registration.ServiceType, targetType)))];
         }
@@ -298,6 +318,60 @@ public sealed partial class RegisterAnalyzer
 
         static bool IsOpenGenericImplementation(INamedTypeSymbol type)
             => type.IsUnboundGenericType || type is { IsGenericType: true, IsDefinition: true };
+    }
+
+    /// <summary>
+    /// Replaces each unbound service type of a closed implementation, such as <c>typeof(IHandler&lt;&gt;)</c>, with the closed
+    /// forms of it that the implementation implements or inherits (<c>IHandler&lt;Task&lt;Entity&gt;&gt;</c>), like the
+    /// generator's <c>ProcessRegistrationCore</c>. An unbound service type without such a form is kept, and is not registered
+    /// (SGIOC032). Returns <paramref name="registrations"/> itself when none is unbound.
+    /// </summary>
+    private static ImmutableArray<ServiceSymbolKey> CloseUnboundServiceTypes(INamedTypeSymbol implementation, ImmutableArray<ServiceSymbolKey> registrations)
+    {
+        ImmutableArray<ServiceSymbolKey>.Builder? closed = null;
+        for(var i = 0; i < registrations.Length; i++)
+        {
+            var registration = registrations[i];
+            if(!registration.ServiceType.IsUnboundGenericType)
+            {
+                closed?.Add(registration);
+                continue;
+            }
+
+            if(closed is null)
+            {
+                closed = ImmutableArray.CreateBuilder<ServiceSymbolKey>(registrations.Length);
+                for(var j = 0; j < i; j++)
+                    closed.Add(registrations[j]);
+            }
+
+            var definition = registration.ServiceType.OriginalDefinition;
+            var hasForm = false;
+            foreach(var form in implementation.AllInterfaces.Concat(EnumerateBaseClasses(implementation)))
+            {
+                if(!SymbolEqualityComparer.Default.Equals(form.OriginalDefinition, definition))
+                    continue;
+
+                hasForm = true;
+                closed.Add(new(form, registration.Key));
+            }
+
+            if(!hasForm)
+                closed.Add(registration);
+        }
+
+        if(closed is null)
+            return registrations;
+
+        // A closed form also listed as a closed service type, or of two unbound service types, is registered once
+        var distinct = ImmutableArray.CreateBuilder<ServiceSymbolKey>(closed.Count);
+        foreach(var registration in closed)
+        {
+            if(!distinct.Contains(registration))
+                distinct.Add(registration);
+        }
+
+        return distinct.ToImmutable();
     }
 
     /// <summary>
@@ -931,6 +1005,12 @@ public sealed partial class RegisterAnalyzer
 
         /// <summary>The IocImportModuleAttribute of the compilation, whose modules' default settings apply to registrations.</summary>
         public ConcurrentBag<AttributeData> ModuleImportAttributes { get; } = [];
+
+        /// <summary>
+        /// The containers the generator implements (see <see cref="IsGeneratedContainer"/>), whose partial accessors request
+        /// services like dependencies. Collected by the symbol action.
+        /// </summary>
+        public ConcurrentBag<INamedTypeSymbol> Containers { get; } = [];
 
         /// <summary>
         /// Default settings of the compiled assembly, then of the imported modules, using DefaultSettingsMap for efficient

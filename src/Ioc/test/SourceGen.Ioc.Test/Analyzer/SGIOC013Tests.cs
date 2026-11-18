@@ -891,4 +891,139 @@ public class SGIOC013Tests
 
         await Assert.That(sgioc013).Count().IsEqualTo(1);
     }
+
+    [Test]
+    public async Task SGIOC013_InstanceConstructedByFuncInSelfConstructedGenericFactoryRegistration_ReportsDiagnostic()
+    {
+        // The generic factory's mapping does not match Handler itself, so its self-registration is constructed and its
+        // constructor requests the Func
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler<T>;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IHandler<int>), typeof(int))]
+                public static IHandler<T> Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo([ServiceKey] int key)
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IHandler<string>)], Factory = nameof(FactoryContainer.Create))]
+            public sealed class Handler([FromKeyedServices("a")] Func<string, Foo> make) : IHandler<string>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC013_InstanceConstructedByFuncInInjectMembers_ReportsDiagnostic()
+    {
+        // A member listed in InjectMembers is injected like an [IocInject] member, so it requests the Func too
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Consumer), InjectMembers = [nameof(TestNamespace.Consumer.Make)])]
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo([ServiceKey] int key)
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            public class Consumer
+            {
+                public Func<string, Foo> Make { get; set; } = null!;
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("public partial Func<string, Foo> Make();", "Register,Container", 1)]
+    [Arguments("public partial Func<string, Foo> Make { get; }", "Register,Container", 1)]
+    [Arguments("public partial Func<string, Foo> Make();", "Register", 0)]
+    [Arguments("public Func<string, Foo> Make() => null!;", "Register,Container", 0)]
+    [Arguments("public partial Func<string, Foo> Make();", "Register,Container", 0, "")]
+    public async Task SGIOC013_InstanceConstructedByFuncInContainerAccessor_ReportsDiagnostic(string accessor, string features, int expected, string modifier = "partial ")
+    {
+        // The generated container implements its partial accessors, so a Func it returns constructs Foo too; the generator
+        // implements no other member, and no container that is not a partial class
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo([ServiceKey] int key)
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            [IocContainer]
+            public {{modifier}}class AppContainer
+            {
+                [IocInject(Key = "a")]
+                {{accessor}}
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = features });
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task SGIOC013_InstanceConstructedByFuncOfUnboundServiceType_ReportsDiagnostic()
+    {
+        // typeof(IFoo<>) registers Foo as each closed form it implements, IFoo<int>, which the Func returns
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo<T>;
+
+            [IocRegister(Key = "a", Instance = nameof(Default), ServiceTypes = [typeof(IFoo<>)])]
+            public class Foo([ServiceKey] int key) : IFoo<int>
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            [IocRegister]
+            public class Consumer([FromKeyedServices("a")] Func<string, IFoo<int>> make);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(1);
+    }
 }

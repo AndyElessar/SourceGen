@@ -118,11 +118,13 @@ public sealed partial class RegisterAnalyzer
     /// <summary>
     /// Gets the registrations that a requested <c>Func&lt;T1, ..., TReturn&gt;</c> with input parameters constructs. Like the
     /// generator (<c>WrapperDemand</c>, <c>CollectFuncEntries</c>), such a Func is requested by a registration (the parameters
-    /// of its effective factory method, otherwise of its implementation type's constructor, also with an Instance; and its
-    /// injected members, also with an Instance) or an applied decorator, directly or as the element of a collection; it is
-    /// registered for every closed, not async-init registration of <c>TReturn</c>, and constructs the implementation type
-    /// with the registration's key even for an Instance or Factory registration. The parameters of a generic factory are
-    /// scanned as declared, not closed for each service type. Each registration maps to the distinct requested <c>Func</c>
+    /// of its effective factory method, otherwise of its implementation type's constructor, also with an Instance, and both
+    /// when a generic factory's mapping does not match the implementation type, which is then constructed; and its injected
+    /// members, [IocInject] and InjectMembers, also with an Instance), an applied decorator, or the return type of a partial
+    /// accessor of a generated container, directly or as the element of a collection; it is registered for every closed, not
+    /// async-init registration of <c>TReturn</c> (an unbound service type registers its closed forms), and constructs the
+    /// implementation type with the registration's key even for an Instance or Factory registration. The parameters of a
+    /// generic factory are scanned as declared, not closed for each service type. Each registration maps to the distinct requested <c>Func</c>
     /// types that construct it, whose input parameters the generator passes to the parameters of their type (see
     /// <see cref="IsPassedFuncArgument"/>).
     /// </summary>
@@ -133,14 +135,28 @@ public sealed partial class RegisterAnalyzer
         // The requested Func types by return type
         var returnTypes = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(RuntimeTypeSymbolComparer.Instance);
         HashSet<INamedTypeSymbol>? uncachedConstructorsScanned = null;
+        var hasInjectMembers = !analyzerContext.InjectMembers.IsEmpty;
         foreach(var registration in analyzerContext.Registrations)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            // The members listed in InjectMembers are injected like the [IocInject] members (scanned below), also with an
+            // Instance (ExtractAndMergeInjectionMembers)
+            if(hasInjectMembers
+                && registration.Attribute.ApplicationSyntaxReference is { } syntax
+                && analyzerContext.InjectMembers.TryGetValue((syntax.SyntaxTree, syntax.Span), out var injectMembers))
+            {
+                foreach(var (member, _) in injectMembers)
+                    ScanMember(member);
+            }
+
+            // A generic factory whose mapping does not match a closed implementation type constructs it instead
+            // (CreateServiceRegistrations), so both the factory and the constructor are scanned
             if(GetEffectiveFactoryMethod(analyzerContext, registration) is { } factoryMethod)
             {
                 ScanParameters(factoryMethod.Parameters);
-                continue;
+                if(!IsSelfConstructedByGenericFactory(analyzerContext, registration, factoryMethod))
+                    continue;
             }
 
             // The constructor is cached on the ServiceInfo when a registration of the type is constructed; scanning it again
@@ -150,6 +166,24 @@ public sealed partial class RegisterAnalyzer
                 ScanParameters(constructor.Parameters);
             else if((uncachedConstructorsScanned ??= new(SymbolEqualityComparer.Default)).Add(implementation))
                 ScanParameters(implementation.GetSelectedConstructor(analyzerContext.Assembly)?.Parameters ?? []);
+        }
+
+        // The generated containers implement their partial accessors, which resolve their return types like dependencies
+        // (WrapperDemand.Scan with the accessors of TransformContainer.ExtractPartialAccessors)
+        foreach(var container in analyzerContext.Containers)
+        {
+            foreach(var member in container.GetMembers())
+            {
+                switch(member)
+                {
+                    case IMethodSymbol { IsStatic: false, IsPartialDefinition: true, ReturnsVoid: false, Parameters.Length: 0, IsGenericMethod: false, MethodKind: MethodKind.Ordinary } method:
+                        Scan(method.ReturnType);
+                        break;
+                    case IPropertySymbol { IsStatic: false, IsPartialDefinition: true, GetMethod: not null } property:
+                        Scan(property.Type);
+                        break;
+                }
+            }
         }
 
         // The injected members of every registered implementation type, cached on its ServiceInfo unless all its registrations
@@ -222,20 +256,23 @@ public sealed partial class RegisterAnalyzer
                 Scan(parameter.Type);
 
             foreach(var (member, _) in injectedMembers)
+                ScanMember(member);
+        }
+
+        void ScanMember(ISymbol member)
+        {
+            switch(member)
             {
-                switch(member)
-                {
-                    case IPropertySymbol property:
-                        Scan(property.Type);
-                        break;
-                    case IFieldSymbol field:
-                        Scan(field.Type);
-                        break;
-                    case IMethodSymbol method:
-                        foreach(var parameter in method.Parameters)
-                            Scan(parameter.Type);
-                        break;
-                }
+                case IPropertySymbol property:
+                    Scan(property.Type);
+                    break;
+                case IFieldSymbol field:
+                    Scan(field.Type);
+                    break;
+                case IMethodSymbol method:
+                    foreach(var parameter in method.Parameters)
+                        Scan(parameter.Type);
+                    break;
             }
         }
 
@@ -260,15 +297,27 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
-    /// Gets whether a <c>Func</c> with input parameters passes one of its arguments to <paramref name="parameter"/> when it
-    /// constructs <paramref name="constructor"/>'s type. Like the generator (<c>WriteFuncFactoryBody</c>,
-    /// <c>MultiParamFuncDependency</c>), each parameter of the constructor, then each injected property or field, then each
-    /// parameter of the inject methods that do not return <c>Task</c> takes the first unused argument of the same runtime type; the others are
-    /// resolved, a <c>[ServiceKey]</c> parameter with the registration's key.
+    /// Gets whether the effective generic factory of a closed registration does not match its implementation type, which the
+    /// generator's <c>CreateServiceRegistrations</c> then constructs for the self-registration, like
+    /// <see cref="EnumerateRootDependencies"/>.
+    /// </summary>
+    private static bool IsSelfConstructedByGenericFactory(AnalyzerContext analyzerContext, AnalyzedRegistration registration, IMethodSymbol factoryMethod)
+        => factoryMethod.TypeParameters.Length > 0
+            && !registration.IsOpenGeneric
+            && registration.Implementation.IsConstructibleIn(analyzerContext.Assembly)
+            && GetEffectiveFactory(analyzerContext, registration).Factory is { TypeParameterCount: > 0 } factory
+            && IocSourceGenerator.CloseGenericFactory(factory, registration.Implementation.GetTypeData()) is null;
+
+    /// <summary>
+    /// Gets whether a <c>Func</c> with input parameters passes one of its arguments to <paramref name="target"/> (a parameter,
+    /// or an injected property or field) when it constructs <paramref name="constructor"/>'s type. Like the generator
+    /// (<c>WriteFuncFactoryBody</c>, <c>MultiParamFuncDependency</c>), each parameter of the constructor, then each injected
+    /// property or field, then each parameter of the inject methods that do not return <c>Task</c> takes the first unused
+    /// argument of the same runtime type; the others are resolved, a <c>[ServiceKey]</c> parameter with the registration's key.
     /// </summary>
     private static bool IsPassedFuncArgument(
         INamedTypeSymbol funcType,
-        IParameterSymbol parameter,
+        ISymbol target,
         IMethodSymbol? constructor,
         ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers)
     {
@@ -278,21 +327,24 @@ public sealed partial class RegisterAnalyzer
         foreach(var constructorParameter in constructor?.Parameters ?? [])
         {
             var passed = TryConsume(constructorParameter.Type, used);
-            if(SymbolEqualityComparer.Default.Equals(constructorParameter, parameter))
+            if(SymbolEqualityComparer.Default.Equals(constructorParameter, target))
                 return passed;
         }
 
         foreach(var (member, _) in injectedMembers)
         {
-            switch(member)
+            var type = member switch
             {
-                case IPropertySymbol property:
-                    TryConsume(property.Type, used);
-                    break;
-                case IFieldSymbol field:
-                    TryConsume(field.Type, used);
-                    break;
-            }
+                IPropertySymbol property => property.Type,
+                IFieldSymbol field => field.Type,
+                _ => null
+            };
+            if(type is null)
+                continue;
+
+            var passed = TryConsume(type, used);
+            if(SymbolEqualityComparer.Default.Equals(member, target))
+                return passed;
         }
 
         foreach(var (member, _) in injectedMembers)
@@ -304,7 +356,7 @@ public sealed partial class RegisterAnalyzer
             foreach(var methodParameter in method.Parameters)
             {
                 var passed = TryConsume(methodParameter.Type, used);
-                if(SymbolEqualityComparer.Default.Equals(methodParameter, parameter))
+                if(SymbolEqualityComparer.Default.Equals(methodParameter, target))
                     return passed;
             }
         }

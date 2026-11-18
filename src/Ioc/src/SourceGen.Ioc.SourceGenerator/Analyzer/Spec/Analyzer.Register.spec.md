@@ -17,7 +17,7 @@ Pipeline of `RegisterAnalyzer`: registration validation, dependency/lifetime che
 
 | Action Type | Handler | Purpose | Diagnostics |
 | :---------- | :------ | :------ | :---------- |
-| Symbol (NamedType) | `CollectAndValidateNamedType` | Collect pending registrations, type-level `[IocRegisterDefaults]` and `[IocImportModule]`; validate target type, explicit service types and the explicit lifetime of an `Instance` | SGIOC001, 009, 032 |
+| Symbol (NamedType) | `CollectAndValidateNamedType` | Collect pending registrations, type-level `[IocRegisterDefaults]` and `[IocImportModule]`, and the containers the generator implements (`[IocContainer]` on a `partial class`, with the Container feature), whose partial accessors can request a `Func` with input parameters; validate target type, explicit service types and the explicit lifetime of an `Instance` | SGIOC001, 009, 032 |
 | Symbol (NamedType) | `AnalyzeImportedOpenRegistrations` | Imported open generic registrations the compiled assembly cannot construct | SGIOC001 |
 | Symbol (Property/Field/Method) | `AnalyzeInjectAttribute` | Validate `[IocInject]` usage and feature gating | SGIOC007, 022, 028 |
 | Symbol (Method) | `AnalyzeDuplicatedKeyedServiceAttributes` | Duplicate keyed-service parameter attributes | SGIOC006 |
@@ -41,7 +41,7 @@ The descriptors of the diagnostics reported at compilation end are tagged `Compi
 4. Per `ServiceInfo`: key type mismatch (SGIOC013/014), KVP key mismatch (SGIOC015), Func with arguments lifetime (SGIOC033), dependency DFS (SGIOC002-005)
 5. Decorated parameters of the decorators matched while resolving registrations (SGIOC034/035)
 6. Expanding dependencies of open generic registrations and their decorators (SGIOC036/037), service types that the mapping of a generic factory does not match (SGIOC039), open generic registrations whose open registration is not registered because their closed types call the Factory (SGIOC042), and implementation types that cannot be constructed without a Factory or Instance (SGIOC001)
-7. Build async-init-only pairs → sync dependency analysis of services and applied decorators (SGIOC030)
+7. Build async-init-only pairs → sync dependency analysis of services, of the registrations a requested `Func` with input parameters constructs, and of applied decorators (SGIOC030)
 
 ## Default Settings
 

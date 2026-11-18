@@ -68,18 +68,28 @@ public sealed partial class RegisterAnalyzer
         /// <paramref name="parameter"/>: one that does not pass one of its arguments to it instead.
         /// </summary>
         public bool PassesKey(ServiceActivation activation, IParameterSymbol parameter)
+            => ConstructedByFunc.TryGetValue(activation, out var funcTypes)
+                && IsResolvedByAnyFunc(funcTypes, parameter, Constructor, InjectedMembers);
+    }
+
+    /// <summary>
+    /// Gets whether one of <paramref name="funcTypes"/> resolves <paramref name="target"/> (a parameter, or an injected property
+    /// or field) when it constructs <paramref name="constructor"/>'s type, instead of passing one of its arguments to it (see
+    /// <see cref="IsPassedFuncArgument"/>).
+    /// </summary>
+    private static bool IsResolvedByAnyFunc(
+        List<INamedTypeSymbol> funcTypes,
+        ISymbol target,
+        IMethodSymbol? constructor,
+        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers)
+    {
+        foreach (var funcType in funcTypes)
         {
-            if (!ConstructedByFunc.TryGetValue(activation, out var funcTypes))
-                return false;
-
-            foreach (var funcType in funcTypes)
-            {
-                if (!IsPassedFuncArgument(funcType, parameter, Constructor, InjectedMembers))
-                    return true;
-            }
-
-            return false;
+            if (!IsPassedFuncArgument(funcType, target, constructor, injectedMembers))
+                return true;
         }
+
+        return false;
     }
 
     /// <summary>
