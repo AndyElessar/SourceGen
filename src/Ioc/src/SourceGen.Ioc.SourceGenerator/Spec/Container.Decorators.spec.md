@@ -11,7 +11,9 @@ Both resolvers use the registration's lifetime, so for singleton and scoped serv
 
 With `ThreadSafeStrategy.CompareExchange`, a decorated instance that loses the race MUST NOT be disposed, because it wraps the shared undecorated instance.
 
-Instance registrations and registrations whose service type is the implementation type are not split; their single resolver applies the decorators.
+Registrations whose service type is the implementation type are not split; their single resolver applies the decorators.
+
+Like the Register output, decorators are not applied to the instance of an `Instance` registration: every resolution returns the instance as is. A `Func<T1, ..., TReturn>` with input parameters constructs a new implementation instance and wraps it in the registration's decorators; the async inject methods of those decorators are not called (see [Register Decorators](Register.Decorators.spec.md)).
 
 The decorated instance MUST be passed to the same constructor parameter as in the Register output, and decorators without such a parameter are skipped (see [Decorated Parameter](Register.Decorators.spec.md#decorated-parameter)). The other parameters are resolved like the implementation's dependencies.
 

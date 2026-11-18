@@ -23,7 +23,7 @@ Report when `SourceGenIocFeatures` enables `AsyncMethodInject` without also enab
 SGIOC027, SGIOC029 and SGIOC030 treat a registered (service type, key) pair as async-init when:
 
 - its implementation type has `[IocInject]` methods returning non-generic `Task`, or
-- a decorator applied to the service type has such methods. The decorators are the registration's own `Decorators`, otherwise those of its best `[IocRegisterDefaults]` (like the generator); `Instance` registrations are not decorated. A decorator applies to the service types the generator decorates with it, matched with the generator's own rules (`TryCloseDecorator`: implemented service type, closed generic constraints), so a decorator never makes the implementation type itself, or a service type it cannot decorate, async-init.
+- a decorator applied to the service type has such methods. The decorators are the registration's own `Decorators`, otherwise those of its best `[IocRegisterDefaults]` (like the generator); `Instance` registrations are never async-init (their instance is not decorated, and a `Func` with input parameters that decorates a new instance does not call async decorator methods). A decorator applies to the service types the generator decorates with it, matched with the generator's own rules (`TryCloseDecorator`: implemented service type, closed generic constraints), so a decorator never makes the implementation type itself, or a service type it cannot decorate, async-init.
 
 Both require `AsyncMethodInject`.
 
