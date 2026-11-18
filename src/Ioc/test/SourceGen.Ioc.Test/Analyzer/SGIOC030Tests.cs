@@ -1700,4 +1700,56 @@ public class SGIOC030Tests
         await Assert.That(sgioc030).Count().IsEqualTo(1);
         await Assert.That(sgioc030[0].GetMessage()).Contains("'dep'");
     }
+
+    [Test]
+    public async Task SGIOC030_FuncArgumentPassedToPropertyBeforeField_NoDiagnostic()
+    {
+        // Like the generator, which sorts the injected members by stage, the Func passes its argument to the injected
+        // property before the injected field declared before it, so the async-init IDep is never resolved synchronously
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IDep;
+
+            [IocRegister(ServiceTypes = [typeof(IDep)])]
+            public class AsyncDep : IDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Key = "k", ServiceTypes = [typeof(IDep)])]
+            public class SyncDep : IDep;
+
+            [IocRegister(Instance = nameof(Default))]
+            public class Foo
+            {
+                public static readonly Foo Default = new();
+
+                [IocInject(Key = "k")]
+                public IDep Field = null!;
+
+                [IocInject]
+                public IDep Property { get; set; } = null!;
+            }
+
+            [IocRegister]
+            public class Consumer(Func<IDep, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,PropertyInject,FieldInject,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).IsEmpty();
+    }
 }

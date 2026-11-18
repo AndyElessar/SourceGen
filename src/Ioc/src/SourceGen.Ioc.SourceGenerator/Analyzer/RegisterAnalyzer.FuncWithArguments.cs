@@ -456,7 +456,7 @@ public sealed partial class RegisterAnalyzer
     /// Gets whether a <c>Func</c> with input parameters passes one of its arguments to <paramref name="target"/> (a parameter,
     /// or an injected property or field) when it constructs <paramref name="constructor"/>'s type. Like the generator
     /// (<c>WriteFuncFactoryBody</c>, <c>MultiParamFuncDependency</c>), each parameter of the constructor, then each injected
-    /// property or field, then each parameter of the inject methods that do not return <c>Task</c> takes the first unused
+    /// property, then each injected field, then each parameter of the inject methods that do not return <c>Task</c> takes the first unused
     /// argument of the same runtime type; the others are resolved, a <c>[ServiceKey]</c> parameter with the registration's key.
     /// </summary>
     private static bool IsPassedFuncArgument(
@@ -475,20 +475,25 @@ public sealed partial class RegisterAnalyzer
                 return passed;
         }
 
-        foreach(var (member, _) in injectedMembers)
+        // Like the generator, which sorts the injected members by stage (SortInjectionMembersByStage): the properties, then the
+        // fields, each in declaration order
+        for(var stage = 0; stage < 2; stage++)
         {
-            var type = member switch
+            foreach(var (member, _) in injectedMembers)
             {
-                IPropertySymbol property => property.Type,
-                IFieldSymbol field => field.Type,
-                _ => null
-            };
-            if(type is null)
-                continue;
+                var type = (stage, member) switch
+                {
+                    (0, IPropertySymbol property) => property.Type,
+                    (1, IFieldSymbol field) => field.Type,
+                    _ => null
+                };
+                if(type is null)
+                    continue;
 
-            var passed = TryConsume(type, used);
-            if(SymbolEqualityComparer.Default.Equals(member, target))
-                return passed;
+                var passed = TryConsume(type, used);
+                if(SymbolEqualityComparer.Default.Equals(member, target))
+                    return passed;
+            }
         }
 
         foreach(var (member, _) in injectedMembers)
