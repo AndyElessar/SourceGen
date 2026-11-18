@@ -288,4 +288,34 @@ public class SGIOC033Tests
 
         await Assert.That(sgioc033).Count().IsEqualTo(1);
     }
+
+    [Test]
+    public async Task SGIOC033_KeyedInjectMethod_ParameterUsesMethodKey()
+    {
+        // An unkeyed parameter of a keyed inject method resolves with the method's key
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister<IFoo>(Lifetime = ServiceLifetime.Singleton, Key = "a")]
+            public class Foo(int x) : IFoo;
+
+            [IocRegister]
+            public class Consumer
+            {
+                [IocInject(Key = "a")]
+                public void Init(Func<int, IFoo> factory) { }
+            }
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc033 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC033");
+
+        await Assert.That(sgioc033).Count().IsEqualTo(1);
+    }
 }

@@ -10,33 +10,51 @@ public sealed partial class RegisterAnalyzer
     /// SGIOC013: Reports error when the parameter type does not match the registered key type.
     /// SGIOC014: Reports error when [ServiceKey] is used but no Key is registered.
     /// </summary>
+    /// <param name="constructedByFunc">
+    /// The registrations a requested <c>Func</c> with input parameters constructs, also when they have an Instance or a
+    /// Factory (see <see cref="CollectRegistrationsConstructedByFunc"/>).
+    /// </param>
     private static void AnalyzeServiceKeyTypeMismatch(
         Action<Diagnostic> reportDiagnostic,
         ServiceInfo serviceInfo,
+        HashSet<ServiceActivation> constructedByFunc,
+        IAssemblySymbol assembly,
+        IocFeatures features,
         CancellationToken cancellationToken)
     {
-        // Check constructor parameters (using cached constructor) against the registrations that call the constructor
-        var constructor = serviceInfo.Constructor;
+        // Check constructor parameters (using cached constructor) against the registrations that call the constructor: the
+        // constructed ones, and those a Func with input parameters constructs, which passes their key too
+        var activations = serviceInfo.Activations;
+        var funcConstructed = constructedByFunc.Count > 0 && activations.Any(constructedByFunc.Contains);
+        var constructor = serviceInfo.Constructor
+            ?? (funcConstructed ? serviceInfo.Type.GetSelectedConstructor(assembly) : null);
         if (constructor is not null)
         {
-            AnalyzeServiceKeyParametersInMethod(reportDiagnostic, constructor.Parameters, serviceInfo.Activations, injected: false, cancellationToken);
+            AnalyzeServiceKeyParametersInMethod(reportDiagnostic, constructor.Parameters, activations, injected: false, cancellationToken, constructedByFunc);
         }
 
-        // Check [Inject] method parameters (using cached injected members) against the registrations that inject them
-        foreach (var (member, _) in serviceInfo.InjectedMembers)
+        // Check [Inject] method parameters (using cached injected members) against the registrations that inject them, and
+        // the synchronous ones against those a Func with input parameters constructs, which calls them with their key too;
+        // the members of a type with only Instance or Factory registrations are not cached
+        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers = serviceInfo.InjectedMembers.IsEmpty && funcConstructed
+            ? [.. serviceInfo.Type.GetInjectedMembers()]
+            : serviceInfo.InjectedMembers;
+        foreach (var (member, _) in injectedMembers)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             if (member is not IMethodSymbol method)
                 continue;
 
-            AnalyzeServiceKeyParametersInMethod(reportDiagnostic, method.Parameters, serviceInfo.Activations, injected: true, cancellationToken);
+            var isAsync = (features & IocFeatures.AsyncMethodInject) != 0 && AnalyzerHelpers.IsNonGenericTaskType(method.ReturnType);
+            AnalyzeServiceKeyParametersInMethod(reportDiagnostic, method.Parameters, activations, injected: true, cancellationToken, isAsync ? null : constructedByFunc);
         }
     }
 
     /// <summary>
     /// Analyzes parameters for [ServiceKey] attribute and reports diagnostics, for each registration that calls the method:
-    /// those that construct (<paramref name="injected"/> false) or inject (<paramref name="injected"/> true) the instance.
+    /// those that construct (<paramref name="injected"/> false) or inject (<paramref name="injected"/> true) the instance, and
+    /// those in <paramref name="constructedByFunc"/>.
     /// SGIOC013: Reports when parameter type does not match registered key type, once per key type.
     /// SGIOC014: Reports when [ServiceKey] is used but no Key is registered, once per parameter.
     /// </summary>
@@ -45,7 +63,8 @@ public sealed partial class RegisterAnalyzer
         ImmutableArray<IParameterSymbol> parameters,
         ImmutableArray<ServiceActivation> activations,
         bool injected,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        HashSet<ServiceActivation>? constructedByFunc = null)
     {
         foreach (var param in parameters)
         {
@@ -66,7 +85,7 @@ public sealed partial class RegisterAnalyzer
             List<ITypeSymbol>? reportedKeyTypes = null;
             foreach (var activation in activations)
             {
-                if (!(injected ? activation.IsInjected : activation.IsConstructed))
+                if (!((injected ? activation.IsInjected : activation.IsConstructed) || constructedByFunc?.Contains(activation) == true))
                     continue;
 
                 // SGIOC014: No key is registered but [ServiceKey] is used

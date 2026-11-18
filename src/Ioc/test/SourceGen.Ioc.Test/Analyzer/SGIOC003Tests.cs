@@ -948,4 +948,122 @@ public class SGIOC003Tests
 
         await Assert.That(sgioc003).Count().IsEqualTo(1);
     }
+
+    [Test]
+    public async Task SGIOC003_ClosedRegistrationInOtherTag_DoesNotHideOpenRegistrationOfConsumerTag()
+    {
+        // With the tag "x", IRepo<int> resolves to the Scoped open registration; the closed one only exists with "y"
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IRepo<>)], Tags = ["x"])]
+            public class Repo<T> : IRepo<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepo<int>)], Tags = ["y"])]
+            public class IntRepo : IRepo<int>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Tags = ["x"])]
+            public class Consumer(IRepo<int> repo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC003_ClosedInterfaceOfOpenImplementation_NotRegistered_NoDiagnostic()
+    {
+        // Like the generator, an open implementation is registered only as open service types, so not as IDisposable
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, RegisterAllInterfaces = true)]
+            public class Repo<T> : IDisposable
+            {
+                public void Dispose() { }
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(IDisposable disposable);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC003_UntaggedRegistration_DistinctFromEmptyStringTag()
+    {
+        // Without tags, IFoo resolves to the untagged Scoped A; B is registered only when the tag "" is passed
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IFoo)])]
+            public class A : IFoo;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IFoo)], Tags = [""])]
+            public class B : IFoo;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(IFoo foo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC003_GenericFactoryNotMatchingImplementation_ConstructsImplementation()
+    {
+        // The generic factory's mapping does not match EntityHandler itself, so its self-registration is constructed
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IRequestHandler<TResponse>;
+
+            public class Entity;
+
+            public static class FactoryContainer
+            {
+                [IocGenericFactory(typeof(IRequestHandler<Task<int>>), typeof(int))]
+                public static IRequestHandler<Task<T>> Create<T>() => throw new NotImplementedException();
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
+            public class ScopedDep;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IRequestHandler<Task<Entity>>)], Factory = nameof(FactoryContainer.Create))]
+            public sealed class EntityHandler(ScopedDep dep) : IRequestHandler<Task<Entity>>;
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
 }

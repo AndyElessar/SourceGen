@@ -30,10 +30,17 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
-    /// A registration with the (service type, key) pairs it registers and its effective tags (<c>""</c> when it has none).
+    /// A registration with the (service type, key) pairs it registers and its tags (its own, otherwise those of its best
+    /// default settings; empty without tags).
     /// </summary>
+    /// <param name="Dependency">The registration, with the activation of its implementation type's self-registration.</param>
+    /// <param name="ServiceTypeActivation">
+    /// The activation of its other service types, which differs from that of the self-registration when a generic factory's
+    /// mapping does not match the implementation type, so the self-registration is constructed.
+    /// </param>
     private sealed record DependencyRegistration(
         RegisteredDependency Dependency,
+        ServiceActivation ServiceTypeActivation,
         ImmutableArray<ServiceSymbolKey> Registrations,
         ImmutableArray<string> Tags,
         GeneratorRegistrationOrder Order);
@@ -54,10 +61,18 @@ public sealed partial class RegisterAnalyzer
     /// </summary>
     private sealed class DependencyIndex
     {
-        private readonly Dictionary<ServiceSymbolKey, ImmutableArray<RegisteredDependency>> _winners;
+        private readonly Dictionary<ServiceSymbolKey, Winners> _winners;
 
-        private DependencyIndex(Dictionary<ServiceSymbolKey, ImmutableArray<RegisteredDependency>> winners)
+        private DependencyIndex(Dictionary<ServiceSymbolKey, Winners> winners)
             => _winners = winners;
+
+        /// <summary>
+        /// The winners of a (service type, key): each with the tag it wins (<see langword="null"/> for the registrations
+        /// without tags), and the distinct registrations among them.
+        /// </summary>
+        private sealed record Winners(
+            ImmutableArray<(string? Tag, RegisteredDependency Dependency)> ByTag,
+            ImmutableArray<RegisteredDependency> Distinct);
 
         public static DependencyIndex Build(List<DependencyRegistration> registrations, CancellationToken cancellationToken)
         {
@@ -66,18 +81,24 @@ public sealed partial class RegisterAnalyzer
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var serviceTypes = new List<ServiceSymbolKey>();
+                var implementation = registration.Dependency.Type;
+                var serviceTypes = new List<(ServiceSymbolKey ServiceType, RegisteredDependency Dependency)>();
                 foreach(var serviceKey in registration.Registrations)
                 {
-                    foreach(var serviceType in GetIndexedServiceTypes(registration.Dependency.Type, serviceKey.ServiceType))
-                        serviceTypes.Add(new(serviceType, serviceKey.Key));
+                    foreach(var serviceType in GetIndexedServiceTypes(implementation, serviceKey.ServiceType))
+                    {
+                        var dependency = IsSelfRegistration(implementation, serviceType)
+                            ? registration.Dependency
+                            : registration.Dependency with { Activation = registration.ServiceTypeActivation };
+                        serviceTypes.Add((new(serviceType, serviceKey.Key), dependency));
+                    }
                 }
 
-                entries.Add(new(registration, GetRegisterTagGroup(registration.Tags), serviceTypes));
+                entries.Add(new(registration, [.. registration.Tags.OrderBy(static tag => tag, StringComparer.Ordinal)], serviceTypes));
             }
 
             // OrderBy is stable, so registrations without a source position keep their order
-            var builders = new Dictionary<ServiceSymbolKey, ImmutableArray<RegisteredDependency>.Builder>();
+            var byTag = new Dictionary<ServiceSymbolKey, List<(string? Tag, RegisteredDependency Dependency)>>();
             AddWinners(entries.OrderBy(static entry => entry.Registration.Order));
             AddWinners(entries
                 .OrderBy(static entry => entry.TagGroup, TagGroupComparer.Instance)
@@ -85,42 +106,55 @@ public sealed partial class RegisterAnalyzer
 
             void AddWinners(IEnumerable<IndexedRegistration> ordered)
             {
-                var lastByTag = new Dictionary<(ServiceSymbolKey ServiceType, string Tag), RegisteredDependency>();
+                var lastByTag = new Dictionary<(ServiceSymbolKey ServiceType, string? Tag), RegisteredDependency>();
                 foreach(var (registration, _, serviceTypes) in ordered)
                 {
-                    foreach(var serviceType in serviceTypes)
+                    foreach(var (serviceType, dependency) in serviceTypes)
                     {
+                        if(registration.Tags.IsEmpty)
+                        {
+                            lastByTag[(serviceType, null)] = dependency;
+                            continue;
+                        }
+
                         foreach(var tag in registration.Tags)
-                            lastByTag[(serviceType, tag)] = registration.Dependency;
+                            lastByTag[(serviceType, tag)] = dependency;
                     }
                 }
 
                 foreach(var kvp in lastByTag)
                 {
-                    if(!builders.TryGetValue(kvp.Key.ServiceType, out var builder))
+                    if(!byTag.TryGetValue(kvp.Key.ServiceType, out var winners))
                     {
-                        builder = ImmutableArray.CreateBuilder<RegisteredDependency>(1);
-                        builders[kvp.Key.ServiceType] = builder;
+                        winners = [];
+                        byTag[kvp.Key.ServiceType] = winners;
                     }
 
-                    // Several tags (and both orders) often pick the same registration
-                    if(!builder.Contains(kvp.Value))
-                        builder.Add(kvp.Value);
+                    // Both orders often pick the same registration for a tag
+                    if(!winners.Contains((kvp.Key.Tag, kvp.Value)))
+                        winners.Add((kvp.Key.Tag, kvp.Value));
                 }
             }
 
-            var winners = new Dictionary<ServiceSymbolKey, ImmutableArray<RegisteredDependency>>(builders.Count);
-            foreach(var kvp in builders)
-                winners[kvp.Key] = kvp.Value.ToImmutable();
+            var result = new Dictionary<ServiceSymbolKey, Winners>(byTag.Count);
+            foreach(var kvp in byTag)
+                result[kvp.Key] = new([.. kvp.Value], Distinct(kvp.Value.Select(static winner => winner.Dependency)));
 
-            return new(winners);
+            return new(result);
         }
 
-        /// <summary>
-        /// Gets the tag group of a registration in the Register output: its tags sorted ordinally, empty without tags.
-        /// </summary>
-        private static ImmutableArray<string> GetRegisterTagGroup(ImmutableArray<string> effectiveTags)
-            => effectiveTags is [""] ? [] : [.. effectiveTags.OrderBy(static tag => tag, StringComparer.Ordinal)];
+        private static ImmutableArray<RegisteredDependency> Distinct(IEnumerable<RegisteredDependency> dependencies)
+        {
+            var builder = ImmutableArray.CreateBuilder<RegisteredDependency>();
+            foreach(var dependency in dependencies)
+            {
+                // Several tags often pick the same registration
+                if(!builder.Contains(dependency))
+                    builder.Add(dependency);
+            }
+
+            return builder.ToImmutable();
+        }
 
         /// <summary>
         /// Orders tag groups like the generator's <c>GroupRegistrationsForRegister.TagArrayComparer</c>: element by element
@@ -144,32 +178,66 @@ public sealed partial class RegisterAnalyzer
             }
         }
 
+        /// <param name="TagGroup">The tag group in the Register output: the tags sorted ordinally, empty without tags.</param>
         private readonly record struct IndexedRegistration(
             DependencyRegistration Registration,
             ImmutableArray<string> TagGroup,
-            List<ServiceSymbolKey> ServiceTypes);
+            List<(ServiceSymbolKey ServiceType, RegisteredDependency Dependency)> ServiceTypes);
 
         /// <summary>
-        /// Gets the registrations a dependency on <paramref name="type"/> with <paramref name="key"/> resolves to: those of
-        /// the type itself, otherwise, for a closed generic type, those of its open generic definition (like MS.DI, which
-        /// prefers a closed registration).
+        /// Gets the registrations a dependency on <paramref name="type"/> with <paramref name="key"/> resolves to: per tag
+        /// (and for the registrations without tags), those of the type itself, otherwise, for a closed generic type, those of
+        /// its open generic definition, like MS.DI, which prefers a closed registration among those registered.
         /// </summary>
         public ImmutableArray<RegisteredDependency> Find(INamedTypeSymbol type, string? key)
         {
-            if(_winners.TryGetValue(new(type, key), out var winners))
-                return winners;
+            _winners.TryGetValue(new(type, key), out var closed);
 
-            if(type.IsGenericType && !type.IsUnboundGenericType && _winners.TryGetValue(new(type.OriginalDefinition, key), out winners))
-                return winners;
+            Winners? open = null;
+            if(type.IsGenericType && !type.IsUnboundGenericType)
+                _winners.TryGetValue(new(type.OriginalDefinition, key), out open);
 
-            return [];
+            if(open is null)
+                return closed?.Distinct ?? [];
+
+            if(closed is null)
+                return open.Distinct;
+
+            // An open registration still resolves the type for the tags without a closed registration
+            var dependencies = new List<RegisteredDependency>(closed.Distinct);
+            foreach(var (tag, dependency) in open.ByTag)
+            {
+                if(!HasTag(closed.ByTag, tag))
+                    dependencies.Add(dependency);
+            }
+
+            return Distinct(dependencies);
+        }
+
+        private static bool HasTag(ImmutableArray<(string? Tag, RegisteredDependency Dependency)> winners, string? tag)
+        {
+            foreach(var winner in winners)
+            {
+                if(winner.Tag == tag)
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>
-        /// Gets the types a registered service type is looked up by: a closed type as itself, an open one by its definition
-        /// when the generator registers it open (its type arguments are the implementation's type parameters in declaration
-        /// order), and an unbound service type of a closed implementation as each closed form the implementation implements
-        /// or inherits (see Register.Basic.spec.md).
+        /// Gets whether an indexed service type is the implementation type itself (its definition for an open one).
+        /// </summary>
+        private static bool IsSelfRegistration(INamedTypeSymbol implementation, INamedTypeSymbol serviceType)
+            => RuntimeTypeSymbolComparer.Instance.Equals(serviceType, implementation)
+                || SymbolEqualityComparer.Default.Equals(serviceType, implementation.OriginalDefinition);
+
+        /// <summary>
+        /// Gets the types a registered service type is looked up by, like the generator's <c>IsValidServiceType</c>: a closed
+        /// type of a closed implementation as itself; an open one of an open implementation by its definition when the
+        /// generator registers it open (its type arguments are the implementation's type parameters in declaration order);
+        /// an unbound service type of a closed implementation as each closed form the implementation implements or inherits
+        /// (see Register.Basic.spec.md). A closed service type of an open implementation is not registered.
         /// </summary>
         private static IEnumerable<INamedTypeSymbol> GetIndexedServiceTypes(INamedTypeSymbol implementation, INamedTypeSymbol serviceType)
         {
@@ -194,7 +262,7 @@ public sealed partial class RegisterAnalyzer
             static INamedTypeSymbol? GetIndexedType(INamedTypeSymbol definition, INamedTypeSymbol serviceType)
             {
                 if(!AnalyzerHelpers.IsOpenGenericType(serviceType))
-                    return serviceType;
+                    return AnalyzerHelpers.IsOpenGenericType(definition) ? null : serviceType;
 
                 return serviceType.TypeArguments.SequenceEqual<ITypeSymbol>(definition.TypeParameters, SymbolEqualityComparer.Default)
                     ? serviceType.OriginalDefinition

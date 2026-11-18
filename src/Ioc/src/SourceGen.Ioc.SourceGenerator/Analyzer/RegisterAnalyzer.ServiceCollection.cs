@@ -160,7 +160,8 @@ public sealed partial class RegisterAnalyzer
             // SGIOC038: Check the interfaces and base classes an open implementation is registered as
             AnalyzeImplicitOpenTypesNestedInGenericType(reportDiagnostic, analyzerContext, attribute, targetType, explicitServiceTypes, location);
 
-            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location, AnalyzerHelpers.GetEffectiveTags(tags), order);
+            // Unlike SGIOC011, the dependency index keeps the registrations without tags apart from those tagged ""
+            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location, [.. tags], order);
         }
 
         (int Tree, int Position) GetSourceOrder(Location? location)
@@ -278,7 +279,25 @@ public sealed partial class RegisterAnalyzer
         // starting from the dependencies of closed registrations; SGIOC039: the service types of generic factories
         analyzerContext.Registrations.Add(new(targetType, registrations, decorators, attribute, hasFactory, hasInstance, bestDefaultIndex, location));
 
-        RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations, tags, order);
+        // Like the generator's CreateServiceRegistrations, the own generic factory of a closed registration is closed for each
+        // registered type: a type its mapping does not match is not registered (SGIOC039), except the implementation type
+        // itself, which is constructed instead
+        var isSelfConstructed = false;
+        var dependencyRegistrations = registrations;
+        if(hasFactory && !hasInstance && !IsOpenGenericImplementation(targetType)
+            && GetFactory(analyzerContext, attribute).Factory is { TypeParameterCount: > 0 } genericFactory)
+        {
+            var isConstructible = targetType.IsConstructibleIn(analyzerContext.Assembly);
+            isSelfConstructed = isConstructible && IocSourceGenerator.CloseGenericFactory(genericFactory, targetType.GetTypeData()) is null;
+            dependencyRegistrations = [.. registrations.Where(registration =>
+                IocSourceGenerator.CloseGenericFactory(genericFactory, registration.ServiceType.GetTypeData()) is not null
+                || (isConstructible && RuntimeTypeSymbolComparer.Instance.Equals(registration.ServiceType, targetType)))];
+        }
+
+        RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory && !isSelfConstructed, hasFactory, hasInstance, registrations, dependencyRegistrations, asyncDecoratedRegistrations, tags, order);
+
+        static bool IsOpenGenericImplementation(INamedTypeSymbol type)
+            => type.IsUnboundGenericType || type is { IsGenericType: true, IsDefinition: true };
     }
 
     /// <summary>
@@ -623,6 +642,9 @@ public sealed partial class RegisterAnalyzer
     /// Records a registration on the <see cref="ServiceInfo"/> of its implementation type, and as a candidate dependency of
     /// the (service type, key) pairs it registers (see <see cref="DependencyIndex"/>).
     /// </summary>
+    /// <param name="hasFactory">Whether the implementation type itself is created by a Factory, not constructed.</param>
+    /// <param name="serviceTypesHaveFactory">Whether the other service types are created by a Factory.</param>
+    /// <param name="dependencyRegistrations">The (service type, key) pairs the generator registers (see <c>RegisterService</c>).</param>
     /// <param name="order">The position of the registration in the generator's registration order.</param>
     private static void RegisterServiceWithIndex(
         AnalyzerContext analyzerContext,
@@ -632,8 +654,10 @@ public sealed partial class RegisterAnalyzer
         string? serviceKey,
         ITypeSymbol? keyTypeSymbol,
         bool hasFactory,
+        bool serviceTypesHaveFactory,
         bool hasInstance,
         ImmutableArray<ServiceSymbolKey> registrations,
+        ImmutableArray<ServiceSymbolKey> dependencyRegistrations,
         ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations,
         ImmutableArray<string> tags,
         GeneratorRegistrationOrder order)
@@ -657,7 +681,12 @@ public sealed partial class RegisterAnalyzer
             analyzerContext.RegisteredServices[targetType] = serviceInfo;
         }
 
-        analyzerContext.DependencyRegistrations.Add(new(new(serviceInfo, activation), registrations, tags, order));
+        analyzerContext.DependencyRegistrations.Add(new(
+            new(serviceInfo, activation),
+            activation with { HasFactory = serviceTypesHaveFactory },
+            dependencyRegistrations,
+            tags,
+            order));
     }
 
     /// <summary>

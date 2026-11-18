@@ -500,4 +500,34 @@ public class SGIOC014Tests
 
         await Assert.That(sgioc014).Count().IsEqualTo(1);
     }
+
+    [Test]
+    public async Task SGIOC014_InjectMethodOfUnkeyedInstanceConstructedByFunc_ReportsDiagnostic()
+    {
+        // The Func constructs the Instance registration's type and calls its [Inject] methods, but no key is registered
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Instance = nameof(Default))]
+            public class Foo
+            {
+                public static readonly Foo Default = new();
+
+                [IocInject]
+                public void Init([ServiceKey] string key) { }
+            }
+
+            [IocRegister]
+            public class Consumer(Func<string, Foo> factory);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
+
+        await Assert.That(sgioc014).Count().IsEqualTo(1);
+    }
 }

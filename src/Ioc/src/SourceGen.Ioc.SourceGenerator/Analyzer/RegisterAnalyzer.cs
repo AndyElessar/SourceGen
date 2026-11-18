@@ -716,6 +716,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         var dependencyIndex = DependencyIndex.Build(analyzerContext.DependencyRegistrations, context.CancellationToken);
         var graph = new DependencyGraph(analyzerContext, dependencyIndex);
         var keyedServiceIndex = new KeyedServiceIndex(analyzerContext);
+        var constructedByFunc = CollectRegistrationsConstructedByFunc(analyzerContext, context.CancellationToken);
 
         foreach(var kvp in analyzerContext.RegisteredServices)
         {
@@ -724,7 +725,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             var serviceInfo = kvp.Value;
 
             // SGIOC013/SGIOC014: Analyze ServiceKey parameter type mismatches
-            AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, context.CancellationToken);
+            AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, constructedByFunc, analyzerContext.Assembly, analyzerContext.Features, context.CancellationToken);
 
             // SGIOC015: Analyze KeyValuePair/Dictionary key type mismatches
             AnalyzeKeyValuePairKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, analyzerContext, keyedServiceIndex, context.CancellationToken);
