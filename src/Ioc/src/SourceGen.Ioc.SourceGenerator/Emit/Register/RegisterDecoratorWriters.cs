@@ -22,7 +22,7 @@ partial class IocSourceGenerator
     /// </code>
     /// For open generic decorators, falls back to ActivatorUtilities.CreateInstance.
     /// </remarks>
-    private static void WriteDecoratorRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, ImmutableEquatableSet<AsyncInitService>? asyncInitServices = null)
+    private static void WriteDecoratorRegistration(SourceWriter writer, ServiceRegistrationModel registration, string lifetime, RegisterWriteContext context)
     {
         var hiddenKey = WriteOwnServiceInstanceOpen(writer, registration, lifetime);
 
@@ -37,7 +37,7 @@ partial class IocSourceGenerator
             writer.WriteLine($"var s0 = sp.{methodName}<{registration.ImplementationType.Name}>({keyArgument});");
         }
 
-        WriteOwnServiceInstanceClose(writer, registration, lifetime, hiddenKey, asyncInitServices);
+        WriteOwnServiceInstanceClose(writer, registration, lifetime, hiddenKey, context);
     }
 
     /// <summary>
@@ -88,10 +88,10 @@ partial class IocSourceGenerator
         ServiceRegistrationModel registration,
         string lifetime,
         string? hiddenKey,
-        ImmutableEquatableSet<AsyncInitService>? asyncInitServices)
+        RegisterWriteContext context)
     {
         var isAsync = RegistersAsyncDecoratorChain(registration);
-        var outermostVar = WriteDecoratorChain(writer, registration, asyncInitServices, isAsyncMode: isAsync);
+        var outermostVar = WriteDecoratorChain(writer, registration, context, isAsyncMode: isAsync);
         writer.WriteLine($"return {outermostVar};");
 
         if(isAsync)
@@ -120,7 +120,7 @@ partial class IocSourceGenerator
     private static string WriteDecoratorChain(
         SourceWriter writer,
         ServiceRegistrationModel registration,
-        ImmutableEquatableSet<AsyncInitService>? asyncInitServices,
+        RegisterWriteContext context,
         bool isAsyncMode = false)
     {
         var decorators = registration.Decorators;
@@ -160,7 +160,7 @@ partial class IocSourceGenerator
                 decoratedParameterIndex: GetDecoratedParameterIndex(ctorParams, registration.ServiceType.Name, typeNameResolver),
                 memberTypeNameResolver: typeNameResolver,
                 decoratedPrevVar: prevVar,
-                asyncInitServices: asyncInitServices,
+                context: context,
                 isAsyncMode: isAsyncMode);
         }
 

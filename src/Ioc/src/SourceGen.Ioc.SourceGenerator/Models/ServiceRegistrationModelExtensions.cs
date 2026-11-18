@@ -21,9 +21,10 @@ internal static class ServiceRegistrationModelExtensions
 
         /// <summary>
         /// Gets whether the implementation type has an async injection method, so the implementation type itself is
-        /// resolved as <c>Task&lt;T&gt;</c>.
+        /// resolved as <c>Task&lt;T&gt;</c>. An <c>Instance</c> is registered as is, without calling its inject methods, so it
+        /// is never async-init.
         /// </summary>
-        public bool HasAsyncInjection => HasAsyncMethod(registration.InjectionMembers);
+        public bool HasAsyncInjection => registration.Instance is null && HasAsyncMethod(registration.InjectionMembers);
 
         /// <summary>
         /// Gets whether a decorator applied to the service type has an async injection method, so the decorated service type

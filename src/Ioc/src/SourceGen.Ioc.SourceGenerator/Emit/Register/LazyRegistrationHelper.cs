@@ -21,6 +21,11 @@ partial class IocSourceGenerator
         string ResolveCall,
         ImmutableEquatableArray<string> Tags)
     {
+        /// <summary>
+        /// Gets the tags of an explicit <c>Lazy&lt;T&gt;</c> registration that replaces this one when any of them is passed.
+        /// </summary>
+        public ImmutableEquatableArray<string> SuppressingTags { get; init; } = [];
+
         public void WriteRegistration(SourceWriter writer)
         {
             var lifetime = Lifetime.Name;
@@ -84,7 +89,36 @@ partial class IocSourceGenerator
 
         foreach(var entry in entries)
         {
+            var suppressed = WriteSuppressingTagsOpen(writer, entry.SuppressingTags);
             entry.WriteRegistration(writer);
+            WriteSuppressingTagsClose(writer, suppressed);
         }
+    }
+
+    /// <summary>
+    /// Opens <c>if (!tags.Contains(...))</c> around a generated wrapper registration that an explicit registration with
+    /// <paramref name="suppressingTags"/> replaces, and returns whether it was opened.
+    /// </summary>
+    private static bool WriteSuppressingTagsOpen(SourceWriter writer, ImmutableEquatableArray<string> suppressingTags)
+    {
+        if(suppressingTags.Length == 0)
+            return false;
+
+        var conditions = suppressingTags.Select(static tag => $"tags.Contains({SymbolDisplay.FormatLiteral(tag, quote: true)})");
+        writer.WriteLine(suppressingTags.Length == 1
+            ? $"if (!{conditions.First()})"
+            : $"if (!({string.Join(" || ", conditions)}))");
+        writer.WriteLine("{");
+        writer.Indentation++;
+        return true;
+    }
+
+    private static void WriteSuppressingTagsClose(SourceWriter writer, bool opened)
+    {
+        if(!opened)
+            return;
+
+        writer.Indentation--;
+        writer.WriteLine("}");
     }
 }

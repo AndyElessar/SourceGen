@@ -358,4 +358,53 @@ public class CollectionDependencyTests
 
         await Verify(generatedSource);
     }
+
+    [Test]
+    public async Task ExplicitCollectionRegistrations_AreInjectedInsteadOfBuiltCollections()
+    {
+        // Like MS.DI (and the Container output), a collection type registered explicitly is injected as that registration;
+        // the collection types that are not registered explicitly keep the collection of the registrations of T
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)])]
+            public sealed class Handler : IHandler { }
+
+            public static class Handlers
+            {
+                public static readonly List<IHandler> List = [];
+            }
+
+            [IocRegisterFor<List<IHandler>>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IReadOnlyList<IHandler>), typeof(IList<IHandler>)], Instance = "global::TestNamespace.Handlers.List")]
+            [IocRegisterFor<List<IHandler>>(ServiceLifetime.Singleton, ServiceTypes = [typeof(IReadOnlyList<IHandler>)], Instance = "global::TestNamespace.Handlers.List", Key = "k")]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class Consumer(
+                IReadOnlyList<IHandler> readOnlyList,
+                IList<IHandler> list,
+                [FromKeyedServices("k")] IReadOnlyList<IHandler> keyedReadOnlyList,
+                Lazy<IReadOnlyList<IHandler>> lazyReadOnlyList,
+                IHandler[] notRegistered);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource)
+            .Contains("var p0 = sp.GetRequiredService<global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.IHandler>>();")
+            .And.Contains("var p1 = sp.GetRequiredService<global::System.Collections.Generic.IList<global::TestNamespace.IHandler>>();")
+            .And.Contains("var p2 = sp.GetRequiredKeyedService<global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.IHandler>>(\"k\");")
+            .And.Contains("() => sp.GetRequiredService<global::System.Collections.Generic.IReadOnlyList<global::TestNamespace.IHandler>>(), ")
+            .And.Contains("var p4 = sp.GetServices<global::TestNamespace.IHandler>().ToArray();");
+        await Verify(generatedSource);
+    }
 }

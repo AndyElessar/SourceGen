@@ -22,6 +22,7 @@ When consumer dependencies include `KeyValuePair<K, V>`, `IDictionary<K, V>`, `I
 - Lifetime matches the keyed value service's lifetime
 - Uses `ServiceDescriptor` directly because `KeyValuePair<K, V>` is a struct (generic `AddXxx<T>` has a `class` constraint)
 - Registrations are emitted after all normal service registrations, before `return services;`
+- A dictionary type (`IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `Dictionary<K, V>`) or collection type registered explicitly as a service type with the dependency's key is resolved as that registration (`sp.GetRequiredService<IReadOnlyDictionary<K, V>>()`) instead of `ToDictionary()` when its tags always register it with the consumer, and as `sp.GetService<IReadOnlyDictionary<K, V>>() ?? ...ToDictionary()` when only some passed tags do (see [Explicit Wrapper Registrations](Register.Injection.spec.md#explicit-wrapper-registrations))
 
 ### Example
 

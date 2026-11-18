@@ -1341,4 +1341,140 @@ public class SGIOC030Tests
         await Assert.That(sgioc030).Count().IsEqualTo(1);
         await Assert.That(sgioc030[0].GetMessage()).Contains("IMyService");
     }
+
+    [Test]
+    public async Task SGIOC030_InstanceWithAsyncInjectMethod_IsNotAsyncInit_NoDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            // An Instance is registered as is, without calling its inject methods, so it is not async-init
+            public sealed class AsyncThing
+            {
+                public static readonly AsyncThing Default = new();
+
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegisterFor<AsyncThing>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.AsyncThing.Default")]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class Consumer(AsyncThing thing, Lazy<AsyncThing> lazy);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class TestContainer
+            {
+                public partial AsyncThing GetThing();
+                public partial Lazy<AsyncThing> GetLazyThing();
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC030_SameTypeInstanceAndAsyncInitRegistrations_InstanceDeclaredFirst_ReportsOnlyAsyncInitKey()
+    {
+        // Async-init is decided per registration, like the generator: the Instance under "i" is synchronous, while the
+        // non-keyed registration of the same type is async-init, whichever is declared first
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegisterFor<AsyncThing>(ServiceLifetime.Singleton, Key = "i", Instance = "global::TestNamespace.AsyncThing.Default")]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class AsyncThing
+            {
+                public static readonly AsyncThing Default = new();
+
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class UnkeyedConsumer(AsyncThing unkeyed);
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class KeyedConsumer([FromKeyedServices("i")] AsyncThing keyed);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("'unkeyed'");
+    }
+
+    [Test]
+    public async Task SGIOC030_SameTypeInstanceAndAsyncInitRegistrations_AsyncInitDeclaredFirst_ReportsOnlyAsyncInitKey()
+    {
+        // Async-init is decided per registration, like the generator: the Instance under "i" is synchronous, while the
+        // non-keyed registration of the same type is async-init, whichever is declared first
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public sealed class AsyncThing
+            {
+                public static readonly AsyncThing Default = new();
+
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegisterFor<AsyncThing>(ServiceLifetime.Singleton, Key = "i", Instance = "global::TestNamespace.AsyncThing.Default")]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class UnkeyedConsumer(AsyncThing unkeyed);
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public sealed class KeyedConsumer([FromKeyedServices("i")] AsyncThing keyed);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(1);
+        await Assert.That(sgioc030[0].GetMessage()).Contains("'unkeyed'");
+    }
 }

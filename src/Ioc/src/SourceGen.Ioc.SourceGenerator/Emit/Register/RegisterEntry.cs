@@ -5,10 +5,44 @@ namespace SourceGen.Ioc;
 partial class IocSourceGenerator
 {
     /// <summary>
-    /// Shared context for writing register entries.
+    /// Shared context for writing the register entries of a tag group.
     /// </summary>
+    /// <param name="AsyncInitServices">
+    /// The (type, key) pairs with an async-init registration (registered as <c>Task&lt;T&gt;</c> only) that is registered
+    /// whenever the tag group is, or <see langword="null"/> for none.
+    /// </param>
+    /// <param name="AsyncInitFallbackServices">
+    /// The (type, key) pairs with an async-init registration that is registered with the tag group only for some passed tags,
+    /// so <c>Task&lt;T&gt;</c> resolves it when registered, and falls back to the synchronous service otherwise.
+    /// </param>
+    /// <param name="ExplicitWrapperServices">
+    /// The wrapper and collection types (other than <c>IEnumerable&lt;T&gt;</c> and <c>Task&lt;T&gt;</c>) that this compilation
+    /// registers explicitly, by (type, key), and that are registered whenever the tag group is; dependencies of these types
+    /// resolve the explicit registration instead of building the wrapper. <see langword="null"/> for none.
+    /// </param>
+    /// <param name="ExplicitWrapperFallbackServices">
+    /// The explicitly registered wrapper and collection types that are registered with the tag group only for some passed
+    /// tags, so dependencies resolve the explicit registration when registered, and build the wrapper otherwise.
+    /// </param>
     private readonly record struct RegisterWriteContext(
-        ImmutableEquatableSet<AsyncInitService>? AsyncInitServices);
+        ImmutableEquatableSet<AsyncInitService>? AsyncInitServices,
+        ImmutableEquatableSet<AsyncInitService>? AsyncInitFallbackServices,
+        ImmutableEquatableSet<ServiceTypeKey>? ExplicitWrapperServices,
+        ImmutableEquatableSet<ServiceTypeKey>? ExplicitWrapperFallbackServices)
+    {
+        /// <summary>
+        /// Gets whether a dependency of <paramref name="typeName"/> with <paramref name="key"/> resolves an explicit registration.
+        /// </summary>
+        public bool IsRegisteredExplicitly(string typeName, string? key) =>
+            ExplicitWrapperServices?.Contains(new(typeName, key)) == true;
+
+        /// <summary>
+        /// Gets whether a dependency of <paramref name="typeName"/> with <paramref name="key"/> resolves an explicit
+        /// registration when it is registered, depending on the passed tags.
+        /// </summary>
+        public bool MayBeRegisteredExplicitly(string typeName, string? key) =>
+            ExplicitWrapperFallbackServices?.Contains(new(typeName, key)) == true;
+    }
 
     /// <summary>
     /// Base model for a single registration entry that can write itself.
@@ -124,6 +158,7 @@ partial class IocSourceGenerator
             var implTypeName = Registration.ImplementationType.Name;
             var lifetime = Registration.Lifetime.Name;
             var requiredResolutionMethod = GetServiceResolutionMethod(Key, isOptional: false);
+            // The implementation type's registration is in the same tag group
             bool isAsyncInit = context.AsyncInitServices?.Contains(new(implTypeName, Key)) == true;
 
             if(isAsyncInit)
@@ -237,7 +272,7 @@ partial class IocSourceGenerator
                 var hiddenKey = WriteOwnServiceInstanceOpen(writer, Registration, Lifetime);
                 var arguments = WriteAdditionalParameterResolution(writer, context);
                 writer.WriteLine($"var s0 = {BuildFactoryInvocationExpression(arguments)};");
-                WriteOwnServiceInstanceClose(writer, Registration, Lifetime, hiddenKey, context.AsyncInitServices);
+                WriteOwnServiceInstanceClose(writer, Registration, Lifetime, hiddenKey, context);
                 return;
             }
 
@@ -280,7 +315,7 @@ partial class IocSourceGenerator
                     additionalParam.TemporaryVariableName,
                     IsKeyedRegistration,
                     Key,
-                    context.AsyncInitServices);
+                    context);
                 resolvedParameterNames.Add(resolvedName);
             }
 
@@ -396,7 +431,7 @@ partial class IocSourceGenerator
                     paramVarName,
                     IsKeyedRegistration,
                     Key,
-                    context.AsyncInitServices);
+                    context);
 
                 constructorParamEntries.Add((parameter.Name, resolvedVar));
             }
@@ -419,7 +454,7 @@ partial class IocSourceGenerator
                     member.IsNullable,
                     hasNonNullDefault,
                     member.DefaultValue,
-                    context.AsyncInitServices);
+                    context);
 
                 propertyVarNames[i] = memberVarName;
             }
@@ -476,14 +511,14 @@ partial class IocSourceGenerator
                             IsKeyedRegistration,
                             Key,
                             typeNameResolver: null,
-                            context.AsyncInitServices)
+                            context)
                         : ResolveParamAndEmitVar(
                             writer,
                             parameter,
                             paramVarName,
                             IsKeyedRegistration,
                             Key,
-                            context.AsyncInitServices);
+                            context);
 
                     memberParamIndex++;
                 }
@@ -574,7 +609,7 @@ partial class IocSourceGenerator
 
         public override void WriteRegistration(SourceWriter writer, RegisterWriteContext context)
         {
-            WriteDecoratorRegistration(writer, Registration, Lifetime, context.AsyncInitServices);
+            WriteDecoratorRegistration(writer, Registration, Lifetime, context);
         }
     }
 }

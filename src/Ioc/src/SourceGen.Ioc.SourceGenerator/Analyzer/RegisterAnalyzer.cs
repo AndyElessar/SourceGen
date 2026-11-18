@@ -859,9 +859,29 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         // Keyed by runtime type, so registrations whose tuple element names differ are the same service
         var serviceTypeStates = new Dictionary<ServiceSymbolKey, (bool HasAsync, bool HasSync)>();
 
+        // Like the generator, an Instance is registered as is, without calling its inject methods, so it is never async-init.
+        // Decided per registration: the same implementation type can be an Instance under one key and constructed under another
+        Dictionary<INamedTypeSymbol, HashSet<ServiceSymbolKey>>? instanceRegistrations = null;
+        foreach(var registration in analyzerContext.Registrations)
+        {
+            if(!registration.HasInstance)
+                continue;
+
+            instanceRegistrations ??= new(RuntimeTypeSymbolComparer.Instance);
+            if(!instanceRegistrations.TryGetValue(registration.Implementation, out var instanceServiceTypes))
+            {
+                instanceServiceTypes = [];
+                instanceRegistrations[registration.Implementation] = instanceServiceTypes;
+            }
+
+            instanceServiceTypes.UnionWith(registration.Registrations);
+        }
+
         foreach(var serviceInfo in analyzerContext.RegisteredServices.Values)
         {
             var isAsyncInit = AnalyzerHelpers.IsAsyncInitImplementation(serviceInfo.Type, analyzerContext.Features);
+            HashSet<ServiceSymbolKey>? instanceServiceTypes = null;
+            instanceRegistrations?.TryGetValue(serviceInfo.Type, out instanceServiceTypes);
 
             // Use pre-computed AllRegistrations (populated at collection time from attribute data) when
             // available. This correctly handles assembly-level registrations where multiple IocRegisterFor
@@ -875,7 +895,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             foreach(var serviceType in serviceTypes)
             {
                 serviceTypeStates.TryGetValue(serviceType, out var state);
-                serviceTypeStates[serviceType] = isAsyncInit || serviceInfo.AsyncDecoratedRegistrations.Contains(serviceType)
+                var isAsyncInitRegistration = isAsyncInit && instanceServiceTypes?.Contains(serviceType) != true;
+                serviceTypeStates[serviceType] = isAsyncInitRegistration || serviceInfo.AsyncDecoratedRegistrations.Contains(serviceType)
                     ? (HasAsync: true, HasSync: state.HasSync)
                     : (HasAsync: state.HasAsync, HasSync: true);
             }
