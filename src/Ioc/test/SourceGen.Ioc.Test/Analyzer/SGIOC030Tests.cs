@@ -2005,4 +2005,213 @@ public class SGIOC030Tests
 
         await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).Count().IsEqualTo(expected);
     }
+
+    private const string ExplicitFuncFoo = """
+        using System;
+        using System.Collections.Generic;
+        using System.Threading.Tasks;
+        using Microsoft.Extensions.DependencyInjection;
+        using SourceGen.Ioc;
+
+        namespace TestNamespace;
+
+        [IocRegister]
+        public class AsyncDep
+        {
+            [IocInject]
+            public Task InitAsync() => Task.CompletedTask;
+        }
+
+        public static class Wrappers
+        {
+            public static readonly Func<string, Foo> Make = _ => null!;
+        }
+
+        """;
+
+    [Test]
+    [Arguments("", "", "", 0)]
+    [Arguments(", Tags = [\"A\"]", ", Tags = [\"A\"]", ", Tags = [\"A\"]", 0)]
+    [Arguments(", Key = \"a\"", "", "", 1)]
+    [Arguments(", Tags = [\"A\"]", "", "", 1)]
+    [Arguments(", Tags = [\"A\"]", ", Tags = [\"A\", \"B\"]", ", Tags = [\"A\", \"B\"]", 1)]
+    public async Task SGIOC030_InstanceConstructedByFunc_ExplicitFuncRegistration_FollowsGeneratedFunc(
+        string explicitArguments,
+        string fooArguments,
+        string consumerArguments,
+        int expected)
+    {
+        // Like the generator (ApplyExplicitWrapperSuppression), an explicit Func<string, Foo> under the same key that is always
+        // registered with Foo's registration replaces the generated Func, which then does not construct the Instance. With
+        // another key, tags it never shares (Foo untagged), or tags it only sometimes shares (Foo tagged A and B), the
+        // generated Func is still registered and constructs Foo
+        var source = ExplicitFuncFoo + $$"""
+            [IocRegister(Instance = nameof(Default){{fooArguments}})]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static readonly Foo Default = new(null!, "");
+            }
+
+            [IocRegisterFor<Func<string, Foo>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Make"{{explicitArguments}})]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient{{consumerArguments}})]
+            public class Consumer(Func<string, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, analyzerConfigOptions: analyzerConfigOptions);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).Count().IsEqualTo(expected);
+        await Assert.That(generatedSource!.Contains("new global::TestNamespace.Foo(")).IsEqualTo(expected > 0);
+    }
+
+    [Test]
+    [Arguments("ServiceLifetime.Scoped", "")]
+    [Arguments("ServiceLifetime.Singleton", ", Key = \"KeyedService.AnyKey\", KeyType = KeyType.Csharp")]
+    public async Task SGIOC030_InstanceConstructedByFunc_ExplicitFuncRegistrationNotRegistered_ReportsDiagnostic(string explicitLifetime, string keyArguments)
+    {
+        // Like the generator, an explicit Func registration that the Register output does not register (an Instance that is
+        // not Singleton, SGIOC009) or that MS.DI does not resolve as a single service (under KeyedService.AnyKey) does not
+        // replace the generated Func, which still constructs Foo
+        var source = ExplicitFuncFoo + $$"""
+            [IocRegister(Instance = nameof(Default){{keyArguments}})]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static readonly Foo Default = new(null!, "");
+            }
+
+            [IocRegisterFor<Func<string, Foo>>({{explicitLifetime}}, Instance = "global::TestNamespace.Wrappers.Make"{{keyArguments}})]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Consumer(Func<string, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, analyzerConfigOptions: analyzerConfigOptions);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("new global::TestNamespace.Foo(");
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("IEnumerable<Func<string, Foo>>")]
+    [Arguments("Func<string, Foo>[]")]
+    public async Task SGIOC030_InstanceConstructedByFuncCollection_ExplicitFuncRegistration_NoDiagnostic(string dependency)
+    {
+        // The collection of an explicitly registered Func<string, Foo> contains the explicit registration only
+        var source = ExplicitFuncFoo + $$"""
+            [IocRegister(Instance = nameof(Default))]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static readonly Foo Default = new(null!, "");
+            }
+
+            [IocRegisterFor<Func<string, Foo>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Make")]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Consumer({{dependency}} makes);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC030_FactoryConstructedByFunc_ExplicitFuncRegistration_NoDiagnostic()
+    {
+        var source = ExplicitFuncFoo + """
+            [IocRegister(Factory = nameof(Create))]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static Foo Create() => new(null!, "");
+            }
+
+            [IocRegisterFor<Func<string, Foo>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Make")]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Consumer(Func<string, Foo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("[IocRegisterFor<Func<string, Foo>>(ServiceLifetime.Singleton, Instance = \"global::TestNamespace.Wrappers.Make\")]", "", 0)]
+    [Arguments("", "(ExplicitOnly = true)][IocRegisterFor<Consumer>", 0)]
+    [Arguments("", "", 1)]
+    public async Task SGIOC030_InstanceConstructedByFunc_ContainerOnly_FollowsContainer(string explicitRegistration, string containerArguments, int expected)
+    {
+        // Without the Register output, only a container constructs a Func: not when Func<string, Foo> is registered explicitly
+        // (it resolves that registration), nor when Foo is not one of its registrations (it resolves the Func from the
+        // fallback provider)
+        var source = ExplicitFuncFoo + $$"""
+            [IocRegister(Instance = nameof(Default))]
+            public class Foo(AsyncDep dep, string name)
+            {
+                public static readonly Foo Default = new(null!, "");
+            }
+
+            {{explicitRegistration}}
+            public static class Registrations;
+
+            public class Consumer(Func<string, Foo> make);
+
+            [IocRegisterFor<Consumer>]
+            public static class ConsumerRegistration;
+
+            [IocContainer{{containerArguments}}]
+            public partial class AppContainer;
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Container,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, analyzerConfigOptions: analyzerConfigOptions);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container");
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030")).Count().IsEqualTo(expected);
+        await Assert.That(generatedSource!.Contains("new global::TestNamespace.Foo(")).IsEqualTo(expected > 0);
+    }
 }

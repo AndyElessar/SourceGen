@@ -125,8 +125,10 @@ public sealed partial class RegisterAnalyzer
     /// members, [IocInject] and InjectMembers, also with an Instance) or an applied decorator, directly or as the element of a
     /// collection; it is registered for every closed, not async-init registration of <c>TReturn</c> (an unbound service type
     /// registers its closed forms), except a service type of an <c>Instance</c> registration whose decorators have async inject
-    /// methods (see <see cref="ServiceInfo.AsyncDecoratedRegistrations"/>), and constructs the implementation type with the registration's key even for an Instance or
-    /// Factory registration. The return type of a partial accessor of a generated container, and a Func nested in another
+    /// methods (see <see cref="DependencyRegistration.AsyncDecoratedRegistrations"/>), and constructs the implementation type with
+    /// the registration's key even for an Instance or Factory registration, unless an explicit registration of the <c>Func</c>
+    /// type replaces it (<c>ApplyExplicitWrapperSuppression</c>, see <see cref="ExplicitFuncRegistrations"/>). Only with the
+    /// Register output (the <c>Register</c> feature). The return type of a partial accessor of a generated container, and a Func nested in another
     /// wrapper, construct only a registration of a container (see <see cref="AddConstructedByContainers"/>). The parameters of a
     /// generic factory are scanned as declared, not closed for each service type. Each registration maps to the distinct requested <c>Func</c>
     /// types that construct it, whose input parameters the generator passes to the parameters of their type (see
@@ -134,6 +136,30 @@ public sealed partial class RegisterAnalyzer
     /// </summary>
     private static Dictionary<ServiceActivation, List<INamedTypeSymbol>> CollectRegistrationsConstructedByFunc(
         AnalyzerContext analyzerContext,
+        CancellationToken cancellationToken)
+    {
+        var constructed = new Dictionary<ServiceActivation, List<INamedTypeSymbol>>();
+
+        // The Register output registers the Funcs; without it, only the generated containers construct them
+        if((analyzerContext.Features & IocFeatures.Register) != 0)
+            AddConstructedByRegisterOutput(analyzerContext, constructed, cancellationToken);
+
+        // The generated containers construct the Funcs of their partial accessors and the Funcs nested in another wrapper inline,
+        // from their own registrations
+        if(!analyzerContext.Containers.IsEmpty)
+            AddConstructedByContainers(analyzerContext, constructed, cancellationToken);
+
+        return constructed;
+    }
+
+    /// <summary>
+    /// Adds the registrations that the <c>Func</c> registrations of the Register output construct (see
+    /// <see cref="CollectRegistrationsConstructedByFunc"/>), except those an explicit registration of the <c>Func</c> type
+    /// replaces (see <see cref="ExplicitFuncRegistrations"/>).
+    /// </summary>
+    private static void AddConstructedByRegisterOutput(
+        AnalyzerContext analyzerContext,
+        Dictionary<ServiceActivation, List<INamedTypeSymbol>> constructed,
         CancellationToken cancellationToken)
     {
         // The requested Func types by return type
@@ -183,42 +209,43 @@ public sealed partial class RegisterAnalyzer
         foreach(var decorator in analyzerContext.AppliedDecorators.Keys)
             ScanMembers(decorator.GetSelectedConstructor(analyzerContext.Assembly), [.. decorator.GetInjectedMembers()]);
 
-        var constructed = new Dictionary<ServiceActivation, List<INamedTypeSymbol>>();
-        if(returnTypes.Count > 0)
+        if(returnTypes.Count == 0)
+            return;
+
+        var explicitFuncs = ExplicitFuncRegistrations.Collect(analyzerContext, returnTypes);
+        foreach(var registration in analyzerContext.DependencyRegistrations)
         {
-            foreach(var registration in analyzerContext.DependencyRegistrations)
+            if(IsOpenGeneric(registration) || IsAsyncInit(analyzerContext, registration))
+                continue;
+
+            foreach(var serviceType in registration.Registrations)
             {
-                if(IsOpenGeneric(registration) || IsAsyncInit(analyzerContext, registration))
+                if(!returnTypes.TryGetValue(serviceType.ServiceType, out var funcTypes) || registration.AsyncDecoratedRegistrations.Contains(serviceType))
                     continue;
 
-                foreach(var serviceType in registration.Registrations)
+                // The Funcs of every service type of the registration construct it, except those an explicit registration
+                // replaces
+                if(explicitFuncs is not null)
                 {
-                    if(!returnTypes.TryGetValue(serviceType.ServiceType, out var funcTypes) || registration.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceType))
+                    funcTypes = explicitFuncs.RemoveReplaced(funcTypes, serviceType.Key, registration.Tags);
+                    if(funcTypes.Count == 0)
                         continue;
-
-                    // The Funcs of every service type of the registration construct it
-                    var activation = registration.Dependency.Activation;
-                    if(!constructed.TryGetValue(activation, out var constructingFuncTypes))
-                    {
-                        constructed[activation] = funcTypes;
-                        continue;
-                    }
-
-                    if(ReferenceEquals(constructingFuncTypes, funcTypes))
-                        continue;
-
-                    foreach(var funcType in funcTypes)
-                        AddConstructingFunc(constructed, activation, funcType);
                 }
+
+                var activation = registration.Dependency.Activation;
+                if(!constructed.TryGetValue(activation, out var constructingFuncTypes))
+                {
+                    constructed[activation] = funcTypes;
+                    continue;
+                }
+
+                if(ReferenceEquals(constructingFuncTypes, funcTypes))
+                    continue;
+
+                foreach(var funcType in funcTypes)
+                    AddConstructingFunc(constructed, activation, funcType);
             }
         }
-
-        // The generated containers construct the Funcs of their partial accessors and the Funcs nested in another wrapper inline,
-        // from their own registrations
-        if(!analyzerContext.Containers.IsEmpty)
-            AddConstructedByContainers(analyzerContext, constructed, cancellationToken);
-
-        return constructed;
 
         void ScanParameters(ImmutableArray<IParameterSymbol> parameters)
         {
@@ -269,6 +296,121 @@ public sealed partial class RegisterAnalyzer
                 returnTypes[returnType] = [funcType];
             else if(!funcTypes.Contains(funcType, RuntimeTypeSymbolComparer.Instance))
                 funcTypes.Add(funcType);
+        }
+    }
+
+    /// <summary>
+    /// The explicit registrations of the requested <c>Func</c> types with input parameters (as a service type), by (type, key),
+    /// with their tags, like the generator's <c>CollectExplicitWrapperRegistrations</c>: an open generic or async-init
+    /// registration, one under <c>KeyedService.AnyKey</c>, and an Instance that is not Singleton (which the Register output
+    /// does not register, see <c>CreateRegisterEntry</c>) do not count. The recorded registrations already leave out the
+    /// service types a generic factory does not match.
+    /// </summary>
+    private sealed class ExplicitFuncRegistrations
+    {
+        private readonly Dictionary<ServiceSymbolKey, TagCoverage> _coverage = [];
+
+        /// <summary>Returns <see langword="null"/> when no requested <c>Func</c> type is registered explicitly.</summary>
+        public static ExplicitFuncRegistrations? Collect(
+            AnalyzerContext analyzerContext,
+            Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> returnTypes)
+        {
+            ExplicitFuncRegistrations? explicitFuncs = null;
+            foreach(var registration in analyzerContext.DependencyRegistrations)
+            {
+                foreach(var serviceKey in registration.Registrations)
+                {
+                    if(!TryGetFuncWithArgumentsReturnType(serviceKey.ServiceType, out _, out var returnType)
+                        || !returnTypes.ContainsKey(returnType)
+                        || serviceKey.Key?.EndsWith("KeyedService.AnyKey", StringComparison.Ordinal) == true
+                        || IsOpenGeneric(registration)
+                        || IsAsyncInit(analyzerContext, registration)
+                        || registration.AsyncDecoratedRegistrations.Contains(serviceKey)
+                        // The Register output does not register an Instance that is not Singleton (SGIOC009)
+                        || registration.Dependency.Activation is { HasInstance: true, Lifetime: not ServiceLifetime.Singleton })
+                    {
+                        continue;
+                    }
+
+                    explicitFuncs ??= new();
+                    if(!explicitFuncs._coverage.TryGetValue(serviceKey, out var coverage))
+                    {
+                        coverage = new TagCoverage();
+                        explicitFuncs._coverage[serviceKey] = coverage;
+                    }
+
+                    coverage.Add(registration.Tags);
+                }
+            }
+
+            return explicitFuncs;
+        }
+
+        /// <summary>
+        /// Gets the <c>Func</c> types that construct a registration of <c>TReturn</c> with <paramref name="key"/> and
+        /// <paramref name="tags"/>, like <c>ApplyExplicitWrapperSuppression</c>: a generated <c>Func</c> is not registered
+        /// while an explicit registration of its type and key is always registered with the registration; one registered
+        /// with it only for some passed tags suppresses it for those tags only, so the generated <c>Func</c> still constructs
+        /// it. Returns <paramref name="funcTypes"/> itself when none is replaced.
+        /// </summary>
+        public List<INamedTypeSymbol> RemoveReplaced(List<INamedTypeSymbol> funcTypes, string? key, ImmutableArray<string> tags)
+        {
+            List<INamedTypeSymbol>? remaining = null;
+            for(var i = 0; i < funcTypes.Count; i++)
+            {
+                var replaced = _coverage.TryGetValue(new ServiceSymbolKey(funcTypes[i], key), out var coverage)
+                    && coverage.IsAlwaysRegisteredWith(tags);
+                if(replaced)
+                    remaining ??= [.. funcTypes.Take(i)];
+                else
+                    remaining?.Add(funcTypes[i]);
+            }
+
+            return remaining ?? funcTypes;
+        }
+    }
+
+    /// <summary>
+    /// The tags of the registrations of a service, like the generator's <c>GroupRegistrationsForRegister.TagCoverage</c>: an
+    /// untagged registration is registered only when no tags are passed, a tagged one when any of its tags is.
+    /// </summary>
+    private sealed class TagCoverage
+    {
+        private bool _hasUntagged;
+        private HashSet<string>? _tags;
+
+        public void Add(ImmutableArray<string> tags)
+        {
+            if(tags.IsEmpty)
+            {
+                _hasUntagged = true;
+                return;
+            }
+
+            _tags ??= new(StringComparer.Ordinal);
+            foreach(var tag in tags)
+                _tags.Add(tag);
+        }
+
+        /// <summary>
+        /// Gets whether one of the registrations is registered whenever a registration with <paramref name="tags"/> is: an
+        /// untagged one with an untagged registration, or tagged ones that together have every tag of <paramref name="tags"/>.
+        /// </summary>
+        public bool IsAlwaysRegisteredWith(ImmutableArray<string> tags)
+        {
+            if(tags.IsEmpty)
+                return _hasUntagged;
+
+            if(_tags is null)
+                return false;
+
+            foreach(var tag in tags)
+            {
+                if(!_tags.Contains(tag))
+                    return false;
+            }
+
+            return true;
         }
     }
 
@@ -380,7 +522,7 @@ public sealed partial class RegisterAnalyzer
     {
         if(analyzerContext.Containers.IsEmpty
             || !analyzerContext.DependencyRegistrations.Any(static registration =>
-                registration.Dependency.Activation.HasInstance && !registration.Dependency.Info.AsyncDecoratedRegistrations.IsEmpty))
+                registration.Dependency.Activation.HasInstance && !registration.AsyncDecoratedRegistrations.IsEmpty))
         {
             return;
         }
@@ -399,7 +541,7 @@ public sealed partial class RegisterAnalyzer
                 scope ??= GetContainerRegistrations(analyzerContext, container, containerAttribute, ref registrationsBySpan);
                 if(FindContainerFuncRegistration(scope, namedType, GetAccessorKey(member), out _, out var serviceKey) is not { } winner
                     || !winner.Dependency.Activation.HasInstance
-                    || !winner.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceKey)
+                    || !winner.AsyncDecoratedRegistrations.Contains(serviceKey)
                     || HasAsyncInitRegistration(analyzerContext, serviceKey))
                 {
                     continue;
@@ -421,7 +563,7 @@ public sealed partial class RegisterAnalyzer
             {
                 if(!registration.Dependency.Activation.HasInstance
                     && registration.Registrations.Contains(serviceKey)
-                    && (IsAsyncInit(analyzerContext, registration) || registration.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceKey)))
+                    && (IsAsyncInit(analyzerContext, registration) || registration.AsyncDecoratedRegistrations.Contains(serviceKey)))
                 {
                     return true;
                 }
@@ -449,7 +591,7 @@ public sealed partial class RegisterAnalyzer
     {
         if(FindContainerFuncRegistration(scope, type, key, out var funcType, out var serviceKey) is not { } winner
             || IsAsyncInit(analyzerContext, winner)
-            || winner.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceKey))
+            || winner.AsyncDecoratedRegistrations.Contains(serviceKey))
         {
             return null;
         }

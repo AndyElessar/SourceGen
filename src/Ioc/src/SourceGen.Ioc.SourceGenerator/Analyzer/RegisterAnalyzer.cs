@@ -1080,7 +1080,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
                 cancellationToken,
                 isResolved: isResolved);
 
-            AnalyzeListedMembersSyncDependencies(Report, analyzedListedMembers, injectedMembers, analyzerContext, asyncInitOnlyServiceTypes, cancellationToken, isResolved);
+            AnalyzeListedMembersSyncDependencies(Report, analyzedListedMembers, injectedMembers, analyzerContext, asyncInitOnlyServiceTypes, isResolved, cancellationToken);
         }
     }
 
@@ -1116,8 +1116,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
                 serviceInfo.InjectedMembers,
                 analyzerContext,
                 asyncInitOnlyServiceTypes,
-                cancellationToken,
-                isResolved: null);
+                isResolved: null,
+                cancellationToken);
         }
     }
 
@@ -1137,8 +1137,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers,
         AnalyzerContext analyzerContext,
         AsyncInitServiceTypes asyncInitOnlyServiceTypes,
-        CancellationToken cancellationToken,
-        Func<ISymbol, bool>? isResolved)
+        Func<ISymbol, bool>? isResolved,
+        CancellationToken cancellationToken)
     {
         foreach(var (member, location) in listedMembers)
         {
