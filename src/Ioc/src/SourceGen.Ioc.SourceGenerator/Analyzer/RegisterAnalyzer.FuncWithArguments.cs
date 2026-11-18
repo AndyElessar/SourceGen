@@ -129,20 +129,32 @@ public sealed partial class RegisterAnalyzer
         CancellationToken cancellationToken)
     {
         var returnTypes = new HashSet<INamedTypeSymbol>(RuntimeTypeSymbolComparer.Instance);
-        var constructorsScanned = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-        var membersScanned = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        HashSet<INamedTypeSymbol>? uncachedConstructorsScanned = null;
         foreach(var registration in analyzerContext.Registrations)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var implementation = registration.Implementation;
-            if(GetEffectiveFactory(analyzerContext, registration).Method is { } factoryMethod)
+            if(GetEffectiveFactoryMethod(analyzerContext, registration) is { } factoryMethod)
+            {
                 ScanParameters(factoryMethod.Parameters);
-            else if(constructorsScanned.Add(implementation))
-                ScanParameters(implementation.GetSelectedConstructor(analyzerContext.Assembly)?.Parameters ?? []);
+                continue;
+            }
 
-            if(membersScanned.Add(implementation))
-                ScanMembers(null, [.. implementation.GetInjectedMembers()]);
+            // The constructor is cached on the ServiceInfo when a registration of the type is constructed; scanning it again
+            // for another registration of the type adds nothing
+            var implementation = registration.Implementation;
+            if(analyzerContext.RegisteredServices.TryGetValue(implementation, out var info) && info.Constructor is { } constructor)
+                ScanParameters(constructor.Parameters);
+            else if((uncachedConstructorsScanned ??= new(SymbolEqualityComparer.Default)).Add(implementation))
+                ScanParameters(implementation.GetSelectedConstructor(analyzerContext.Assembly)?.Parameters ?? []);
+        }
+
+        // The injected members of every registered implementation type, cached on its ServiceInfo unless all its registrations
+        // have an Instance
+        foreach(var kvp in analyzerContext.RegisteredServices)
+        {
+            var info = kvp.Value;
+            ScanMembers(null, info.HasInjection ? info.InjectedMembers : [.. info.Type.GetInjectedMembers()]);
         }
 
         foreach(var decorator in analyzerContext.AppliedDecorators.Keys)

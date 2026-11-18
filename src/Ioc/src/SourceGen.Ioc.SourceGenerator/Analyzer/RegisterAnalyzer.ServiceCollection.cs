@@ -161,7 +161,7 @@ public sealed partial class RegisterAnalyzer
             AnalyzeImplicitOpenTypesNestedInGenericType(reportDiagnostic, analyzerContext, attribute, targetType, explicitServiceTypes, location);
 
             // Unlike SGIOC011, the dependency index keeps the registrations without tags apart from those tagged ""
-            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location, [.. tags], order);
+            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location, tags.Length == 0 ? [] : [.. tags], order);
         }
 
         (int Tree, int Position) GetSourceOrder(Location? location)
@@ -1128,7 +1128,7 @@ public sealed partial class RegisterAnalyzer
         public bool HasConstructorActivation { get; private set; }
 
         /// <summary>Gets whether a registration of this implementation type has no Instance, so the container injects its members.</summary>
-        private bool HasInjection { get; set; }
+        public bool HasInjection { get; private set; }
 
         /// <summary>
         /// Serializes the writes of <see cref="AddActivation"/> and <see cref="AddRegistrations"/>. The properties are read
