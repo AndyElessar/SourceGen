@@ -337,6 +337,50 @@ public class SGIOC030Tests
     }
 
     [Test]
+    [Arguments(", Key = \"a\"", 1)]
+    [Arguments("", 0)]
+    public async Task SGIOC030_KeyedInjectMethod_ParameterUsesMethodKey(string asyncServiceKey, int expectedCount)
+    {
+        // An unkeyed parameter of a keyed inject method resolves with the method's key, like the generator: it depends on the
+        // keyed async-init service, not on the unkeyed one
+        var source = $$"""
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+            public interface IConsumer { }
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)]{{asyncServiceKey}})]
+            public class MyService : IMyService
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IConsumer)])]
+            public class Consumer : IConsumer
+            {
+                [IocInject(Key = "a")]
+                public void Initialize(IMyService service) { }
+            }
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: analyzerConfigOptions);
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC030").ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(expectedCount);
+    }
+
+    [Test]
     public async Task SGIOC030_ConstructorRequestsKeyedSyncTypeForAsyncInitService_ReportsDiagnostic()
     {
         const string source = """

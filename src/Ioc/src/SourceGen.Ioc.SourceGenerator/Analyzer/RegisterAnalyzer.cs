@@ -998,22 +998,26 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
                     break;
 
                 case IMethodSymbol method:
+                    // An unkeyed parameter of a keyed inject method resolves with the method's key
                     AnalyzeParameterDependenciesOnAsyncInitServices(
                         reportDiagnostic,
                         method.Parameters,
                         asyncInitOnlyServiceTypes,
-                        cancellationToken);
+                        cancellationToken,
+                        methodKey: injectAttribute.GetKeyInfo().Key);
                     break;
             }
         }
     }
 
+    /// <param name="methodKey">The key of an injected method, which applies to parameters without their own key.</param>
     private static void AnalyzeParameterDependenciesOnAsyncInitServices(
         Action<Diagnostic> reportDiagnostic,
         ImmutableArray<IParameterSymbol> parameters,
         ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
         CancellationToken cancellationToken,
-        int decoratedParameterIndex = -1)
+        int decoratedParameterIndex = -1,
+        string? methodKey = null)
     {
         for(var i = 0; i < parameters.Length; i++)
         {
@@ -1028,7 +1032,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
                 parameter.Name,
                 parameter.Type,
                 parameter.Locations.FirstOrDefault(),
-                parameter.GetServiceKeyAndAttributeInfo().ServiceKey,
+                parameter.GetServiceKeyAndAttributeInfo().ServiceKey ?? methodKey,
                 asyncInitOnlyServiceTypes);
         }
     }
