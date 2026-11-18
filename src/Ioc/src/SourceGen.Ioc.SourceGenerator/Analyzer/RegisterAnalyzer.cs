@@ -725,7 +725,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             var serviceInfo = kvp.Value;
 
             // SGIOC013/SGIOC014: Analyze ServiceKey parameter type mismatches
-            AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, constructedByFunc, analyzerContext.Assembly, analyzerContext.Features, context.CancellationToken);
+            AnalyzeServiceKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, constructedByFunc, analyzerContext.Assembly, context.CancellationToken);
 
             // SGIOC015: Analyze KeyValuePair/Dictionary key type mismatches
             AnalyzeKeyValuePairKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, analyzerContext, keyedServiceIndex, context.CancellationToken);

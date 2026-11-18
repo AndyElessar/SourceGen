@@ -153,7 +153,7 @@ Report when a registered service depends on `Func<T1, ..., TReturn>` with at lea
 - Checks constructor parameters, and the types of `[IocInject]`/`[Inject]` properties, fields and method parameters, as listed in [Analyzed Registrations](#analyzed-registrations).
 - Looks up `TReturn` like the lifetime checks (SGIOC003-005, see [Resolved Dependencies](#resolved-dependencies)), with the service key of the parameter (`[FromKeyedServices]`) or member (`[IocInject(Key)]`), since the generator creates a keyed `Func`'s service from its keyed registration. Each Singleton or Scoped lifetime among the registrations it resolves to is reported once.
 - Does not report the parameterless `Func<T>` or `Lazy<T>`, which follow the lifetime, or a `TReturn` that is not registered.
-- Reports one diagnostic per dependency at the consumer's first registration that calls the constructor or injects the member (see [Analyzed Registrations](#analyzed-registrations)).
+- Reports one diagnostic per dependency and lifetime (so at most two, when the registrations it resolves to include both a Singleton and a Scoped one) at the consumer's first registration that calls the constructor or injects the member (see [Analyzed Registrations](#analyzed-registrations)).
 
 **Message format:** `'{Consumer}' depends on '{FuncType}', which creates a new '{ServiceType}' on every call although '{ServiceType}' is registered as {Lifetime}`
 

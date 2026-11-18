@@ -122,13 +122,16 @@ public sealed partial class RegisterAnalyzer
     /// injected members, also with an Instance) or an applied decorator, directly or as the element of a collection; it is
     /// registered for every closed, not async-init registration of <c>TReturn</c>, and constructs the implementation type
     /// with the registration's key even for an Instance or Factory registration. The parameters of a generic factory are
-    /// scanned as declared, not closed for each service type.
+    /// scanned as declared, not closed for each service type. Each registration maps to the distinct requested <c>Func</c>
+    /// types that construct it, whose input parameters the generator passes to the parameters of their type (see
+    /// <see cref="IsPassedFuncArgument"/>).
     /// </summary>
-    private static HashSet<ServiceActivation> CollectRegistrationsConstructedByFunc(
+    private static Dictionary<ServiceActivation, List<INamedTypeSymbol>> CollectRegistrationsConstructedByFunc(
         AnalyzerContext analyzerContext,
         CancellationToken cancellationToken)
     {
-        var returnTypes = new HashSet<INamedTypeSymbol>(RuntimeTypeSymbolComparer.Instance);
+        // The requested Func types by return type
+        var returnTypes = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(RuntimeTypeSymbolComparer.Instance);
         HashSet<INamedTypeSymbol>? uncachedConstructorsScanned = null;
         foreach(var registration in analyzerContext.Registrations)
         {
@@ -160,7 +163,7 @@ public sealed partial class RegisterAnalyzer
         foreach(var decorator in analyzerContext.AppliedDecorators.Keys)
             ScanMembers(decorator.GetSelectedConstructor(analyzerContext.Assembly), [.. decorator.GetInjectedMembers()]);
 
-        var constructed = new HashSet<ServiceActivation>();
+        var constructed = new Dictionary<ServiceActivation, List<INamedTypeSymbol>>();
         if(returnTypes.Count == 0)
             return constructed;
 
@@ -175,12 +178,32 @@ public sealed partial class RegisterAnalyzer
             var info = registration.Dependency.Info;
             var isAsyncInit = !registration.Dependency.Activation.HasInstance
                 && AnalyzerHelpers.IsAsyncInitImplementation(implementation, analyzerContext.Features);
+            if(isAsyncInit)
+                continue;
+
             foreach(var serviceType in registration.Registrations)
             {
-                if(returnTypes.Contains(serviceType.ServiceType) && !isAsyncInit && !info.AsyncDecoratedRegistrations.Contains(serviceType))
+                if(!returnTypes.TryGetValue(serviceType.ServiceType, out var funcTypes) || info.AsyncDecoratedRegistrations.Contains(serviceType))
+                    continue;
+
+                // The Funcs of every service type of the registration construct it
+                var activation = registration.Dependency.Activation;
+                if(!constructed.TryGetValue(activation, out var constructingFuncTypes))
                 {
-                    constructed.Add(registration.Dependency.Activation);
-                    break;
+                    constructed[activation] = funcTypes;
+                    continue;
+                }
+
+                if(ReferenceEquals(constructingFuncTypes, funcTypes))
+                    continue;
+
+                // The lists are shared with the return types, so the Func types of another service type go to a copy (rare: a
+                // registration with several service types requested through Funcs)
+                constructed[activation] = constructingFuncTypes = [.. constructingFuncTypes];
+                foreach(var funcType in funcTypes)
+                {
+                    if(!constructingFuncTypes.Contains(funcType, RuntimeTypeSymbolComparer.Instance))
+                        constructingFuncTypes.Add(funcType);
                 }
             }
         }
@@ -226,8 +249,80 @@ public sealed partial class RegisterAnalyzer
                 type = elementType;
             }
 
-            if(TryGetFuncWithArgumentsReturnType(type, out _, out var returnType))
-                returnTypes.Add(returnType);
+            if(!TryGetFuncWithArgumentsReturnType(type, out var funcType, out var returnType))
+                return;
+
+            if(!returnTypes.TryGetValue(returnType, out var funcTypes))
+                returnTypes[returnType] = [funcType];
+            else if(!funcTypes.Contains(funcType, RuntimeTypeSymbolComparer.Instance))
+                funcTypes.Add(funcType);
+        }
+    }
+
+    /// <summary>
+    /// Gets whether a <c>Func</c> with input parameters passes one of its arguments to <paramref name="parameter"/> when it
+    /// constructs <paramref name="constructor"/>'s type. Like the generator (<c>WriteFuncFactoryBody</c>,
+    /// <c>MultiParamFuncDependency</c>), each parameter of the constructor, then each injected property or field, then each
+    /// parameter of the inject methods that do not return <c>Task</c> takes the first unused argument of the same runtime type; the others are
+    /// resolved, a <c>[ServiceKey]</c> parameter with the registration's key.
+    /// </summary>
+    private static bool IsPassedFuncArgument(
+        INamedTypeSymbol funcType,
+        IParameterSymbol parameter,
+        IMethodSymbol? constructor,
+        ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers)
+    {
+        var inputTypes = funcType.TypeArguments;
+        Span<bool> used = stackalloc bool[inputTypes.Length - 1];
+
+        foreach(var constructorParameter in constructor?.Parameters ?? [])
+        {
+            var passed = TryConsume(constructorParameter.Type, used);
+            if(SymbolEqualityComparer.Default.Equals(constructorParameter, parameter))
+                return passed;
+        }
+
+        foreach(var (member, _) in injectedMembers)
+        {
+            switch(member)
+            {
+                case IPropertySymbol property:
+                    TryConsume(property.Type, used);
+                    break;
+                case IFieldSymbol field:
+                    TryConsume(field.Type, used);
+                    break;
+            }
+        }
+
+        foreach(var (member, _) in injectedMembers)
+        {
+            // The Func never calls a Task-returning inject method, whatever the features
+            if(member is not IMethodSymbol method || AnalyzerHelpers.IsNonGenericTaskType(method.ReturnType))
+                continue;
+
+            foreach(var methodParameter in method.Parameters)
+            {
+                var passed = TryConsume(methodParameter.Type, used);
+                if(SymbolEqualityComparer.Default.Equals(methodParameter, parameter))
+                    return passed;
+            }
+        }
+
+        return false;
+
+        bool TryConsume(ITypeSymbol type, Span<bool> used)
+        {
+            for(var i = 0; i < used.Length; i++)
+            {
+                if(used[i] || !RuntimeTypeSymbolComparer.Instance.Equals(inputTypes[i], type))
+                    continue;
+
+                used[i] = true;
+                return true;
+            }
+
+            return false;
         }
     }
 }

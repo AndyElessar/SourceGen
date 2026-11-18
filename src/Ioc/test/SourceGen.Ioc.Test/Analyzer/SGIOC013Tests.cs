@@ -760,4 +760,135 @@ public class SGIOC013Tests
 
         await Assert.That(sgioc013).Count().IsEqualTo(1);
     }
+
+    [Test]
+    [Arguments("Func<int, Foo>", 0)]
+    [Arguments("Func<string, Foo>", 1)]
+    [Arguments("Func<string, Foo> make, Func<int, Foo>", 1)]
+    public async Task SGIOC013_InstanceConstructedByFunc_ChecksKeyUnlessPassedArgument(string funcs, int expected)
+    {
+        // The Func passes its int argument to the [ServiceKey] parameter (new Foo(arg0)) instead of the string key; every Func
+        // type that constructs the registration is checked
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo([ServiceKey] int key)
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            [IocRegister]
+            public class Consumer([FromKeyedServices("a")] {{funcs}} factory);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    [Arguments("int", 1)]
+    [Arguments("int, int", 0)]
+    public async Task SGIOC013_FuncArgumentsTakenByEarlierParameters_ChecksKey(string inputTypes, int expected)
+    {
+        // Each argument goes to the first unused parameter of its type: the constructor's, then the injected properties',
+        // then the inject methods'; with one int argument, the constructor's count takes it and the key is passed to Init
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo(int count)
+            {
+                public static readonly Foo Default = new(0);
+
+                [IocInject]
+                public void Init([ServiceKey] int key) { }
+            }
+
+            [IocRegister]
+            public class Consumer([FromKeyedServices("a")] Func<{{inputTypes}}, Foo> factory);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task SGIOC013_FuncSkipsTaskInjectMethodWithoutAsyncFeature_NoDiagnostic()
+    {
+        // The Func never calls a Task-returning inject method, whatever the features, so the argument goes to Init
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo
+            {
+                public static readonly Foo Default = new();
+
+                [IocInject]
+                public Task Setup(int x) => Task.CompletedTask;
+
+                [IocInject]
+                public void Init([ServiceKey] int key) { }
+            }
+
+            [IocRegister]
+            public class Consumer([FromKeyedServices("a")] Func<int, Foo> factory);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).IsEmpty();
+    }
+
+    [Test]
+    public async Task SGIOC013_FuncArgumentTakenByInjectedPropertyBeforeMethod_ReportsDiagnostic()
+    {
+        // Injected properties take their arguments before the inject methods, also when declared after them
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Key = "a", Instance = nameof(Default))]
+            public class Foo
+            {
+                public static readonly Foo Default = new();
+
+                [IocInject]
+                public void Init([ServiceKey] int key) { }
+
+                [IocInject]
+                public int Count { get; set; }
+            }
+
+            [IocRegister]
+            public class Consumer([FromKeyedServices("a")] Func<int, Foo> factory);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(1);
+    }
 }

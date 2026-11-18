@@ -502,10 +502,13 @@ public class SGIOC014Tests
     }
 
     [Test]
-    public async Task SGIOC014_InjectMethodOfUnkeyedInstanceConstructedByFunc_ReportsDiagnostic()
+    [Arguments("int", 1)]
+    [Arguments("string", 0)]
+    public async Task SGIOC014_InjectMethodOfUnkeyedInstanceConstructedByFunc_ReportsUnlessPassedArgument(string inputType, int expected)
     {
-        // The Func constructs the Instance registration's type and calls its [Inject] methods, but no key is registered
-        const string source = """
+        // The Func constructs the Instance registration's type and calls its [Inject] methods: it passes its string argument
+        // to the [ServiceKey] parameter (s0.Init(arg0)), otherwise the key, but no key is registered
+        var source = $$"""
             using System;
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
@@ -522,12 +525,12 @@ public class SGIOC014Tests
             }
 
             [IocRegister]
-            public class Consumer(Func<string, Foo> factory);
+            public class Consumer(Func<{{inputType}}, Foo> factory);
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
         var sgioc014 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014");
 
-        await Assert.That(sgioc014).Count().IsEqualTo(1);
+        await Assert.That(sgioc014).Count().IsEqualTo(expected);
     }
 }
