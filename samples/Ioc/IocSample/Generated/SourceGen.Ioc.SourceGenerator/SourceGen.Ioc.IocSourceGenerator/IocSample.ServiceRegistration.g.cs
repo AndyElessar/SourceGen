@@ -67,7 +67,7 @@ namespace IocSample
                 });
                 services.AddTransient(typeof(global::IocSample.WrapperService<>), typeof(global::IocSample.WrapperService<>));
                 services.AddTransient(typeof(global::IocSample.IWrapperService<>), typeof(global::IocSample.WrapperService<>));
-                services.AddSingleton<global::IocSample.Consumer>((global::System.IServiceProvider sp) =>
+                services.AddTransient<global::IocSample.Consumer>((global::System.IServiceProvider sp) =>
                 {
                     var p0 = sp.GetRequiredService<global::System.Lazy<global::IocSample.IWrapperService<int>>>();
                     var p1 = sp.GetRequiredService<global::System.Func<global::IocSample.IWrapperService<string>>>();
