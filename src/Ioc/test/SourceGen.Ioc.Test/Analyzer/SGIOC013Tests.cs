@@ -1497,4 +1497,90 @@ public class SGIOC013Tests
 
         await Assert.That(sgioc013).Count().IsEqualTo(1);
     }
+
+    [Test]
+    [Arguments("\"a\"", 0)]
+    [Arguments("\"b\"", 1)]
+    public async Task SGIOC013_KeyedInstanceConstructedByFunc_ExplicitFuncRegistration_FollowsGeneratedFunc(string explicitKey, int expected)
+    {
+        // An explicit Func<string, Foo> under Foo's key replaces the generated Func, which then does not pass the string key
+        // to the int [ServiceKey] parameter; under another key, the generated Func is still registered
+        var source = $$"""
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Instance = nameof(Default), Key = "a")]
+            public class Foo(string name, [ServiceKey] int key)
+            {
+                public static readonly Foo Default = new("", 0);
+            }
+
+            public static class Wrappers
+            {
+                public static readonly Func<string, Foo> Make = _ => Foo.Default;
+            }
+
+            [IocRegisterFor<Func<string, Foo>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Make", Key = {{explicitKey}})]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Consumer([FromKeyedServices("a")] Func<string, Foo> make);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013")).Count().IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task SGIOC013_InstanceConstructedByFunc_AsyncDecoratorOnOtherRegistration_ReportsDiagnostic()
+    {
+        // Like the generator (CollectFuncEntries), whether a registration is async-init is decided per registration: the
+        // async decorator of the "async" registration does not keep the Func<string, IFoo> of the "sync" Instance
+        // registration from constructing Foo with the string key "a"
+        var source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            public class Foo([ServiceKey] int key) : IFoo
+            {
+                public static readonly Foo Default = new(0);
+                public static Foo Create() => Default;
+            }
+
+            public class AsyncDecorator(IFoo inner) : IFoo
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegisterFor<Foo>(ServiceTypes = [typeof(IFoo)], Key = "a", Tags = ["sync"], Instance = "global::TestNamespace.Foo.Default")]
+            [IocRegisterFor<Foo>(ServiceTypes = [typeof(IFoo)], Key = "a", Tags = ["async"], Factory = nameof(Foo.Create), Decorators = [typeof(AsyncDecorator)])]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Consumer([FromKeyedServices("a")] Func<string, IFoo> make);
+            """;
+
+        var analyzerConfigOptions = new Dictionary<string, string>
+        {
+            ["build_property.SourceGenIocFeatures"] = "Register,MethodInject,AsyncMethodInject"
+        };
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source, analyzerConfigOptions: analyzerConfigOptions);
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source, analyzerConfigOptions: analyzerConfigOptions);
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).Contains("new global::System.Func<string, global::TestNamespace.IFoo>((string arg0) =>");
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013")).Count().IsEqualTo(1);
+    }
 }

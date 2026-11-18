@@ -759,6 +759,7 @@ public sealed partial class RegisterAnalyzer
             new(serviceInfo, activation),
             activation with { HasFactory = serviceTypesHaveFactory },
             dependencyRegistrations,
+            asyncDecoratedRegistrations,
             tags,
             order));
     }

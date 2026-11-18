@@ -38,10 +38,16 @@ public sealed partial class RegisterAnalyzer
     /// The activation of its other service types, which differs from that of the self-registration when a generic factory's
     /// mapping does not match the implementation type, so the self-registration is constructed.
     /// </param>
+    /// <param name="AsyncDecoratedRegistrations">
+    /// The (service type, key) pairs of this registration that an async decorator makes async-init. Unlike
+    /// <see cref="ServiceInfo.AsyncDecoratedRegistrations"/>, which merges every registration of the implementation type, it
+    /// is this registration's own, like the generator's per-registration <c>IsAsyncInit</c>.
+    /// </param>
     private sealed record DependencyRegistration(
         RegisteredDependency Dependency,
         ServiceActivation ServiceTypeActivation,
         ImmutableArray<ServiceSymbolKey> Registrations,
+        ImmutableArray<ServiceSymbolKey> AsyncDecoratedRegistrations,
         ImmutableArray<string> Tags,
         GeneratorRegistrationOrder Order);
 

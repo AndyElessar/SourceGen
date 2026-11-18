@@ -533,4 +533,44 @@ public class SGIOC014Tests
 
         await Assert.That(sgioc014).Count().IsEqualTo(expected);
     }
+
+    [Test]
+    [Arguments("Instance = nameof(Default)", "")]
+    [Arguments("Factory = nameof(Create)", "")]
+    [Arguments("Instance = nameof(Default)", "IEnumerable<")]
+    public async Task SGIOC014_ConstructedByFunc_ExplicitFuncRegistration_NoDiagnostic(string activation, string collection)
+    {
+        // An explicit Func<string, Foo> registration replaces the generated Func (ApplyExplicitWrapperSuppression), which then
+        // does not construct the Instance or Factory registration
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister({{activation}})]
+            public class Foo(string name, [ServiceKey] object key)
+            {
+                public static readonly Foo Default = new("", "");
+                public static Foo Create() => Default;
+            }
+
+            public static class Wrappers
+            {
+                public static readonly Func<string, Foo> Make = _ => Foo.Default;
+            }
+
+            [IocRegisterFor<Func<string, Foo>>(ServiceLifetime.Singleton, Instance = "global::TestNamespace.Wrappers.Make")]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Consumer({{collection}}Func<string, Foo>{{(collection.Length > 0 ? ">" : "")}} make);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC014")).IsEmpty();
+    }
 }
