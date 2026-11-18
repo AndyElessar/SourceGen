@@ -1083,9 +1083,7 @@ public sealed partial class RegisterAnalyzer
         /// <summary>
         /// Every registration of this implementation type, in source order.
         /// </summary>
-        public ImmutableArray<ServiceActivation> Activations => _activations;
-
-        private ImmutableArray<ServiceActivation> _activations = [];
+        public ImmutableArray<ServiceActivation> Activations { get; private set; } = [];
 
         /// <summary>
         /// All (service type, key) pairs from every registration that maps to this implementation type.
@@ -1093,41 +1091,40 @@ public sealed partial class RegisterAnalyzer
         /// where <see cref="RegisteredServices"/> only stores the first entry per implementation type.
         /// Used by SGIOC030 analysis to correctly identify all async-init-only service type/key pairs.
         /// </summary>
-        public ImmutableArray<ServiceSymbolKey> AllRegistrations => _allRegistrations;
-
-        private ImmutableArray<ServiceSymbolKey> _allRegistrations;
+        public ImmutableArray<ServiceSymbolKey> AllRegistrations { get; private set; }
 
         /// <summary>
         /// The (service type, key) pairs of <see cref="AllRegistrations"/> that a decorator with async inject methods makes
         /// async-init, even when the implementation type is not (SGIOC030).
         /// </summary>
-        public ImmutableArray<ServiceSymbolKey> AsyncDecoratedRegistrations => _asyncDecoratedRegistrations;
-
-        private ImmutableArray<ServiceSymbolKey> _asyncDecoratedRegistrations;
+        public ImmutableArray<ServiceSymbolKey> AsyncDecoratedRegistrations { get; private set; }
 
         /// <summary>
         /// Cached constructor to avoid repeated GetSelectedConstructor lookups; null unless a registration of this
         /// implementation type has neither Instance nor Factory, since the container constructs only such a registration.
         /// </summary>
-        public IMethodSymbol? Constructor => Volatile.Read(ref _constructor);
-
-        private IMethodSymbol? _constructor;
-        private int _hasConstructorActivation;
+        public IMethodSymbol? Constructor { get; private set; }
 
         /// <summary>
         /// Cached list of members with [IocInject] or [Inject] attribute to avoid repeated GetMembers() and attribute lookups;
         /// empty unless a registration of this implementation type has no Instance, since the container does not inject an Instance.
         /// </summary>
-        public ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> InjectedMembers => _injectedMembers;
-
-        private ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> _injectedMembers = [];
-        private int _hasInjection;
+        public ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> InjectedMembers { get; private set; } = [];
 
         /// <summary>
         /// Gets whether a registration of this implementation type has neither Instance nor Factory, so the container calls
         /// its constructor.
         /// </summary>
-        public bool HasConstructorActivation => Volatile.Read(ref _hasConstructorActivation) != 0;
+        public bool HasConstructorActivation { get; private set; }
+
+        /// <summary>Gets whether a registration of this implementation type has no Instance, so the container injects its members.</summary>
+        private bool HasInjection { get; set; }
+
+        /// <summary>
+        /// Serializes the writes of <see cref="AddActivation"/> and <see cref="AddRegistrations"/>. The properties are read
+        /// without it, once every registration has been recorded at CompilationEnd.
+        /// </summary>
+        private readonly object _gate = new();
 
         public ServiceInfo(
             INamedTypeSymbol type,
@@ -1139,8 +1136,8 @@ public sealed partial class RegisterAnalyzer
         {
             Type = type;
             Lifetime = activation.Lifetime;
-            _allRegistrations = registrations;
-            _asyncDecoratedRegistrations = asyncDecoratedRegistrations;
+            AllRegistrations = registrations;
+            AsyncDecoratedRegistrations = asyncDecoratedRegistrations;
             ServiceKey = serviceKey;
 
             AddActivation(activation, assembly);
@@ -1152,16 +1149,25 @@ public sealed partial class RegisterAnalyzer
         /// </summary>
         public void AddActivation(ServiceActivation activation, IAssemblySymbol assembly)
         {
-            ImmutableInterlocked.Update(ref _activations, static (current, added) => current.Add(added), activation);
+            lock(_gate)
+            {
+                Activations = Activations.Add(activation);
 
-            // Like the generator, an Instance or Factory registration is not constructed, so its constructor has no dependencies
-            if(activation.IsConstructed && Interlocked.Exchange(ref _hasConstructorActivation, 1) == 0)
-                Volatile.Write(ref _constructor, Type.GetSelectedConstructor(assembly));
+                // Like the generator, an Instance or Factory registration is not constructed, so its constructor has no dependencies
+                if(activation.IsConstructed && !HasConstructorActivation)
+                {
+                    HasConstructorActivation = true;
+                    Constructor = Type.GetSelectedConstructor(assembly);
+                }
 
-            // An Instance is not injected; a Factory's result keeps its injected members, since the generator calls the inject
-            // methods of an async-init factory result
-            if(activation.IsInjected && Interlocked.Exchange(ref _hasInjection, 1) == 0)
-                ImmutableInterlocked.InterlockedExchange(ref _injectedMembers, [.. Type.GetInjectedMembers()]);
+                // An Instance is not injected; a Factory's result keeps its injected members, since the generator calls the inject
+                // methods of an async-init factory result
+                if(activation.IsInjected && !HasInjection)
+                {
+                    HasInjection = true;
+                    InjectedMembers = [.. Type.GetInjectedMembers()];
+                }
+            }
         }
 
         /// <summary>
@@ -1184,10 +1190,13 @@ public sealed partial class RegisterAnalyzer
         /// </summary>
         public void AddRegistrations(ImmutableArray<ServiceSymbolKey> registrations, ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations)
         {
-            ImmutableInterlocked.Update(ref _allRegistrations, static (current, added) => current.AddRange(added), registrations);
+            lock(_gate)
+            {
+                AllRegistrations = AllRegistrations.AddRange(registrations);
 
-            if(!asyncDecoratedRegistrations.IsEmpty)
-                ImmutableInterlocked.Update(ref _asyncDecoratedRegistrations, static (current, added) => current.AddRange(added), asyncDecoratedRegistrations);
+                if(!asyncDecoratedRegistrations.IsEmpty)
+                    AsyncDecoratedRegistrations = AsyncDecoratedRegistrations.AddRange(asyncDecoratedRegistrations);
+            }
         }
     }
 }
