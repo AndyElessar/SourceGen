@@ -23,13 +23,20 @@ public sealed partial class RegisterAnalyzer
         var cycleLocation = serviceInfo.GetFirstActivationLocation(injected: false);
         var activations = serviceInfo.Activations;
 
-        foreach (var dependencyInfo in dependencies)
+        for (var e = 0; e < dependencies.Length; e++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // SGIOC002: A cycle through this edge exists only when both ends share a strongly connected component.
-            // The DFS still runs for those edges so the reported cycle path is unchanged.
-            if (graph.IsInSameComponent(targetType, dependencyInfo.Type, cancellationToken))
+            // A parameter resolves to one registration per tag group; registrations of the same implementation type are
+            // checked once for a cycle, and once per lifetime for a lifetime conflict
+            var dependencyInfo = dependencies[e];
+
+            // SGIOC002: A cycle through this edge exists only when both ends share a strongly connected component, and only
+            // through a registration the container constructs. The DFS still runs for those edges so the reported cycle path
+            // is unchanged.
+            if (dependencyInfo.IsConstructed
+                && !HasEarlierEdge(dependencies, e, sameLifetime: false)
+                && graph.IsInSameComponent(targetType, dependencyInfo.Type, cancellationToken))
             {
                 visited.Clear();
                 pathStack.Clear();
@@ -43,6 +50,9 @@ public sealed partial class RegisterAnalyzer
                         cycleString));
                 }
             }
+
+            if (HasEarlierEdge(dependencies, e, sameLifetime: true))
+                continue;
 
             // SGIOC003-005: Check every constructed registration with its own lifetime, at its own location
             for (var i = 0; i < activations.Length; i++)
@@ -76,36 +86,58 @@ public sealed partial class RegisterAnalyzer
 
             return false;
         }
+
+        // Whether an earlier edge of the same parameter resolves to the same implementation type (and lifetime), so this
+        // edge reports nothing new
+        static bool HasEarlierEdge(ImmutableArray<DependencyEdge> dependencies, int index, bool sameLifetime)
+        {
+            var edge = dependencies[index];
+            for (var i = 0; i < index; i++)
+            {
+                var earlier = dependencies[i];
+                if (earlier.ParameterIndex == edge.ParameterIndex
+                    && ReferenceEquals(earlier.Dependency.Info, edge.Dependency.Info)
+                    && (sameLifetime ? earlier.Lifetime == edge.Lifetime : earlier.IsConstructed))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     /// <summary>
-    /// A registered constructor dependency of a service.
+    /// A registration a constructor parameter of a service resolves to.
     /// </summary>
-    /// <param name="Info">The registered dependency.</param>
+    /// <param name="Dependency">The registration the parameter resolves to (see <see cref="DependencyIndex"/>).</param>
     /// <param name="IsThroughFunc">
     /// Whether the dependency is resolved through a <c>Func&lt;...&gt;</c> factory, which resolves it on every call,
     /// so a transient dependency is not captured.
     /// </param>
-    private readonly record struct DependencyEdge(ServiceInfo Info, bool IsThroughFunc)
+    /// <param name="ParameterIndex">The index of the constructor parameter.</param>
+    private readonly record struct DependencyEdge(RegisteredDependency Dependency, bool IsThroughFunc, int ParameterIndex)
     {
-        public INamedTypeSymbol Type => Info.Type;
+        public INamedTypeSymbol Type => Dependency.Type;
 
-        /// <summary>The lifetime of the dependency's first registration.</summary>
-        public ServiceLifetime Lifetime => Info.Lifetime;
+        public ServiceLifetime Lifetime => Dependency.Lifetime;
+
+        /// <summary>Gets whether the container calls the dependency's constructor, through which a cycle can continue.</summary>
+        public bool IsConstructed => Dependency.Activation.IsConstructed;
     }
 
     /// <summary>
     /// Registered service dependency graph with cached constructor dependencies and lazily computed
     /// strongly connected components (Tarjan), so edges that cannot form a cycle skip the cycle DFS.
     /// </summary>
-    private sealed class DependencyGraph(AnalyzerContext analyzerContext)
+    private sealed class DependencyGraph(AnalyzerContext analyzerContext, DependencyIndex dependencyIndex)
     {
         private readonly Dictionary<INamedTypeSymbol, ImmutableArray<DependencyEdge>> _dependencies = new(SymbolEqualityComparer.Default);
         private Dictionary<INamedTypeSymbol, int>? _componentIds;
 
         /// <summary>
-        /// Gets the registered dependencies of a registered service's constructor, in parameter order.
-        /// Func&lt;...&gt;/Lazy&lt;T&gt; parameters are unwrapped when the direct lookup fails.
+        /// Gets the registrations the constructor parameters of a registered service resolve to, in parameter order, matched
+        /// by the parameter's service key. Func&lt;...&gt;/Lazy&lt;T&gt; parameters are unwrapped when the direct lookup fails.
         /// </summary>
         public ImmutableArray<DependencyEdge> GetDependencies(INamedTypeSymbol type)
         {
@@ -120,22 +152,25 @@ public sealed partial class RegisterAnalyzer
             }
 
             var builder = ImmutableArray.CreateBuilder<DependencyEdge>(constructor.Parameters.Length);
-            foreach (var parameter in constructor.Parameters)
+            for (var i = 0; i < constructor.Parameters.Length; i++)
             {
+                var parameter = constructor.Parameters[i];
                 if (parameter.Type is not INamedTypeSymbol parameterType)
                     continue;
 
-                if (FindRegisteredDependency(analyzerContext, parameterType) is { } dependency)
-                {
-                    builder.Add(new DependencyEdge(dependency, IsThroughFunc: false));
-                }
-                else if (TryUnwrapServiceType(parameterType, out var unwrappedType, out var isFunc)
-                    && FindRegisteredDependency(analyzerContext, unwrappedType) is { } unwrappedDependency)
-                {
-                    builder.Add(new DependencyEdge(unwrappedDependency, isFunc));
-                }
-            }
+                // A [ServiceKey] parameter receives the registration's key, not a service
+                var (key, _, hasServiceKey, _, _) = parameter.GetServiceKeyAndAttributeInfo();
+                if (hasServiceKey)
+                    continue;
 
+                var isFunc = false;
+                var dependencies = dependencyIndex.Find(parameterType, key);
+                if (dependencies.IsEmpty && TryUnwrapServiceType(parameterType, out var unwrappedType, out isFunc))
+                    dependencies = dependencyIndex.Find(unwrappedType, key);
+
+                foreach (var dependency in dependencies)
+                    builder.Add(new DependencyEdge(dependency, isFunc, i));
+            }
             var result = builder.ToImmutable();
             _dependencies[type] = result;
             return result;
@@ -180,6 +215,10 @@ public sealed partial class RegisterAnalyzer
 
                 foreach (var dependency in GetDependencies(node))
                 {
+                    // A registration that is not constructed does not call the constructor, so no cycle continues through it
+                    if (!dependency.IsConstructed)
+                        continue;
+
                     var next = dependency.Type;
                     if (!indices.TryGetValue(next, out var nextNodeIndex))
                     {
@@ -227,42 +266,6 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
-    /// Finds a registered dependency by parameter type using O(1) index lookups.
-    /// This method is called during CompilationEnd when all services are fully indexed.
-    /// </summary>
-    private static ServiceInfo? FindRegisteredDependency(
-        AnalyzerContext analyzerContext,
-        INamedTypeSymbol parameterType)
-    {
-        // Direct match - O(1)
-        if (analyzerContext.RegisteredServices.TryGetValue(parameterType, out var directMatch))
-            return directMatch;
-
-        // Try open generic match for direct type (e.g., TestOpenGeneric2<int> -> TestOpenGeneric2<T>)
-        if (parameterType.IsGenericType && !parameterType.IsUnboundGenericType)
-        {
-            var originalDefinition = parameterType.OriginalDefinition;
-            if (analyzerContext.RegisteredServices.TryGetValue(originalDefinition, out var genericMatch))
-                return genericMatch;
-        }
-
-        // Use index for interface/base class lookup - O(1)
-        if (analyzerContext.ServiceTypeIndex.TryGetValue(parameterType, out var indexedMatch))
-            return indexedMatch;
-
-        // Try open generic match for indexed lookup
-        if (parameterType.IsGenericType && !parameterType.IsUnboundGenericType)
-        {
-            var originalDefinition = parameterType.OriginalDefinition;
-            if (analyzerContext.ServiceTypeIndex.TryGetValue(originalDefinition, out var genericIndexMatch))
-                return genericIndexMatch;
-        }
-
-        // No fallback needed - this runs during CompilationEnd when index is complete
-        return null;
-    }
-
-    /// <summary>
     /// Detects circular dependencies using a stack-based approach to avoid List.Insert(0,...) allocations.
     /// Returns true if a cycle is detected, with the path stored in pathStack.
     /// </summary>
@@ -284,7 +287,7 @@ public sealed partial class RegisterAnalyzer
 
         foreach (var dependency in graph.GetDependencies(currentType))
         {
-            if (DetectCircularDependency(graph, startType, dependency.Type, visited, pathStack))
+            if (dependency.IsConstructed && DetectCircularDependency(graph, startType, dependency.Type, visited, pathStack))
             {
                 pathStack.Push(currentType);
                 return true;

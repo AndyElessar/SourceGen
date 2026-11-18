@@ -337,4 +337,57 @@ public class SGIOC002Tests
         await Assert.That(locations).Count().IsEqualTo(2);
         await Assert.That(locations).All().Satisfy(static location => location.IsEqualTo("IocRegister"));
     }
+
+    [Test]
+    public async Task SGIOC002_KeyedRegistrationFirst_ThenCycleThroughNonKeyedInterface_ReportsDiagnostic()
+    {
+        const string source = """
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.Foo>(Key = "a", ServiceTypes = [typeof(TestNamespace.IFoo)])]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister<IFoo>]
+            public class Foo(Bar bar) : IFoo;
+
+            [IocRegister]
+            public class Bar(IFoo foo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc002 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC002");
+
+        await Assert.That(sgioc002).Count().IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task SGIOC002_DependencyResolvedByInstanceRegistration_NoDiagnostic()
+    {
+        // The last registration of Foo is an Instance, so its constructor is not called and there is no cycle
+        const string source = """
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister]
+            public class Foo(Bar bar)
+            {
+                public static readonly Foo Default = null!;
+            }
+
+            [IocRegisterFor<Foo>(Instance = nameof(Foo.Default))]
+            public static class Registrations;
+
+            [IocRegister]
+            public class Bar(Foo foo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc002 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC002");
+
+        await Assert.That(sgioc002).Count().IsEqualTo(0);
+    }
 }

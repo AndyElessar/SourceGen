@@ -264,6 +264,8 @@ partial class IocSourceGenerator
             (p.IsNullable && p.Type is LazyTypeData { InstanceType: not WrapperTypeData } or FuncTypeData { ReturnType: not WrapperTypeData }) ||
             p.HasDefaultValue) == true;
 
+    // The order of the tag groups decides which registration of a (service type, key) is the last one for a set of tags; the
+    // RegisterAnalyzer mirrors it (DependencyIndex.TagGroupComparer), so keep both in sync
     private sealed class TagArrayComparer : IComparer<ImmutableEquatableArray<string>>
     {
         public static readonly TagArrayComparer Instance = new();

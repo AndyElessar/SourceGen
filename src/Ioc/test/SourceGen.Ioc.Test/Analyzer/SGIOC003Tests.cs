@@ -626,7 +626,7 @@ public class SGIOC003Tests
 
             public interface IService;
 
-            [IocRegister]
+            [IocRegister(ServiceTypes = [typeof(IService)])]
             public class Service : IService;
 
             [IocRegister(Lifetime = ServiceLifetime.Singleton)]
@@ -730,5 +730,222 @@ public class SGIOC003Tests
         await Assert.That(locations).Count().IsEqualTo(2);
         await Assert.That(locations).Contains("IocRegisterFor<TestNamespace.SingletonService>(ServiceLifetime.Singleton, Key = \"a\")");
         await Assert.That(locations).Contains("IocRegister(Lifetime = ServiceLifetime.Singleton, Key = \"b\")");
+    }
+
+    [Test]
+    public async Task SGIOC003_KeyedRegistrationFirst_ThenNonKeyedRegistrationOfInterface_ReportsDiagnostic()
+    {
+        // IFoo resolves to the non-keyed registration, although the first registration of Foo is keyed
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.Foo>(ServiceLifetime.Scoped, Key = "a", ServiceTypes = [typeof(TestNamespace.IFoo)])]
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister<IFoo>(Lifetime = ServiceLifetime.Scoped)]
+            public class Foo : IFoo;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Bar(IFoo foo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003").ToList();
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+        await Assert.That(sgioc003[0].GetMessage()).Contains("Bar").And.Contains("Foo");
+    }
+
+    [Test]
+    public async Task SGIOC003_DependencyOnInterfaceNotRegistered_NoDiagnostic()
+    {
+        // Like the generator, Foo is registered as itself only, so IFoo does not resolve to it
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped)]
+            public class Foo : IFoo;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Bar(IFoo foo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task SGIOC003_KeyedDependency_UsesKeyedRegistration()
+    {
+        // [FromKeyedServices("a")] resolves the keyed Scoped registration, not the non-keyed Singleton one
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister<IFoo>(Lifetime = ServiceLifetime.Singleton)]
+            public class Foo : IFoo;
+
+            [IocRegisterFor<Foo>(ServiceLifetime.Scoped, Key = "a", ServiceTypes = [typeof(IFoo)])]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Bar([FromKeyedServices("a")] IFoo foo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC003_LastRegistrationInGeneratorOrder_IsTheDependency()
+    {
+        // The generator adds [IocRegister], then [IocRegisterFor], then [IocRegisterFor<T>] registrations, so the Scoped
+        // [IocRegisterFor<T>] registration wins, although it is neither the first nor the last registration in source order
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Foo;
+
+            [IocRegisterFor<Foo>(ServiceLifetime.Scoped)]
+            public static class GenericRegistrations;
+
+            [IocRegisterFor(typeof(Foo), ServiceLifetime.Singleton)]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Bar(Foo foo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC003_WinnerOfTagGroupConflicts_ReportsDiagnostic()
+    {
+        // With the tag "x", the Scoped registration is the last one of Foo
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Foo;
+
+            [IocRegisterFor<Foo>(ServiceLifetime.Scoped, Tags = ["x"])]
+            [IocRegisterFor<Foo>(ServiceLifetime.Singleton, Tags = ["y"])]
+            public static class Registrations;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Bar(Foo foo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC003_SameWinnerOfSeveralTagGroups_ReportsOnce()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, Tags = ["x", "y"])]
+            public class Foo;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Bar(Foo foo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC003_TagGroupsOfRegisterOutput_LastRegistrationOfLastGroupWins()
+    {
+        // The Register output adds the registrations grouped by their tags (["a"], then ["a", "b"], then ["b"]), so with the
+        // tag "a" IFoo resolves to the Scoped X, although Z is the last registration with the tag "a" in source order
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister(Lifetime = ServiceLifetime.Scoped, ServiceTypes = [typeof(IFoo)], Tags = ["a", "b"])]
+            public class X : IFoo;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IFoo)], Tags = ["b"])]
+            public class Y : IFoo;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IFoo)], Tags = ["a"])]
+            public class Z : IFoo;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, Tags = ["a"])]
+            public class C(IFoo foo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task SGIOC003_UnboundImplementationWithRegisterAllInterfaces_ReportsDiagnostic()
+    {
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor(typeof(TestNamespace.Repo<>), ServiceLifetime.Scoped, RegisterAllInterfaces = true)]
+
+            namespace TestNamespace;
+
+            public interface IRepo<T>;
+
+            public class Repo<T> : IRepo<T>;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class Consumer(IRepo<int> repo);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc003 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC003");
+
+        await Assert.That(sgioc003).Count().IsEqualTo(1);
     }
 }

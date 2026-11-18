@@ -378,10 +378,13 @@ internal static class AnalyzerHelpers
         foreach(var serviceType in explicitServiceTypes)
             yield return serviceType;
 
+        // An unbound implementation (typeof(Repo<>)) has no interfaces or base class of its own: they are its definition's
+        var hierarchyType = implementationType.IsUnboundGenericType ? implementationType.OriginalDefinition : implementationType;
+
         var (_, registerAllInterfaces) = attribute.TryGetRegisterAllInterfaces();
         if(registerAllInterfaces)
         {
-            foreach(var interfaceType in implementationType.AllInterfaces)
+            foreach(var interfaceType in hierarchyType.AllInterfaces)
                 yield return interfaceType;
         }
 
@@ -389,7 +392,7 @@ internal static class AnalyzerHelpers
         if(!registerAllBaseClasses)
             yield break;
 
-        var baseType = implementationType.BaseType;
+        var baseType = hierarchyType.BaseType;
         while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
         {
             yield return baseType;
@@ -863,6 +866,16 @@ internal static class AnalyzerHelpers
 
         return treeOrder;
     }
+
+    /// <summary>
+    /// Gets the position of a registration attribute's pipeline in the generator's registration order. The generator
+    /// concatenates its registration pipelines (<c>IocSourceGenerator.Initialize</c>, <c>CollectAndConcat</c>) in this order:
+    /// <c>[IocRegister]</c> (0), <c>[IocRegister&lt;T&gt;]</c> (1), <c>[IocRegisterFor]</c> (2), <c>[IocRegisterFor&lt;T&gt;]</c>
+    /// (3), then the <c>ImplementationTypes</c> of default settings (4); each pipeline is in source order (see
+    /// <see cref="GetSourceOrder"/>). The last registration of a (service type, key) in this order is the one resolved.
+    /// </summary>
+    public static int GetGeneratorRegistrationPipeline(INamedTypeSymbol attributeClass, IocAttributeSymbols attributeSymbols)
+        => (IsIoCRegisterAttribute(attributeClass, attributeSymbols) ? 0 : 2) + (attributeClass.IsGenericType ? 1 : 0);
 
     /// <summary>Gets the source position of an attribute; an attribute that is not in the compilation comes last.</summary>
     public static (int Tree, int Position) GetSourceOrder(SyntaxReference? syntax, Dictionary<SyntaxTree, int> treeOrder)

@@ -154,7 +154,10 @@ public sealed partial class RegisterAnalyzer
             // SGIOC038: Check the interfaces and base classes an open implementation is registered as
             AnalyzeImplicitOpenTypesNestedInGenericType(reportDiagnostic, analyzerContext, attribute, targetType, explicitServiceTypes, location);
 
-            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location);
+            var order = new GeneratorRegistrationOrder(
+                AnalyzerHelpers.GetGeneratorRegistrationPipeline(attribute.AttributeClass!, analyzerContext.AttributeSymbols),
+                GetSourceOrder(location));
+            RegisterService(analyzerContext, attribute, targetType, key, keyTypeSymbol, explicitServiceTypes, location, AnalyzerHelpers.GetEffectiveTags(tags), order);
         }
 
         (int Tree, int Position) GetSourceOrder(Location? location)
@@ -231,7 +234,9 @@ public sealed partial class RegisterAnalyzer
         string? key,
         ITypeSymbol? keyTypeSymbol,
         List<INamedTypeSymbol> explicitServiceTypes,
-        Location? location)
+        Location? location,
+        ImmutableArray<string> tags,
+        GeneratorRegistrationOrder order)
     {
         // Skip registration if type is invalid
         if(targetType.IsAbstract && targetType.TypeKind is not TypeKind.Interface)
@@ -270,7 +275,7 @@ public sealed partial class RegisterAnalyzer
         // starting from the dependencies of closed registrations; SGIOC039: the service types of generic factories
         analyzerContext.Registrations.Add(new(targetType, registrations, decorators, attribute, hasFactory, hasInstance, bestDefaultIndex, location));
 
-        RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations);
+        RegisterServiceWithIndex(analyzerContext, targetType, lifetime, location, key, keyTypeSymbol, hasFactory, hasInstance, registrations, asyncDecoratedRegistrations, tags, order);
     }
 
     /// <summary>
@@ -612,8 +617,10 @@ public sealed partial class RegisterAnalyzer
     }
 
     /// <summary>
-    /// Registers a service and builds the service type index for fast lookups.
+    /// Records a registration on the <see cref="ServiceInfo"/> of its implementation type, and as a candidate dependency of
+    /// the (service type, key) pairs it registers (see <see cref="DependencyIndex"/>).
     /// </summary>
+    /// <param name="order">The position of the registration in the generator's registration order.</param>
     private static void RegisterServiceWithIndex(
         AnalyzerContext analyzerContext,
         INamedTypeSymbol targetType,
@@ -624,7 +631,9 @@ public sealed partial class RegisterAnalyzer
         bool hasFactory,
         bool hasInstance,
         ImmutableArray<ServiceSymbolKey> registrations,
-        ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations)
+        ImmutableArray<ServiceSymbolKey> asyncDecoratedRegistrations,
+        ImmutableArray<string> tags,
+        GeneratorRegistrationOrder order)
     {
         var hasKey = serviceKey is not null;
         var activation = new ServiceActivation(lifetime, location, hasKey, keyTypeSymbol, hasFactory, hasInstance);
@@ -632,44 +641,20 @@ public sealed partial class RegisterAnalyzer
         // Same implementation type already registered (e.g., multiple assembly-level IocRegisterFor
         // attributes targeting the same impl type with different keys). Record the additional
         // (service type, key) pairs and the registration's own activation on the existing entry,
-        // so the analyses see every registration, not only the first one.
-        if(analyzerContext.RegisteredServices.TryGetValue(targetType, out var existingInfo))
+        // so the analyses see every registration, not only the first one. The registrations are
+        // recorded one after another at CompilationEnd (ResolveRegistrations).
+        if(analyzerContext.RegisteredServices.TryGetValue(targetType, out var serviceInfo))
         {
-            existingInfo.AddRegistrations(registrations, asyncDecoratedRegistrations);
-            existingInfo.AddActivation(activation, analyzerContext.Assembly);
-            return;
+            serviceInfo.AddRegistrations(registrations, asyncDecoratedRegistrations);
+            serviceInfo.AddActivation(activation, analyzerContext.Assembly);
+        }
+        else
+        {
+            serviceInfo = new ServiceInfo(targetType, serviceKey, activation, registrations, asyncDecoratedRegistrations, analyzerContext.Assembly);
+            analyzerContext.RegisteredServices[targetType] = serviceInfo;
         }
 
-        var serviceInfo = new ServiceInfo(targetType, serviceKey, activation, registrations, asyncDecoratedRegistrations, analyzerContext.Assembly);
-        if(!analyzerContext.RegisteredServices.TryAdd(targetType, serviceInfo))
-        {
-            // Another registration of the type was added concurrently
-            existingInfo = analyzerContext.RegisteredServices[targetType];
-            existingInfo.AddRegistrations(registrations, asyncDecoratedRegistrations);
-            existingInfo.AddActivation(activation, analyzerContext.Assembly);
-            return;
-        }
-
-        // Only build type index for non-keyed services.
-        // Keyed services are resolved by key + type, not by type alone,
-        // so including them in the type-only index could lead to false positive
-        // circular dependency (SGIOC002) or lifetime conflict (SGIOC003-005) diagnostics.
-        if(hasKey)
-            return;
-
-        // Build index for interfaces
-        foreach(var iface in targetType.AllInterfaces)
-        {
-            analyzerContext.ServiceTypeIndex.TryAdd(iface, serviceInfo);
-        }
-
-        // Build index for base classes
-        var baseType = targetType.BaseType;
-        while(baseType is not null && baseType.SpecialType is not SpecialType.System_Object)
-        {
-            analyzerContext.ServiceTypeIndex.TryAdd(baseType, serviceInfo);
-            baseType = baseType.BaseType;
-        }
+        analyzerContext.DependencyRegistrations.Add(new(new(serviceInfo, activation), registrations, tags, order));
     }
 
     /// <summary>
@@ -881,7 +866,6 @@ public sealed partial class RegisterAnalyzer
     private sealed class AnalyzerContext(
         IocAttributeSymbols attributeSymbols,
         ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> registeredServices,
-        ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> serviceTypeIndex,
         IocFeatures features,
         ServiceLifetime fallbackLifetime,
         IAssemblySymbol assembly)
@@ -899,10 +883,10 @@ public sealed partial class RegisterAnalyzer
         public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> RegisteredServices { get; } = registeredServices;
 
         /// <summary>
-        /// Index mapping service types (interfaces/base classes) to their implementations.
-        /// Enables O(1) lookup instead of O(n) linear search.
+        /// Every registration with the (service type, key) pairs it registers, from which the <see cref="DependencyIndex"/>
+        /// is built. Filled at CompilationEnd, in source order.
         /// </summary>
-        public ConcurrentDictionary<INamedTypeSymbol, ServiceInfo> ServiceTypeIndex { get; } = serviceTypeIndex;
+        public List<DependencyRegistration> DependencyRegistrations { get; } = [];
 
         /// <summary>
         /// The registrations collected by the symbol and compilation start actions, resolved against the default settings at
@@ -1070,12 +1054,6 @@ public sealed partial class RegisterAnalyzer
         public INamedTypeSymbol Type { get; }
 
         /// <summary>
-        /// The lifetime of the first registration of this implementation type, used when the type is a dependency of another
-        /// registration. The analyses of the type's own constructor and members use <see cref="Activations"/>.
-        /// </summary>
-        public ServiceLifetime Lifetime { get; }
-
-        /// <summary>
         /// The key string of the first registration, or null if it is unkeyed.
         /// </summary>
         public string? ServiceKey { get; }
@@ -1135,7 +1113,6 @@ public sealed partial class RegisterAnalyzer
             IAssemblySymbol assembly)
         {
             Type = type;
-            Lifetime = activation.Lifetime;
             AllRegistrations = registrations;
             AsyncDecoratedRegistrations = asyncDecoratedRegistrations;
             ServiceKey = serviceKey;

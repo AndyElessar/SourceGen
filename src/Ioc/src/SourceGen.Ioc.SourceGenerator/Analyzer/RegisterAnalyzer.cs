@@ -581,16 +581,13 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         if(!attributeSymbols.HasAnyRegistrationAttribute)
             return;
 
-        // Use ConcurrentDictionary for thread-safe collection during parallel symbol analysis.
-        // Both are keyed by runtime type (without tuple element names), like the generator's dependency resolution.
+        // The registered implementation types, keyed by runtime type (without tuple element names), like the generator's
+        // dependency resolution
         var registeredServices = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(RuntimeTypeSymbolComparer.Instance);
-        // Index for service type -> implementation lookup (interfaces/base classes)
-        var serviceTypeIndex = new ConcurrentDictionary<INamedTypeSymbol, ServiceInfo>(RuntimeTypeSymbolComparer.Instance);
 
         var analyzerContext = new AnalyzerContext(
             attributeSymbols,
             registeredServices,
-            serviceTypeIndex,
             features,
             IocSourceGenerator.ReadDefaultLifetime(context.Options.AnalyzerConfigOptionsProvider.GlobalOptions) ?? ServiceLifetime.Transient,
             context.Compilation.Assembly);
@@ -716,7 +713,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         // Reuse these collections across all services to reduce allocations
         var visited = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var pathStack = new Stack<INamedTypeSymbol>();
-        var graph = new DependencyGraph(analyzerContext);
+        var dependencyIndex = DependencyIndex.Build(analyzerContext.DependencyRegistrations, context.CancellationToken);
+        var graph = new DependencyGraph(analyzerContext, dependencyIndex);
         var keyedServiceIndex = new KeyedServiceIndex(analyzerContext);
 
         foreach(var kvp in analyzerContext.RegisteredServices)
@@ -732,7 +730,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             AnalyzeKeyValuePairKeyTypeMismatch(context.ReportDiagnostic, serviceInfo, analyzerContext, keyedServiceIndex, context.CancellationToken);
 
             // SGIOC033: Func factories with arguments ignore Singleton/Scoped lifetimes
-            AnalyzeFuncWithArgumentsLifetime(context.ReportDiagnostic, serviceInfo, analyzerContext, context.CancellationToken);
+            AnalyzeFuncWithArgumentsLifetime(context.ReportDiagnostic, serviceInfo, dependencyIndex, context.CancellationToken);
 
             AnalyzeDependencies(
                 context.ReportDiagnostic,

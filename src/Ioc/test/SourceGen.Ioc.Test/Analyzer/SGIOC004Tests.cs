@@ -362,4 +362,29 @@ public class SGIOC004Tests
 
         await Assert.That(sgioc004).Count().IsEqualTo(0);
     }
+
+    [Test]
+    public async Task SGIOC004_KeyedSingletonFirst_ThenNonKeyedTransientDependency_ReportsDiagnostic()
+    {
+        // The non-keyed dependency resolves to the non-keyed Transient registration, not the keyed Singleton one
+        const string source = """
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            [assembly: IocRegisterFor<TestNamespace.TransientService>(ServiceLifetime.Singleton, Key = "cached")]
+
+            namespace TestNamespace;
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class TransientService;
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton)]
+            public class SingletonService(TransientService transient);
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);
+        var sgioc004 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC004");
+
+        await Assert.That(sgioc004).Count().IsEqualTo(1);
+    }
 }
