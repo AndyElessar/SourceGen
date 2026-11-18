@@ -314,6 +314,42 @@ public class DecoratorContainerTests
     }
 
     [Test]
+    public async Task Container_WithInstanceAndDecorators_FuncWithInputParametersDecoratesServiceTypeOnly()
+    {
+        // A Func with input parameters decorates the new instance for the decorated service type, but not for the
+        // implementation type, which shares the Instance registration's entry
+        const string source = """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IHandler { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Instance = nameof(Default), Decorators = [typeof(LoggingDecorator)])]
+            public class Handler(string name) : IHandler
+            {
+                public static readonly Handler Default = new("default");
+            }
+
+            public class LoggingDecorator(IHandler inner) : IHandler;
+
+            [IocRegister]
+            public class Consumer(Func<string, IHandler> handlerFactory, Func<string, Handler> implementationFactory);
+
+            [IocContainer]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(source);
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task Container_WithDecorators_HavingClosedGenericDependency_GeneratesDirectResolverCalls()
     {
         const string source = """

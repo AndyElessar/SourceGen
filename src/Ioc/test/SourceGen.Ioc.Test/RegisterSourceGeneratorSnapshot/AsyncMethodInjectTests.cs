@@ -451,6 +451,53 @@ public class AsyncMethodInjectTests
     }
 
     [Test]
+    public async Task AsyncMethodInject_FuncWithInputParametersOfInstanceWithAsyncDecorator_IsNotRegistered()
+    {
+        // The instance of an Instance registration is not decorated, but a Func with input parameters constructs and
+        // decorates a new instance synchronously, so it cannot call the decorator's async inject method. The implementation
+        // type is not decorated, and the parameterless wrappers resolve the instance as is.
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Instance = nameof(Default), Decorators = [typeof(MyServiceDecorator)])]
+            public class MyService(string name) : IMyService
+            {
+                public static readonly MyService Default = new("default");
+            }
+
+            public class MyServiceDecorator(IMyService inner) : IMyService
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Func<string, IMyService> factory, Func<string, MyService> implementationFactory, Func<IMyService> plainFactory, Lazy<IMyService> lazy);
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "ServiceRegistration");
+
+        await Assert.That(generatedSource).DoesNotContain("new global::System.Func<string, global::TestNamespace.IMyService>(");
+        await Assert.That(generatedSource).Contains("new global::System.Func<string, global::TestNamespace.MyService>(");
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task AsyncMethodInject_TaskOfServiceWithAsyncAndSyncKeys_ResolvesEachKeyByItsOwnShape()
     {
         // IMyService is async-init without a key and synchronous with the "sync" key, and the reverse for IOtherService.

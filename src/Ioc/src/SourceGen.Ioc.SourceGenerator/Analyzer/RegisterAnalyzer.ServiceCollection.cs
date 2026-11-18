@@ -287,9 +287,9 @@ public sealed partial class RegisterAnalyzer
         if(decorators.IsEmpty && bestDefaultIndex >= 0)
             decorators = analyzerContext.DefaultDecorators[bestDefaultIndex];
 
-        var asyncDecoratedRegistrations = hasInstance
-            ? []
-            : AnalyzeDecorators(analyzerContext, decorators, targetType, registrations);
+        // The instance of an Instance registration is not decorated, so its decorators are not analyzed, but a Func with input
+        // parameters decorates a new instance, so it is not generated when a decorator has async inject methods
+        var asyncDecoratedRegistrations = AnalyzeDecorators(analyzerContext, decorators, targetType, registrations, isInstance: hasInstance);
 
         // SGIOC036/SGIOC037: open generic registrations are closed on demand for the dependencies the generator discovers,
         // starting from the dependencies of closed registrations; SGIOC039: the service types of generic factories
@@ -515,13 +515,16 @@ public sealed partial class RegisterAnalyzer
     /// Matches the decorators to the registration's service types with the generator's rules, recording each match in
     /// <see cref="AnalyzerContext.DecoratorUsages"/> (SGIOC034/SGIOC035) and each applied decorator in
     /// <see cref="AnalyzerContext.AppliedDecorators"/> (SGIOC030). Returns the (service type, key) pairs that an applied
-    /// decorator with async inject methods makes async-init (SGIOC030).
+    /// decorator with async inject methods makes async-init (SGIOC030). For an <c>Instance</c> registration
+    /// (<paramref name="isInstance"/>), whose instance is not decorated, nothing is recorded, and the returned pairs are those
+    /// whose <c>Func</c> with input parameters is not generated, since it would decorate a new instance.
     /// </summary>
     private static ImmutableArray<ServiceSymbolKey> AnalyzeDecorators(
         AnalyzerContext analyzerContext,
         ImmutableArray<INamedTypeSymbol> decorators,
         INamedTypeSymbol targetType,
-        ImmutableArray<ServiceSymbolKey> registrations)
+        ImmutableArray<ServiceSymbolKey> registrations,
+        bool isInstance)
     {
         if(decorators.IsEmpty)
             return [];
@@ -543,19 +546,25 @@ public sealed partial class RegisterAnalyzer
                 if(!AnalyzerHelpers.TryGetDecoratedParameterIndexes(analyzerContext.GetDecoratorTypeData(decorator), serviceTypeData, out var parameterIndexes))
                     continue;
 
-                analyzerContext.DecoratorUsages
-                    .GetOrAdd(definition, static _ => new(SymbolEqualityComparer.Default))
-                    .TryAdd(serviceTypeForDiagnostics, parameterIndexes);
+                if(!isInstance)
+                {
+                    analyzerContext.DecoratorUsages
+                        .GetOrAdd(definition, static _ => new(SymbolEqualityComparer.Default))
+                        .TryAdd(serviceTypeForDiagnostics, parameterIndexes);
+                }
 
                 // The generator skips a decorator without a parameter for the decorated instance
                 if(parameterIndexes.IsEmpty)
                     continue;
 
-                // An open generic decorator is analyzed as closed for the service type, so its dependencies have closed types
-                var appliedDecorator = TryConstructDecorator(definition, serviceType) ?? definition;
-                analyzerContext.AppliedDecorators
-                    .GetOrAdd(appliedDecorator, static _ => new())
-                    .TryAdd(parameterIndexes[0], 0);
+                if(!isInstance)
+                {
+                    // An open generic decorator is analyzed as closed for the service type, so its dependencies have closed types
+                    var appliedDecorator = TryConstructDecorator(definition, serviceType) ?? definition;
+                    analyzerContext.AppliedDecorators
+                        .GetOrAdd(appliedDecorator, static _ => new())
+                        .TryAdd(parameterIndexes[0], 0);
+                }
 
                 isAsyncDecorated |= AnalyzerHelpers.IsAsyncInitImplementation(decorator, analyzerContext.Features);
             }
@@ -1191,7 +1200,9 @@ public sealed partial class RegisterAnalyzer
 
         /// <summary>
         /// The (service type, key) pairs of <see cref="AllRegistrations"/> that a decorator with async inject methods makes
-        /// async-init, even when the implementation type is not (SGIOC030).
+        /// async-init, even when the implementation type is not (SGIOC030). For an <c>Instance</c> registration, which is never
+        /// async-init, they are the pairs whose <c>Func</c> with input parameters is not generated, since it would decorate a
+        /// new instance without calling those methods.
         /// </summary>
         public ImmutableArray<ServiceSymbolKey> AsyncDecoratedRegistrations { get; private set; }
 

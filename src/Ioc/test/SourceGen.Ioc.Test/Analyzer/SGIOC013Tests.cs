@@ -665,6 +665,56 @@ public class SGIOC013Tests
     }
 
     [Test]
+    [Arguments("Func<string, IFoo>", "AsyncDecorator", "", 0)]
+    [Arguments("Func<string, IFoo>", "AsyncDecorator", "[IocContainer] public partial class AppContainer;", 0)]
+    [Arguments("Lazy<Func<string, IFoo>>", "AsyncDecorator", "[IocContainer] public partial class AppContainer;", 0)]
+    [Arguments("Func<string, Foo>", "AsyncDecorator", "", 1)]
+    [Arguments("Func<string, IFoo>", "SyncDecorator", "", 1)]
+    [Arguments("Func<string, IFoo>", "SyncDecorator", "[IocContainer] public partial class AppContainer;", 1)]
+    public async Task SGIOC013_InstanceWithAsyncDecoratorRequestedByFunc_ReportsOnlyWhenConstructed(string funcType, string decorator, string container, int expected)
+    {
+        // A Func with input parameters is not generated for the decorated service type of an Instance registration whose
+        // decorator has async inject methods (the Register output does not register it, a container resolves it from the
+        // fallback provider), so it does not construct the type; the undecorated implementation type is still constructed
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IFoo;
+
+            [IocRegister(Key = "a", ServiceTypes = [typeof(IFoo)], Instance = nameof(Default), Decorators = [typeof({{decorator}})])]
+            public class Foo([ServiceKey] int key) : IFoo
+            {
+                public static readonly Foo Default = new(0);
+            }
+
+            public class AsyncDecorator(IFoo inner) : IFoo
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            public class SyncDecorator(IFoo inner) : IFoo;
+
+            [IocRegister]
+            public class Consumer([FromKeyedServices("a")] {{funcType}} factory);
+
+            {{container}}
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = "Register,Container,MethodInject,AsyncMethodInject" });
+        var sgioc013 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC013");
+
+        await Assert.That(sgioc013).Count().IsEqualTo(expected);
+    }
+
+    [Test]
     public async Task SGIOC013_FactoryWithAsyncInjectMethodRequestedByFunc_NoDiagnostic()
     {
         // No Func with input parameters is registered for an async-init registration, so nothing constructs the type

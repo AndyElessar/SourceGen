@@ -757,8 +757,9 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         // SGIOC001: Implementation types that cannot be constructed without a Factory or Instance
         AnalyzeUnconstructibleImplementations(context.ReportDiagnostic, analyzerContext, context.CancellationToken);
 
+        // ConstructedByFunc includes every pair of Resolved
         var asyncInitOnlyServiceTypes = BuildAsyncInitOnlyServiceTypes(analyzerContext);
-        if(asyncInitOnlyServiceTypes.Count == 0)
+        if(asyncInitOnlyServiceTypes.ConstructedByFunc.Count == 0)
             return;
 
         foreach(var serviceInfo in analyzerContext.RegisteredServices.Values)
@@ -875,10 +876,23 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             symbol?.Locations.FirstOrDefault(static location => location.IsInSource);
     }
 
-    private static ImmutableHashSet<ServiceSymbolKey> BuildAsyncInitOnlyServiceTypes(AnalyzerContext analyzerContext)
+    /// <summary>
+    /// The (service type, key) pairs that a synchronous dependency cannot resolve (SGIOC030).
+    /// </summary>
+    /// <param name="Resolved">The pairs whose registrations are all async-init.</param>
+    /// <param name="ConstructedByFunc">
+    /// The pairs that no registration lets a <c>Func</c> with input parameters construct: each is async-init, or an
+    /// <c>Instance</c> registration (never async-init) whose <c>Func</c> would decorate a new instance with a decorator that
+    /// has async inject methods. Includes every pair of <paramref name="Resolved"/>.
+    /// </param>
+    private readonly record struct AsyncInitServiceTypes(
+        ImmutableHashSet<ServiceSymbolKey> Resolved,
+        ImmutableHashSet<ServiceSymbolKey> ConstructedByFunc);
+
+    private static AsyncInitServiceTypes BuildAsyncInitOnlyServiceTypes(AnalyzerContext analyzerContext)
     {
         // Keyed by runtime type, so registrations whose tuple element names differ are the same service
-        var serviceTypeStates = new Dictionary<ServiceSymbolKey, (bool HasAsync, bool HasSync)>();
+        var serviceTypeStates = new Dictionary<ServiceSymbolKey, (bool HasAsync, bool HasSync, bool HasFuncAsync, bool HasFuncSync)>();
 
         // Like the generator, an Instance is registered as is, without calling its inject methods, so it is never async-init.
         // Decided per registration: the same implementation type can be an Instance under one key and constructed under another
@@ -916,23 +930,34 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
             foreach(var serviceType in serviceTypes)
             {
                 serviceTypeStates.TryGetValue(serviceType, out var state);
-                var isAsyncInitRegistration = isAsyncInit && instanceServiceTypes?.Contains(serviceType) != true;
-                serviceTypeStates[serviceType] = isAsyncInitRegistration || serviceInfo.AsyncDecoratedRegistrations.Contains(serviceType)
-                    ? (HasAsync: true, HasSync: state.HasSync)
-                    : (HasAsync: state.HasAsync, HasSync: true);
+                var isInstance = instanceServiceTypes?.Contains(serviceType) == true;
+                var isAsyncDecorated = serviceInfo.AsyncDecoratedRegistrations.Contains(serviceType);
+
+                // The async decorators of an Instance registration only keep a Func with input parameters from constructing it
+                var isAsyncInitRegistration = !isInstance && (isAsyncInit || isAsyncDecorated);
+                var isFuncAsyncInitRegistration = isAsyncInitRegistration || (isInstance && isAsyncDecorated);
+                serviceTypeStates[serviceType] = (
+                    HasAsync: state.HasAsync || isAsyncInitRegistration,
+                    HasSync: state.HasSync || !isAsyncInitRegistration,
+                    HasFuncAsync: state.HasFuncAsync || isFuncAsyncInitRegistration,
+                    HasFuncSync: state.HasFuncSync || !isFuncAsyncInitRegistration);
             }
         }
 
         var asyncOnlyServiceTypes = ImmutableHashSet.CreateBuilder<ServiceSymbolKey>();
+        var funcAsyncOnlyServiceTypes = ImmutableHashSet.CreateBuilder<ServiceSymbolKey>();
         foreach(var kvp in serviceTypeStates)
         {
             var serviceType = kvp.Key;
             var state = kvp.Value;
             if(state is { HasAsync: true, HasSync: false })
                 asyncOnlyServiceTypes.Add(serviceType);
+
+            if(state is { HasFuncAsync: true, HasFuncSync: false })
+                funcAsyncOnlyServiceTypes.Add(serviceType);
         }
 
-        return asyncOnlyServiceTypes.ToImmutable();
+        return new(asyncOnlyServiceTypes.ToImmutable(), funcAsyncOnlyServiceTypes.ToImmutable());
     }
 
     private static HashSet<ServiceSymbolKey> CollectRegisteredServiceTypesForAnalysis(
@@ -984,7 +1009,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         ServiceInfo serviceInfo,
         Dictionary<ServiceActivation, List<INamedTypeSymbol>> constructedByFunc,
         AnalyzerContext analyzerContext,
-        ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
+        AsyncInitServiceTypes asyncInitOnlyServiceTypes,
         CancellationToken cancellationToken)
     {
         var hasListedMembers = !analyzerContext.InjectMembers.IsEmpty;
@@ -1049,7 +1074,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         Action<Diagnostic> reportDiagnostic,
         ServiceInfo serviceInfo,
         AnalyzerContext analyzerContext,
-        ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
+        AsyncInitServiceTypes asyncInitOnlyServiceTypes,
         CancellationToken cancellationToken)
     {
         HashSet<Location>? reportedLocations = null;
@@ -1093,7 +1118,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         ImmutableArray<(ISymbol Member, Location Location)> listedMembers,
         ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers,
         AnalyzerContext analyzerContext,
-        ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
+        AsyncInitServiceTypes asyncInitOnlyServiceTypes,
         CancellationToken cancellationToken,
         Func<ISymbol, bool>? isResolved)
     {
@@ -1143,7 +1168,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         Action<Diagnostic> reportDiagnostic,
         IMethodSymbol? constructor,
         ImmutableArray<(ISymbol Member, AttributeData InjectAttribute)> injectedMembers,
-        ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
+        AsyncInitServiceTypes asyncInitOnlyServiceTypes,
         CancellationToken cancellationToken,
         int decoratedParameterIndex = -1,
         Func<ISymbol, bool>? isResolved = null)
@@ -1209,7 +1234,7 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeParameterDependenciesOnAsyncInitServices(
         Action<Diagnostic> reportDiagnostic,
         ImmutableArray<IParameterSymbol> parameters,
-        ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes,
+        AsyncInitServiceTypes asyncInitOnlyServiceTypes,
         CancellationToken cancellationToken,
         int decoratedParameterIndex = -1,
         string? methodKey = null,
@@ -1239,12 +1264,15 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         ITypeSymbol dependencyType,
         Location? location,
         string? serviceKey,
-        ImmutableHashSet<ServiceSymbolKey> asyncInitOnlyServiceTypes)
+        AsyncInitServiceTypes asyncInitOnlyServiceTypes)
     {
-        // Lazy<T> and Func<..., T> create T synchronously, so they cannot resolve an async-init service either
+        // Lazy<T> and Func<..., T> create T synchronously, so they cannot resolve an async-init service either. A Func with input
+        // parameters constructs T, so it cannot construct the Instance registrations whose decorators have async inject methods
+        var constructedByFunc = false;
         while(dependencyType.TryGetWrapperInfo(out var wrapperInfo)
             && wrapperInfo is { Kind: WrapperKind.Lazy or WrapperKind.Func, ElementType: { } elementType })
         {
+            constructedByFunc |= TryGetFuncWithArgumentsReturnType(dependencyType, out _, out _);
             dependencyType = elementType;
         }
 
@@ -1254,7 +1282,8 @@ public sealed partial class RegisterAnalyzer : DiagnosticAnalyzer
         if(dependencyType.WithNullableAnnotation(NullableAnnotation.NotAnnotated) is not INamedTypeSymbol namedDependencyType)
             return;
 
-        if(!asyncInitOnlyServiceTypes.Contains(new(namedDependencyType, serviceKey)))
+        var asyncInitServiceTypes = constructedByFunc ? asyncInitOnlyServiceTypes.ConstructedByFunc : asyncInitOnlyServiceTypes.Resolved;
+        if(!asyncInitServiceTypes.Contains(new(namedDependencyType, serviceKey)))
             return;
 
         reportDiagnostic(Diagnostic.Create(

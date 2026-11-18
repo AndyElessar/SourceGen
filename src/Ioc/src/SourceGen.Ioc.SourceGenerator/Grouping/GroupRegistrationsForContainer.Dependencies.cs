@@ -392,6 +392,16 @@ partial class IocSourceGenerator
             ? new InstanceExpressionDependency(instance)
             : new DirectServiceDependency(cached.ResolverMethodName);
 
+    /// <summary>
+    /// Gets the registration that a <c>Func</c> with input parameters returning <paramref name="returnType"/> constructs. The
+    /// implementation type of an <c>Instance</c> registration shares the entry of its decorated service type (the entry is
+    /// not split), but it is not decorated, so the decorators are dropped when the Func returns the implementation type.
+    /// </summary>
+    private static ServiceRegistrationModel GetFuncConstructedRegistration(ServiceRegistrationModel registration, TypeData returnType) =>
+        registration.Decorators.Length > 0 && !TypeNameComparer.Instance.Equals(registration.ServiceType.Name, returnType.Name)
+            ? registration with { Decorators = [] }
+            : registration;
+
     private static ResolvedDependency ResolveWrapperDependencyForContainerEntryModel(
         TypeData type,
         string? key,
@@ -456,10 +466,12 @@ partial class IocSourceGenerator
 
                 if(func.HasInputParameters)
                 {
-                    // A Func with input parameters constructs the instance synchronously, so it cannot initialize an async-init service
-                    if(serviceLookup.TryGetValue(new(innerType.Name, key), out var innerRegistrations) && !innerRegistrations[^1].IsAsyncInit)
+                    // A Func with input parameters constructs the instance synchronously, so it cannot initialize an async-init service,
+                    // nor the async-init decorators it applies to a new instance of an Instance registration
+                    if(serviceLookup.TryGetValue(new(innerType.Name, key), out var innerRegistrations)
+                        && !innerRegistrations[^1].IsAsyncInit
+                        && GetFuncConstructedRegistration(innerRegistrations[^1].Registration, innerType) is { IsAsyncInitWhenConstructedByFunc: false } targetRegistration)
                     {
-                        var targetRegistration = innerRegistrations[^1].Registration;
                         return new MultiParamFuncDependency(
                             innerType.Name,
                             CreateFuncInputParameters(func.InputTypes),

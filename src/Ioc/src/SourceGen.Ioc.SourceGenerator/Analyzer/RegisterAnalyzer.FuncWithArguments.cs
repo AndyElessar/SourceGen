@@ -124,7 +124,8 @@ public sealed partial class RegisterAnalyzer
     /// when a generic factory's mapping does not match the implementation type, which is then constructed; and its injected
     /// members, [IocInject] and InjectMembers, also with an Instance) or an applied decorator, directly or as the element of a
     /// collection; it is registered for every closed, not async-init registration of <c>TReturn</c> (an unbound service type
-    /// registers its closed forms), and constructs the implementation type with the registration's key even for an Instance or
+    /// registers its closed forms), except a service type of an <c>Instance</c> registration whose decorators have async inject
+    /// methods (see <see cref="ServiceInfo.AsyncDecoratedRegistrations"/>), and constructs the implementation type with the registration's key even for an Instance or
     /// Factory registration. The return type of a partial accessor of a generated container, and a Func nested in another
     /// wrapper, construct only a registration of a container (see <see cref="AddConstructedByContainers"/>). The parameters of a
     /// generic factory are scanned as declared, not closed for each service type. Each registration maps to the distinct requested <c>Func</c>
@@ -355,8 +356,8 @@ public sealed partial class RegisterAnalyzer
     /// <see cref="ConstructsFuncInline"/>). Like the generator (<c>ResolveWrapperDependencyForContainerEntryModel</c>,
     /// <c>MultiParamFuncDependency</c>), a wrapper type the container registers itself resolves as that registration, at any
     /// level; otherwise the <c>Func</c> constructs the last registration of its return type and the key among the container's
-    /// own registrations (<paramref name="scope"/>), unless it is async-init. Otherwise the container resolves it from the
-    /// fallback provider. Returns the constructed registration, if any.
+    /// own registrations (<paramref name="scope"/>), unless it is async-init or its service type is decorated with async inject
+    /// methods (also for an <c>Instance</c> registration). Otherwise the container resolves it from the fallback provider. Returns the constructed registration, if any.
     /// </summary>
     private static DependencyRegistration? AddConstructedByContainerFunc(
         AnalyzerContext analyzerContext,

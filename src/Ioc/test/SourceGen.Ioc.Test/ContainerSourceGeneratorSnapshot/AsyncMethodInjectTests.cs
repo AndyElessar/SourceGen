@@ -1191,6 +1191,56 @@ public class AsyncMethodInjectTests
     }
 
     [Test]
+    public async Task AsyncMethodInject_FuncWithInputParametersOfInstanceWithAsyncDecorator_FallsBackToProvider()
+    {
+        // The instance of an Instance registration is not decorated, but a Func with input parameters constructs and
+        // decorates a new instance synchronously, so it cannot call the decorator's async inject method. The implementation
+        // type is not decorated, and the parameterless wrappers resolve the instance as is.
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IMyService)], Instance = nameof(Default), Decorators = [typeof(MyServiceDecorator)])]
+            public class MyService(string name) : IMyService
+            {
+                public static readonly MyService Default = new("default");
+            }
+
+            public class MyServiceDecorator(IMyService inner) : IMyService
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(Lifetime = ServiceLifetime.Transient)]
+            public class Consumer(Func<string, IMyService> factory, Func<string, MyService> implementationFactory, Func<IMyService> plainFactory, Lazy<IMyService> lazy);
+
+            [IocContainer(EagerResolveOptions = EagerResolveOptions.None)]
+            public partial class TestContainer { }
+            """;
+
+        var result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string>
+            {
+                ["build_property.SourceGenIocFeatures"] = AsyncMethodInjectFeatures
+            });
+
+        await result.VerifyCompilableAsync();
+        var generatedSource = SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs");
+
+        await Assert.That(generatedSource).Contains("GetRequiredService(typeof(global::System.Func<string, global::TestNamespace.IMyService>))");
+        await Assert.That(generatedSource).DoesNotContain("new global::TestNamespace.MyServiceDecorator(");
+        await Verify(generatedSource);
+    }
+
+    [Test]
     public async Task AsyncMethodInject_NonGenericTaskDependency_TreatedAsPlainServiceInContainer()
     {
         // Non-generic Task (arity 0) must NOT be classified as WrapperKind.Task in the

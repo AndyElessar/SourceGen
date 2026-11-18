@@ -85,8 +85,9 @@ partial class IocSourceGenerator
 
             foreach(var needed in neededByReturnType[reg.ServiceType.Name])
             {
-                // A Func with input parameters constructs the instance synchronously, so it cannot initialize an async-init service
-                if(needed.HasInputParameters && FilterRegistrationForFeatures(reg, features).IsAsyncInit)
+                // A Func with input parameters constructs the instance synchronously, so it cannot initialize an async-init service,
+                // nor the async-init decorators it applies to a new instance of an Instance registration
+                if(needed.HasInputParameters && FilterRegistrationForFeatures(reg, features).IsAsyncInitWhenConstructedByFunc)
                     continue;
 
                 if(!addedKeys.Add((needed.Name, reg.ImplementationType.Name, reg.Key)))

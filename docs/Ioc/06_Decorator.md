@@ -226,7 +226,7 @@ services.AddSingleton<global::System.Threading.Tasks.Task<global::MyNamespace.IH
 The decorated service type becomes async-init: it is registered as `Task<IHandler>` only, so consumers inject `Task<IHandler>` and `await` it (requesting `IHandler`, `Lazy<IHandler>` or `Func<..., IHandler>` reports `SGIOC030`). Decorators are applied from the innermost one, and each decorator's async methods are awaited before the next decorator wraps it. The outermost decorator is disposed with the registration's lifetime through `AsyncInitHolder<IHandler, MyHandler>` (see [Disposal of async-init services](04_Field_Property_Method_Injection.md#disposal-of-async-init-services)).
 
 > [!NOTE]
-> Only the decorated service types change. The implementation type (`MyHandler`) and service types the decorator does not implement keep their synchronous registrations. A `Func<..., IHandler>` with input parameters cannot initialize an async-init service, so it is not generated for it.
+> Only the decorated service types change. The implementation type (`MyHandler`) and service types the decorator does not implement keep their synchronous registrations. A `Func<..., IHandler>` with input parameters cannot initialize an async-init service, so it is not generated for it. The same applies to an `Instance` registration: its instance is never decorated, so `IHandler`, `Lazy<IHandler>` and `Func<IHandler>` resolve it synchronously, but a `Func<..., IHandler>` with input parameters would create and decorate a new instance without awaiting the async methods, so it is not generated either (requesting it reports `SGIOC030`).
 
 ## Type Constraint Validation
 

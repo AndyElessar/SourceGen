@@ -1569,6 +1569,112 @@ public class SGIOC030Tests
     }
 
     [Test]
+    [Arguments("Func<string, IMyService> service", "AsyncDecorator", 1)]
+    [Arguments("Lazy<Func<string, IMyService>> service", "AsyncDecorator", 1)]
+    [Arguments("Func<string, MyService> service", "AsyncDecorator", 0)]
+    [Arguments("IMyService service", "AsyncDecorator", 0)]
+    [Arguments("Lazy<IMyService> service", "AsyncDecorator", 0)]
+    [Arguments("Func<IMyService> service", "AsyncDecorator", 0)]
+    [Arguments("Func<string, IMyService> service", "SyncDecorator", 0)]
+    public async Task SGIOC030_FuncWithArgumentsOfInstanceWithAsyncDecorator_ReportsDiagnostic(string parameter, string decorator, int expected)
+    {
+        // The instance of an Instance registration is not decorated, but a Func with input parameters would decorate a new
+        // instance without calling the async decorator methods, so it is not generated, like for an async-init service. The
+        // implementation type is not decorated, and the instance itself is resolved synchronously.
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)], Instance = nameof(Default), Decorators = [typeof({{decorator}})])]
+            public class MyService(string name) : IMyService
+            {
+                public static readonly MyService Default = new("");
+            }
+
+            public class AsyncDecorator(IMyService inner) : IMyService
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            public class SyncDecorator(IMyService inner) : IMyService;
+
+            [IocRegister]
+            public class Consumer({{parameter}});
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = AsyncDecoratorFeatures });
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030).ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(expected);
+        if(expected > 0)
+            await Assert.That(sgioc030[0].GetMessage()).Contains("'IMyService'");
+    }
+
+    [Test]
+    [Arguments("AsyncDecorator", "", 0)]
+    [Arguments("AsyncDecorator", "[IocContainer] public partial class AppContainer;", 0)]
+    [Arguments("SyncDecorator", "", 1)]
+    [Arguments("SyncDecorator", "[IocContainer] public partial class AppContainer;", 1)]
+    public async Task SGIOC030_InstanceWithAsyncDecoratorRequestedByFuncWithArguments_IsNotConstructed(string decorator, string container, int expected)
+    {
+        // No Func with input parameters constructs the decorated service type of an Instance registration whose decorator has
+        // async inject methods (the Register output does not register it, and a container resolves it from the fallback
+        // provider), so the dependencies of the implementation type are not resolved
+        var source = $$"""
+            using System;
+            using System.Threading.Tasks;
+            using SourceGen.Ioc;
+
+            namespace TestNamespace;
+
+            public interface IMyService { }
+
+            [IocRegister]
+            public class AsyncDep
+            {
+                [IocInject]
+                public Task InitAsync() => Task.CompletedTask;
+            }
+
+            [IocRegister(ServiceTypes = [typeof(IMyService)], Instance = nameof(Default), Decorators = [typeof({{decorator}})])]
+            public class MyService(AsyncDep dep, string name) : IMyService
+            {
+                public static readonly MyService Default = new(null!, "");
+            }
+
+            public class AsyncDecorator(IMyService inner) : IMyService
+            {
+                [IocInject]
+                public Task InitializeAsync() => Task.CompletedTask;
+            }
+
+            public class SyncDecorator(IMyService inner) : IMyService;
+
+            [IocRegister]
+            public class Consumer(Func<string, IMyService> make);
+
+            {{container}}
+            """;
+
+        var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(
+            source,
+            analyzerConfigOptions: new Dictionary<string, string> { ["build_property.SourceGenIocFeatures"] = AsyncDecoratorFeatures });
+        var sgioc030 = SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC030)
+            .Where(static diagnostic => diagnostic.GetMessage().Contains("'dep'"))
+            .ToList();
+
+        await Assert.That(sgioc030).Count().IsEqualTo(expected);
+    }
+
+    [Test]
     [Arguments("Func<string, Foo>", 1)]
     [Arguments("Func<AsyncDep, Foo>", 0)]
     public async Task SGIOC030_InjectedPropertyOfInstanceConstructedByFunc_ChecksResolvedProperty(string funcType, int expected)
