@@ -152,66 +152,27 @@ partial class IocSourceGenerator
         bool isOptional,
         RegisterWriteContext context)
     {
+        var expression = type is CollectionWrapperTypeData collectionType
+            ? BuildCollectionExpression(collectionType, serviceKey, isOptional, context)
+            : BuildServiceCall(GetServiceResolutionMethod(serviceKey, isOptional), type.Name, serviceKey);
+        writer.WriteLine($"var {paramVar} = {expression};");
+    }
+
+    /// <summary>
+    /// Builds a collection expression: <c>GetServices&lt;T&gt;()</c> for <c>IEnumerable&lt;T&gt;</c>, followed by
+    /// <c>.ToArray()</c> for the other collection types, or the explicit registration of the collection type.
+    /// </summary>
+    private static string BuildCollectionExpression(CollectionWrapperTypeData type, string? serviceKey, bool isOptional, RegisterWriteContext context)
+    {
         if(BuildExplicitRegistrationCall(type, serviceKey, isOptional, context) is { } explicitCall)
         {
-            writer.WriteLine($"var {paramVar} = {explicitCall};");
-            return;
+            return explicitCall;
         }
 
-        var servicesMethod = serviceKey is not null ? GetKeyedServices : GetServices;
-
-        switch(type)
-        {
-            case EnumerableTypeData enumerable:
-            {
-                var call = BuildServiceCall(servicesMethod, enumerable.ElementType.Name, serviceKey);
-                writer.WriteLine($"var {paramVar} = {call};");
-                return;
-            }
-
-            case ReadOnlyCollectionTypeData readOnlyCollection:
-            {
-                var call = BuildServiceCall(servicesMethod, readOnlyCollection.ElementType.Name, serviceKey);
-                writer.WriteLine($"var {paramVar} = {call}.ToArray();");
-                return;
-            }
-
-            case CollectionTypeData collection:
-            {
-                var call = BuildServiceCall(servicesMethod, collection.ElementType.Name, serviceKey);
-                writer.WriteLine($"var {paramVar} = {call}.ToArray();");
-                return;
-            }
-
-            case ReadOnlyListTypeData readOnlyList:
-            {
-                var call = BuildServiceCall(servicesMethod, readOnlyList.ElementType.Name, serviceKey);
-                writer.WriteLine($"var {paramVar} = {call}.ToArray();");
-                return;
-            }
-
-            case ListTypeData list:
-            {
-                var call = BuildServiceCall(servicesMethod, list.ElementType.Name, serviceKey);
-                writer.WriteLine($"var {paramVar} = {call}.ToArray();");
-                return;
-            }
-
-            case ArrayTypeData array:
-            {
-                var call = BuildServiceCall(servicesMethod, array.ElementType.Name, serviceKey);
-                writer.WriteLine($"var {paramVar} = {call}.ToArray();");
-                return;
-            }
-
-            default:
-            {
-                var methodName = GetServiceResolutionMethod(serviceKey, isOptional);
-                var call = BuildServiceCall(methodName, type.Name, serviceKey);
-                writer.WriteLine($"var {paramVar} = {call};");
-                return;
-            }
-        }
+        var getServicesCall = BuildServiceCall(serviceKey is not null ? GetKeyedServices : GetServices, type.ElementType.Name, serviceKey);
+        return type is EnumerableTypeData
+            ? getServicesCall
+            : WithExplicitRegistrationFallback(type, serviceKey, context, $"{getServicesCall}.ToArray()");
     }
 
     /// <summary>
@@ -253,7 +214,8 @@ partial class IocSourceGenerator
                 }
 
                 var lazyInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional, context);
-                return $"new global::System.Lazy<{innerType.Name}>(() => {lazyInnerExpr}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)";
+                return WithExplicitRegistrationFallback(type, serviceKey, context,
+                    $"new global::System.Lazy<{innerType.Name}>(() => {lazyInnerExpr}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)");
             }
 
             case FuncTypeData func:
@@ -266,7 +228,7 @@ partial class IocSourceGenerator
                 }
 
                 var funcInnerExpr = BuildInnerResolutionExpression(innerType, serviceKey, isOptional, context);
-                return $"new global::System.Func<{innerType.Name}>(() => {funcInnerExpr})";
+                return WithExplicitRegistrationFallback(type, serviceKey, context, $"new global::System.Func<{innerType.Name}>(() => {funcInnerExpr})");
             }
 
             case KeyValuePairTypeData kvp:
@@ -281,7 +243,7 @@ partial class IocSourceGenerator
             {
                 var kvpTypeName = $"global::System.Collections.Generic.KeyValuePair<{dict.KeyType.Name}, {dict.ValueType.Name}>";
                 var getServicesCall = BuildServiceCall(serviceKey is not null ? GetKeyedServices : GetServices, kvpTypeName, serviceKey);
-                return $"{getServicesCall}.ToDictionary()";
+                return WithExplicitRegistrationFallback(type, serviceKey, context, $"{getServicesCall}.ToDictionary()");
             }
 
             case TaskTypeData task:
@@ -295,7 +257,12 @@ partial class IocSourceGenerator
 
                 var syncMethodName = GetServiceResolutionMethod(serviceKey, isOptional);
                 var syncCall = BuildServiceCall(syncMethodName, innerTypeName, serviceKey);
-                return $"global::System.Threading.Tasks.Task.FromResult({syncCall})";
+                var fromResult = $"global::System.Threading.Tasks.Task.FromResult({syncCall})";
+
+                // An async-init registration registered with the consumer only for some passed tags: Task<T> when registered
+                return context.AsyncInitFallbackServices?.Contains(new(innerTypeName, serviceKey)) == true
+                    ? $"{BuildServiceCall(serviceKey is not null ? GetKeyedService : GetService, type.Name, serviceKey)} ?? {fromResult}"
+                    : fromResult;
             }
 
             default:
@@ -319,19 +286,7 @@ partial class IocSourceGenerator
 
         if(innerType is CollectionWrapperTypeData collectionInner)
         {
-            if(BuildExplicitRegistrationCall(innerType, serviceKey, isOptional, context) is { } explicitCall)
-            {
-                return explicitCall;
-            }
-
-            var getServicesCall = BuildServiceCall(
-                serviceKey is not null ? GetKeyedServices : GetServices,
-                collectionInner.ElementType.Name,
-                serviceKey);
-
-            return innerType is CollectionWrapperTypeData and not EnumerableTypeData
-                ? $"{getServicesCall}.ToArray()"
-                : getServicesCall;
+            return BuildCollectionExpression(collectionInner, serviceKey, isOptional, context);
         }
 
         var methodName = GetServiceResolutionMethod(serviceKey, isOptional);
@@ -348,6 +303,18 @@ partial class IocSourceGenerator
         context.IsRegisteredExplicitly(type.Name, serviceKey)
             ? BuildServiceCall(GetServiceResolutionMethod(serviceKey, isOptional), type.Name, serviceKey)
             : null;
+
+    /// <summary>
+    /// Wraps <paramref name="builtExpression"/> as <c>sp.GetService&lt;T&gt;() ?? built</c> when an explicit registration of the
+    /// wrapper or collection type is registered with the consumer only for some passed tags: the dependency then resolves the
+    /// explicit registration when it is registered, like <c>GetService</c>. The generated code never registers these types
+    /// (direct <c>Lazy&lt;T&gt;</c> / <c>Func&lt;T&gt;</c> are resolved from <c>MS.DI</c> instead of built), so a registration
+    /// found at runtime is an explicit one.
+    /// </summary>
+    private static string WithExplicitRegistrationFallback(TypeData type, string? serviceKey, RegisterWriteContext context, string builtExpression) =>
+        context.MayBeRegisteredExplicitly(type.Name, serviceKey)
+            ? $"{BuildServiceCall(serviceKey is not null ? GetKeyedService : GetService, type.Name, serviceKey)} ?? {builtExpression}"
+            : builtExpression;
 
     /// <summary>
     /// Builds a service resolution call for keyed or non-keyed services.

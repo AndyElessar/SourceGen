@@ -63,7 +63,11 @@ partial class IocSourceGenerator
             }
             isFirstGroup = false;
 
-            var context = new RegisterWriteContext(model.AsyncInitServices, group.ExplicitWrapperServices);
+            var context = new RegisterWriteContext(
+                group.AsyncInitServices,
+                group.AsyncInitFallbackServices,
+                group.ExplicitWrapperServices,
+                group.ExplicitWrapperFallbackServices);
 
             if(group.Tags.Length == 0)
             {

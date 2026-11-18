@@ -156,3 +156,42 @@ public sealed class ExplicitWrapperRegistrationConsumer(
 [IocRegisterFor<ExplicitWrapperRegistrationConsumer>(ServiceLifetime.Transient)]
 [IocContainer(ExplicitOnly = true)]
 public sealed partial class ExplicitWrapperRegistrationModule;
+
+/// <summary>Service registered under tags "ExplicitWrapperA" and "ExplicitWrapperC", whose <c>Lazy&lt;T&gt;</c> is registered explicitly under "ExplicitWrapperA" only.</summary>
+public interface ITaggedExplicitWrapperService;
+
+public sealed class TaggedExplicitWrapperService : ITaggedExplicitWrapperService;
+
+public static class TaggedExplicitWrapperInstances
+{
+    public static readonly Lazy<ITaggedExplicitWrapperService> Lazy = new(static () => new TaggedExplicitWrapperService());
+}
+
+public sealed class TaggedExplicitWrapperConsumer(Lazy<ITaggedExplicitWrapperService> lazy)
+{
+    public Lazy<ITaggedExplicitWrapperService> Lazy => lazy;
+}
+
+/// <summary>Service that is async-init under tag "SplitAsyncA" and synchronous under tag "SplitAsyncB".</summary>
+public interface ISplitAsyncService;
+
+public sealed class AsyncSplitAsyncService : ISplitAsyncService
+{
+    [IocInject]
+    public Task InitAsync() => Task.CompletedTask;
+}
+
+public sealed class SyncSplitAsyncService : ISplitAsyncService;
+
+public sealed class SplitAsyncConsumer(Task<ISplitAsyncService> service)
+{
+    public Task<ISplitAsyncService> Service => service;
+}
+
+[IocRegisterFor<TaggedExplicitWrapperService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(ITaggedExplicitWrapperService)], Tags = ["ExplicitWrapperA", "ExplicitWrapperC"])]
+[IocRegisterFor<Lazy<ITaggedExplicitWrapperService>>(ServiceLifetime.Singleton, Instance = "global::SourceGen.Ioc.TestCase.TaggedExplicitWrapperInstances.Lazy", Tags = ["ExplicitWrapperA"])]
+[IocRegisterFor<TaggedExplicitWrapperConsumer>(ServiceLifetime.Transient, Tags = ["ExplicitWrapperA", "ExplicitWrapperC"])]
+[IocRegisterFor<AsyncSplitAsyncService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(ISplitAsyncService)], Tags = ["SplitAsyncA"])]
+[IocRegisterFor<SyncSplitAsyncService>(ServiceLifetime.Singleton, ServiceTypes = [typeof(ISplitAsyncService)], Tags = ["SplitAsyncB"])]
+[IocRegisterFor<SplitAsyncConsumer>(ServiceLifetime.Transient, Tags = ["SplitAsyncB"])]
+public static class TaggedWrapperRegistrations;

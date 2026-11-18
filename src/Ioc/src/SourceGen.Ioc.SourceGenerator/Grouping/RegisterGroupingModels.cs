@@ -22,15 +22,17 @@ partial class IocSourceGenerator
     /// <summary>
     /// Tag-grouped register output data including registrations and wrapper entries.
     /// </summary>
-    /// <param name="ExplicitWrapperServices">
-    /// The explicitly registered wrapper and collection types that the group's dependencies resolve (see
-    /// <see cref="RegisterWriteContext.ExplicitWrapperServices"/>), or <see langword="null"/> for none.
-    /// </param>
+    /// <remarks>
+    /// The service sets are those of <see cref="RegisterWriteContext"/> for the group's tags.
+    /// </remarks>
     private sealed record class RegisterTagGroup(
         ImmutableEquatableArray<string> Tags,
         ImmutableEquatableArray<RegisterEntry> Registrations,
         ImmutableEquatableArray<LazyRegistrationEntry> LazyEntries,
         ImmutableEquatableArray<FuncRegistrationEntry> FuncEntries,
         ImmutableEquatableArray<KvpRegistrationEntry> KvpEntries,
-        ImmutableEquatableSet<ServiceTypeKey>? ExplicitWrapperServices);
+        ImmutableEquatableSet<AsyncInitService>? AsyncInitServices,
+        ImmutableEquatableSet<AsyncInitService>? AsyncInitFallbackServices,
+        ImmutableEquatableSet<ServiceTypeKey>? ExplicitWrapperServices,
+        ImmutableEquatableSet<ServiceTypeKey>? ExplicitWrapperFallbackServices);
 }

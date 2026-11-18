@@ -558,8 +558,8 @@ services.AddSingleton<global::System.Collections.Generic.IReadOnlyDictionary<str
 This applies to `Lazy<T>`, `Func<T>`, the dictionary types and the collection types (`IReadOnlyList<T>`, `IList<T>`, ...), also inside another wrapper (`Lazy<Func<T>>`). When `Lazy<T>` or `Func<T>` is registered explicitly, the generator does not register its own `Lazy<T>` / `Func<T>` for `T` under the same key.
 
 > [!NOTE]
-> - The registration must use the dependency's key, and be registered whenever the consumer is: both without tags, or with every tag of the consumer. Otherwise the wrapper is built as usual.
-> - An async-init registration (registered as `Task<T>`) is not used.
+> - The registration must use the dependency's key. With [tags](07_Tags.md), it is used when it is registered together with the consumer: a consumer whose tags are not all covered by the registration's tags checks at runtime whether it is registered, and an untagged consumer never uses a tagged registration (or the reverse).
+> - An async-init registration (registered as `Task<T>`) is not used. An `Instance` is never async-init: its inject methods are not called.
 > - Only the registrations of the same project are known at compile time. A wrapper type registered by hand in the `IServiceCollection`, or by another assembly, is not used by the generated code.
 
 ## Diagnostics

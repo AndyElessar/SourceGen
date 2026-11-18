@@ -22,6 +22,11 @@ partial class IocSourceGenerator
         ServiceRegistrationModel Registration,
         ImmutableEquatableArray<string> Tags)
     {
+        /// <summary>
+        /// Gets the tags of an explicit <c>Func</c> registration that replaces this one when any of them is passed.
+        /// </summary>
+        public ImmutableEquatableArray<string> SuppressingTags { get; init; } = [];
+
         public void WriteRegistration(SourceWriter writer, RegisterWriteContext context)
         {
             var lifetime = Registration.Lifetime.Name;
@@ -115,7 +120,9 @@ partial class IocSourceGenerator
 
         foreach(var entry in entries)
         {
+            var suppressed = WriteSuppressingTagsOpen(writer, entry.SuppressingTags);
             entry.WriteRegistration(writer, context);
+            WriteSuppressingTagsClose(writer, suppressed);
         }
     }
 
