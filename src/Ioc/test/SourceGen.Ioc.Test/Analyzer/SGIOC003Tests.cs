@@ -712,12 +712,13 @@ public class SGIOC003Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
+            [assembly: IocRegisterFor<TestNamespace.SingletonService>(ServiceLifetime.Singleton, Key = "a")]
+
             namespace TestNamespace;
 
             [IocRegister(Lifetime = ServiceLifetime.Scoped)]
             public class ScopedService { }
 
-            [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "a")]
             [IocRegister(Lifetime = ServiceLifetime.Singleton, Key = "b")]
             public class SingletonService(ScopedService scoped) { }
             """;
@@ -727,7 +728,7 @@ public class SGIOC003Tests
         var locations = sgioc003.Select(static d => d.Location.SourceTree!.GetText().ToString(d.Location.SourceSpan)).ToList();
 
         await Assert.That(locations).Count().IsEqualTo(2);
-        await Assert.That(locations).Contains("IocRegister(Lifetime = ServiceLifetime.Singleton, Key = \"a\")");
+        await Assert.That(locations).Contains("IocRegisterFor<TestNamespace.SingletonService>(ServiceLifetime.Singleton, Key = \"a\")");
         await Assert.That(locations).Contains("IocRegister(Lifetime = ServiceLifetime.Singleton, Key = \"b\")");
     }
 }

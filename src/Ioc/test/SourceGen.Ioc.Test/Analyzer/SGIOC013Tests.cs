@@ -491,9 +491,11 @@ public class SGIOC013Tests
             namespace TestNamespace;
 
             [IocRegister(Key = "MyKey")]
-            [IocRegister(Key = 42)]
-            [IocRegister(Key = 7)]
             public class MyService([ServiceKey] string key) { }
+
+            [IocRegisterFor<MyService>(Key = 42)]
+            [IocRegisterFor<MyService>(Key = 7)]
+            public static class Registrations;
             """;
 
         var diagnostics = await SourceGeneratorTestHelper.RunAnalyzerAsync<RegisterAnalyzer>(source);

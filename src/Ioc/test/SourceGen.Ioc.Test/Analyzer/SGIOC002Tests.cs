@@ -316,10 +316,11 @@ public class SGIOC002Tests
         const string source = """
             using SourceGen.Ioc;
 
+            [assembly: IocRegisterFor<TestNamespace.ServiceA>(Key = "default", Instance = nameof(TestNamespace.ServiceA.Default))]
+
             namespace TestNamespace;
 
-            [IocRegister(Key = "default", Instance = nameof(Default))]
-            [IocRegister(Tags = ["constructed"])]
+            [IocRegister]
             public class ServiceA(ServiceB b)
             {
                 public static readonly ServiceA Default = null!;
@@ -334,7 +335,6 @@ public class SGIOC002Tests
         var locations = sgioc002.Select(static d => d.Location.SourceTree!.GetText().ToString(d.Location.SourceSpan)).ToList();
 
         await Assert.That(locations).Count().IsEqualTo(2);
-        await Assert.That(locations).Contains("IocRegister(Tags = [\"constructed\"])");
-        await Assert.That(locations).Contains("IocRegister");
+        await Assert.That(locations).All().Satisfy(static location => location.IsEqualTo("IocRegister"));
     }
 }

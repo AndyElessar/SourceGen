@@ -620,8 +620,10 @@ public class SGIOC015Tests
             public interface IService { }
 
             [IocRegister]
-            [IocRegister(Key = 42)]
             public class ServiceA : IService { }
+
+            [IocRegisterFor<ServiceA>(Key = 42)]
+            public static class Registrations;
 
             [IocRegister]
             public class Consumer(KeyValuePair<string, IService> kvp)
@@ -643,6 +645,8 @@ public class SGIOC015Tests
             using System.Collections.Generic;
             using SourceGen.Ioc;
 
+            [assembly: IocRegisterFor<TestNamespace.Consumer>(Key = "factory", Factory = nameof(TestNamespace.Consumer.Create))]
+
             namespace TestNamespace;
 
             public interface IService { }
@@ -650,7 +654,6 @@ public class SGIOC015Tests
             [IocRegister(Key = "Key1")]
             public class ServiceA : IService { }
 
-            [IocRegister(Key = "factory", Factory = nameof(Create))]
             [IocRegister]
             public class Consumer(KeyValuePair<int, IService> kvp)
             {

@@ -183,6 +183,8 @@ public class SGIOC033Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
+            [assembly: IocRegisterFor<TestNamespace.Consumer>(Key = "default", Instance = nameof(TestNamespace.Consumer.Default))]
+
             namespace TestNamespace;
 
             public interface IService { }
@@ -190,7 +192,6 @@ public class SGIOC033Tests
             [IocRegister(Lifetime = ServiceLifetime.Singleton, ServiceTypes = [typeof(IService)])]
             public class Service(string name) : IService { }
 
-            [IocRegister(Key = "default", Instance = nameof(Default))]
             [IocRegister(Lifetime = ServiceLifetime.Transient)]
             public class Consumer(Func<string, IService> dependency)
             {

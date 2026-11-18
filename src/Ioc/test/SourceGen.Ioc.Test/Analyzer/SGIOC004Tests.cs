@@ -343,12 +343,13 @@ public class SGIOC004Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
+            [assembly: IocRegisterFor<TestNamespace.Foo>(Key = "default", Instance = nameof(TestNamespace.Foo.Default))]
+
             namespace TestNamespace;
 
             [IocRegister(Lifetime = ServiceLifetime.Transient)]
             public class TransientService;
 
-            [IocRegister(Key = "default", Instance = nameof(Default))]
             [IocRegister(Lifetime = ServiceLifetime.Transient)]
             public class Foo(TransientService transient)
             {

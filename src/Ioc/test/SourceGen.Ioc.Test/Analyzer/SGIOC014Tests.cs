@@ -463,9 +463,10 @@ public class SGIOC014Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
+            [assembly: IocRegisterFor<TestNamespace.MyService>(Key = "default", Instance = nameof(TestNamespace.MyService.Default))]
+
             namespace TestNamespace;
 
-            [IocRegister(Key = "default", Instance = nameof(Default))]
             [IocRegister]
             public class MyService([ServiceKey] string key)
             {
@@ -486,10 +487,11 @@ public class SGIOC014Tests
             using Microsoft.Extensions.DependencyInjection;
             using SourceGen.Ioc;
 
+            [assembly: IocRegisterFor<TestNamespace.MyService>(Tags = ["b"])]
+
             namespace TestNamespace;
 
             [IocRegister(Tags = ["a"])]
-            [IocRegister(Tags = ["b"])]
             public class MyService([ServiceKey] string key) { }
             """;
 
