@@ -232,6 +232,39 @@ public class SGIOC046Tests
     }
 
     [Test]
+    [Arguments("public Func<string, IMyService> Make => null!;")]
+    [Arguments("public Func<string, IMyService> Make() => null!;")]
+    [Arguments("public static partial Func<string, IMyService> Make { get; }")]
+    public async Task SGIOC046_MemberThatIsNotAPartialAccessor_NoDiagnostic(string member)
+    {
+        // Like the generator's ExtractPartialAccessors, only instance partial methods and properties are accessors
+        var diagnostics = await RunAsync<RegisterAnalyzer>(CreateSource(member));
+
+        await Assert.That(SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, Constants.SGIOC046)).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("public partial IMyService Get { get; }", "")]
+    [Arguments("public partial Lazy<IMyService> Get { get; }", "")]
+    [Arguments("public partial Func<IMyService> Get { get; }", "")]
+    [Arguments("public partial Func<string, IMyService> Get { get; }", "")]
+    [Arguments("public partial IMyService Get { get; }", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton, Decorators = [typeof(TestNamespace.AsyncDecorator)])]")]
+    [Arguments("public partial Func<string, IMyService> Get { get; }", "[assembly: IocRegisterDefaults(typeof(TestNamespace.IMyService), Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton, Decorators = [typeof(TestNamespace.AsyncDecorator)])]")]
+    public async Task SGIOC046_InstanceWithAsyncDecorator_IsNotAsyncInitForContainerAnalyzer(string accessor, string assemblyAttribute)
+    {
+        // The instance of an Instance registration is resolved synchronously (the container returns it as is), so the
+        // ContainerAnalyzer does not treat its service type as async-init (SGIOC021/027/029), whether the async decorator is the
+        // registration's own or that of its default settings
+        var source = CreateSource(accessor, containerArguments: "IntegrateServiceProvider = false");
+        if(assemblyAttribute.Length > 0)
+            source = source.Replace(", Decorators = [typeof(AsyncDecorator)]", "").Replace("using SourceGen.Ioc;", "using SourceGen.Ioc;\n\n" + assemblyAttribute);
+
+        var diagnostics = await RunAsync<ContainerAnalyzer>(source);
+
+        await Assert.That(diagnostics.Where(static d => d.Id is Constants.SGIOC021 or Constants.SGIOC027 or Constants.SGIOC029)).IsEmpty();
+    }
+
+    [Test]
     [Arguments("IntegrateServiceProvider = true", "[IocRegister(ServiceTypes = [typeof(IMyService)])] public class Other(string s) : IMyService;", "")]
     [Arguments("IncludeTags = [\"a\"]", "[IocRegister(ServiceTypes = [typeof(IMyService)], Tags = [\"a\"])] public class Other(string s) : IMyService;", "")]
     [Arguments("ExplicitOnly = true", "public class Other(string s) : IMyService;", "[IocRegisterFor(typeof(Other), ServiceTypes = [typeof(IMyService)])]")]

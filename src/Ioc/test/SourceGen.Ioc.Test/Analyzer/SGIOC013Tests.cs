@@ -1014,6 +1014,9 @@ public class SGIOC013Tests
     [Arguments("public partial Func<string, Foo> Make { get; }", "Register,Container", 1)]
     [Arguments("public partial Func<string, Foo> Make();", "Register", 0)]
     [Arguments("public Func<string, Foo> Make() => null!;", "Register,Container", 0)]
+    [Arguments("public Func<string, Foo> Make => null!;", "Register,Container", 0)]
+    [Arguments("public Func<string, Foo> Make { get; } = null!;", "Register,Container", 0)]
+    [Arguments("public static partial Func<string, Foo> Make { get; }", "Register,Container", 0)]
     [Arguments("public partial Func<string, Foo> Make();", "Register,Container", 0, "")]
     public async Task SGIOC013_InstanceConstructedByFuncInContainerAccessor_ReportsDiagnostic(string accessor, string features, int expected, string modifier = "partial ")
     {
