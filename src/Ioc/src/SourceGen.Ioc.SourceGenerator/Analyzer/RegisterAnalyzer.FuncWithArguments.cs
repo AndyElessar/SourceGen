@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis.Text;
+
 namespace SourceGen.Ioc;
 
 /// <summary>
@@ -120,10 +122,11 @@ public sealed partial class RegisterAnalyzer
     /// generator (<c>WrapperDemand</c>, <c>CollectFuncEntries</c>), such a Func is requested by a registration (the parameters
     /// of its effective factory method, otherwise of its implementation type's constructor, also with an Instance, and both
     /// when a generic factory's mapping does not match the implementation type, which is then constructed; and its injected
-    /// members, [IocInject] and InjectMembers, also with an Instance), an applied decorator, or the return type of a partial
-    /// accessor of a generated container, directly or as the element of a collection; it is registered for every closed, not
-    /// async-init registration of <c>TReturn</c> (an unbound service type registers its closed forms), and constructs the
-    /// implementation type with the registration's key even for an Instance or Factory registration. The parameters of a
+    /// members, [IocInject] and InjectMembers, also with an Instance) or an applied decorator, directly or as the element of a
+    /// collection; it is registered for every closed, not async-init registration of <c>TReturn</c> (an unbound service type
+    /// registers its closed forms), and constructs the implementation type with the registration's key even for an Instance or
+    /// Factory registration. The return type of a partial accessor of a generated container constructs only a registration of
+    /// that container (see <see cref="AddConstructedByContainerAccessors"/>). The parameters of a
     /// generic factory are scanned as declared, not closed for each service type. Each registration maps to the distinct requested <c>Func</c>
     /// types that construct it, whose input parameters the generator passes to the parameters of their type (see
     /// <see cref="IsPassedFuncArgument"/>).
@@ -168,24 +171,6 @@ public sealed partial class RegisterAnalyzer
                 ScanParameters(implementation.GetSelectedConstructor(analyzerContext.Assembly)?.Parameters ?? []);
         }
 
-        // The generated containers implement their partial accessors, which resolve their return types like dependencies
-        // (WrapperDemand.Scan with the accessors of TransformContainer.ExtractPartialAccessors)
-        foreach(var container in analyzerContext.Containers)
-        {
-            foreach(var member in container.GetMembers())
-            {
-                switch(member)
-                {
-                    case IMethodSymbol { IsStatic: false, IsPartialDefinition: true, ReturnsVoid: false, Parameters.Length: 0, IsGenericMethod: false, MethodKind: MethodKind.Ordinary } method:
-                        Scan(method.ReturnType);
-                        break;
-                    case IPropertySymbol { IsStatic: false, IsPartialDefinition: true, GetMethod: not null } property:
-                        Scan(property.Type);
-                        break;
-                }
-            }
-        }
-
         // The injected members of every registered implementation type, cached on its ServiceInfo unless all its registrations
         // have an Instance
         foreach(var kvp in analyzerContext.RegisteredServices)
@@ -198,49 +183,39 @@ public sealed partial class RegisterAnalyzer
             ScanMembers(decorator.GetSelectedConstructor(analyzerContext.Assembly), [.. decorator.GetInjectedMembers()]);
 
         var constructed = new Dictionary<ServiceActivation, List<INamedTypeSymbol>>();
-        if(returnTypes.Count == 0)
-            return constructed;
-
-        foreach(var registration in analyzerContext.DependencyRegistrations)
+        if(returnTypes.Count > 0)
         {
-            var implementation = registration.Dependency.Type;
-            if(implementation.IsUnboundGenericType || implementation is { IsGenericType: true, IsDefinition: true })
-                continue;
-
-            // A Func with input parameters is not registered for an async-init registration, which it cannot initialize; an
-            // Instance registration is never async-init, and its Func calls only the synchronous [Inject] methods
-            var info = registration.Dependency.Info;
-            var isAsyncInit = !registration.Dependency.Activation.HasInstance
-                && AnalyzerHelpers.IsAsyncInitImplementation(implementation, analyzerContext.Features);
-            if(isAsyncInit)
-                continue;
-
-            foreach(var serviceType in registration.Registrations)
+            foreach(var registration in analyzerContext.DependencyRegistrations)
             {
-                if(!returnTypes.TryGetValue(serviceType.ServiceType, out var funcTypes) || info.AsyncDecoratedRegistrations.Contains(serviceType))
+                if(IsOpenGeneric(registration) || IsAsyncInit(analyzerContext, registration))
                     continue;
 
-                // The Funcs of every service type of the registration construct it
-                var activation = registration.Dependency.Activation;
-                if(!constructed.TryGetValue(activation, out var constructingFuncTypes))
+                foreach(var serviceType in registration.Registrations)
                 {
-                    constructed[activation] = funcTypes;
-                    continue;
-                }
+                    if(!returnTypes.TryGetValue(serviceType.ServiceType, out var funcTypes) || registration.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceType))
+                        continue;
 
-                if(ReferenceEquals(constructingFuncTypes, funcTypes))
-                    continue;
+                    // The Funcs of every service type of the registration construct it
+                    var activation = registration.Dependency.Activation;
+                    if(!constructed.TryGetValue(activation, out var constructingFuncTypes))
+                    {
+                        constructed[activation] = funcTypes;
+                        continue;
+                    }
 
-                // The lists are shared with the return types, so the Func types of another service type go to a copy (rare: a
-                // registration with several service types requested through Funcs)
-                constructed[activation] = constructingFuncTypes = [.. constructingFuncTypes];
-                foreach(var funcType in funcTypes)
-                {
-                    if(!constructingFuncTypes.Contains(funcType, RuntimeTypeSymbolComparer.Instance))
-                        constructingFuncTypes.Add(funcType);
+                    if(ReferenceEquals(constructingFuncTypes, funcTypes))
+                        continue;
+
+                    foreach(var funcType in funcTypes)
+                        AddConstructingFunc(constructed, activation, funcType);
                 }
             }
         }
+
+        // The generated containers implement their partial accessors (TransformContainer.ExtractPartialAccessors), whose Funcs
+        // construct a registration of the container itself, not the Register output's registrations
+        if(!analyzerContext.Containers.IsEmpty)
+            AddConstructedByContainerAccessors(analyzerContext, constructed, cancellationToken);
 
         return constructed;
 
@@ -295,6 +270,175 @@ public sealed partial class RegisterAnalyzer
                 funcTypes.Add(funcType);
         }
     }
+
+    /// <summary>
+    /// Adds the registrations that the <c>Func</c> with input parameters returned by a partial accessor of a generated container
+    /// constructs. Like the generator (<c>ResolvePartialAccessorDependencies</c>, <c>MultiParamFuncDependency</c>), the
+    /// accessor's <c>Func</c> constructs the last registration of its return type and key (from its <c>[IocInject]</c>) among
+    /// the container's own registrations (<c>ExplicitOnly</c>: the <c>[IocRegisterFor]</c> on the container, in their order;
+    /// otherwise every registration, with <c>IncludeTags</c> those with one of them), unless that registration is async-init
+    /// or the container registers the <c>Func</c> type itself. Otherwise, and for a collection of <c>Func</c>s, the container
+    /// resolves it from the fallback provider, where the Register output registers no <c>Func</c> for an accessor.
+    /// </summary>
+    private static void AddConstructedByContainerAccessors(
+        AnalyzerContext analyzerContext,
+        Dictionary<ServiceActivation, List<INamedTypeSymbol>> constructed,
+        CancellationToken cancellationToken)
+    {
+        // The registrations by the span of their attribute, built for the first ExplicitOnly container
+        Dictionary<(SyntaxTree Tree, TextSpan Span), DependencyRegistration>? registrationsBySpan = null;
+
+        foreach(var (container, containerAttribute) in analyzerContext.Containers)
+        {
+            List<DependencyRegistration>? scope = null;
+            foreach(var member in container.GetMembers())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var type = member switch
+                {
+                    IMethodSymbol { IsStatic: false, IsPartialDefinition: true, ReturnsVoid: false, Parameters.Length: 0, IsGenericMethod: false, MethodKind: MethodKind.Ordinary } method => method.ReturnType,
+                    IPropertySymbol { IsStatic: false, IsPartialDefinition: true, GetMethod: not null } property => property.Type,
+                    _ => null
+                };
+                if(type is null || !TryGetFuncWithArgumentsReturnType(type, out var funcType, out var returnType))
+                    continue;
+
+                scope ??= GetContainerRegistrations(analyzerContext, container, containerAttribute, ref registrationsBySpan);
+
+                var serviceKey = new ServiceSymbolKey(returnType, GetAccessorKey(member));
+                var funcKey = new ServiceSymbolKey(funcType, serviceKey.Key);
+                DependencyRegistration? winner = null;
+                var hasFuncRegistration = false;
+                foreach(var registration in scope)
+                {
+                    if(IsOpenGeneric(registration))
+                        continue;
+
+                    if(registration.Registrations.Contains(serviceKey))
+                        winner = registration;
+                    else if(registration.Registrations.Contains(funcKey))
+                        hasFuncRegistration = true;
+                }
+
+                if(winner is null
+                    || hasFuncRegistration
+                    || IsAsyncInit(analyzerContext, winner)
+                    || winner.Dependency.Info.AsyncDecoratedRegistrations.Contains(serviceKey))
+                {
+                    continue;
+                }
+
+                AddConstructingFunc(constructed, winner.Dependency.Activation, funcType);
+            }
+        }
+
+        // Like the generator's ExtractKeyFromInjectAttribute
+        static string? GetAccessorKey(ISymbol member)
+        {
+            foreach(var attribute in member.GetAttributes())
+            {
+                if(attribute.AttributeClass?.IsInject == true)
+                    return attribute.GetKeyInfo().Key;
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets the registrations of a generated container in the generator's order, like its <c>GroupExplicitOnlyRegistrations</c>
+    /// and <c>FilterRegistrationsForContainer</c>: with <c>ExplicitOnly</c>, the <c>[IocRegisterFor]</c> on the container in
+    /// their order; otherwise every registration, filtered by <c>IncludeTags</c> when it has any.
+    /// </summary>
+    private static List<DependencyRegistration> GetContainerRegistrations(
+        AnalyzerContext analyzerContext,
+        INamedTypeSymbol container,
+        AttributeData containerAttribute,
+        ref Dictionary<(SyntaxTree Tree, TextSpan Span), DependencyRegistration>? registrationsBySpan)
+    {
+        var explicitOnly = false;
+        HashSet<string>? includeTags = null;
+        foreach(var namedArgument in containerAttribute.NamedArguments)
+        {
+            switch(namedArgument.Key)
+            {
+                case "ExplicitOnly" when namedArgument.Value.Value is bool value:
+                    explicitOnly = value;
+                    break;
+                case "IncludeTags" when !namedArgument.Value.IsNull && namedArgument.Value.Values.Length > 0:
+                    includeTags = new(StringComparer.Ordinal);
+                    foreach(var tag in namedArgument.Value.Values)
+                    {
+                        if(tag.Value is string value)
+                            includeTags.Add(value);
+                    }
+                    break;
+            }
+        }
+
+        if(explicitOnly)
+        {
+            if(registrationsBySpan is null)
+            {
+                registrationsBySpan = new(analyzerContext.DependencyRegistrations.Count);
+                foreach(var registration in analyzerContext.DependencyRegistrations)
+                {
+                    if(registration.Dependency.Activation.Location is { SourceTree: { } tree } location)
+                        registrationsBySpan[(tree, location.SourceSpan)] = registration;
+                }
+            }
+
+            var explicitRegistrations = new List<DependencyRegistration>();
+            foreach(var attribute in container.GetAttributes())
+            {
+                if(attribute.AttributeClass is { } attributeClass
+                    && AnalyzerHelpers.IsIoCRegisterForAttribute(attributeClass, analyzerContext.AttributeSymbols)
+                    && attribute.ApplicationSyntaxReference is { } syntax
+                    && registrationsBySpan.TryGetValue((syntax.SyntaxTree, syntax.Span), out var registration))
+                {
+                    explicitRegistrations.Add(registration);
+                }
+            }
+
+            return explicitRegistrations;
+        }
+
+        if(includeTags is null)
+            return analyzerContext.DependencyRegistrations;
+
+        return [.. analyzerContext.DependencyRegistrations.Where(registration => registration.Tags.Any(includeTags.Contains))];
+    }
+
+    /// <summary>
+    /// Records that a <c>Func</c> type constructs a registration. The lists can be shared with other registrations, so a
+    /// <c>Func</c> type is added to a copy.
+    /// </summary>
+    private static void AddConstructingFunc(
+        Dictionary<ServiceActivation, List<INamedTypeSymbol>> constructed,
+        ServiceActivation activation,
+        INamedTypeSymbol funcType)
+    {
+        if(!constructed.TryGetValue(activation, out var funcTypes))
+        {
+            constructed[activation] = [funcType];
+            return;
+        }
+
+        if(!funcTypes.Contains(funcType, RuntimeTypeSymbolComparer.Instance))
+            constructed[activation] = [.. funcTypes, funcType];
+    }
+
+    private static bool IsOpenGeneric(DependencyRegistration registration)
+        => registration.Dependency.Type is { IsUnboundGenericType: true } or { IsGenericType: true, IsDefinition: true };
+
+    /// <summary>
+    /// Gets whether a registration is async-init, so no <c>Func</c> with input parameters constructs it: it cannot initialize
+    /// it. An Instance registration is never async-init, and its Func calls only the synchronous [Inject] methods.
+    /// </summary>
+    private static bool IsAsyncInit(AnalyzerContext analyzerContext, DependencyRegistration registration)
+        => !registration.Dependency.Activation.HasInstance
+            && AnalyzerHelpers.IsAsyncInitImplementation(registration.Dependency.Type, analyzerContext.Features);
 
     /// <summary>
     /// Gets whether the effective generic factory of a closed registration does not match its implementation type, which the

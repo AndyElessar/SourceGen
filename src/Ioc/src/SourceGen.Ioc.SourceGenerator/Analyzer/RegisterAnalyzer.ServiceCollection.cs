@@ -89,7 +89,7 @@ public sealed partial class RegisterAnalyzer
                 else if(AnalyzerHelpers.IsIocImportModuleAttribute(attributeClass, analyzerContext.AttributeSymbols))
                     analyzerContext.ModuleImportAttributes.Add(attribute);
                 else if(IsGeneratedContainer(attribute, attributeClass, analyzerContext, context.CancellationToken))
-                    analyzerContext.Containers.Add(typeSymbol);
+                    analyzerContext.Containers.Add((typeSymbol, attribute));
 
                 continue;
             }
@@ -1007,10 +1007,10 @@ public sealed partial class RegisterAnalyzer
         public ConcurrentBag<AttributeData> ModuleImportAttributes { get; } = [];
 
         /// <summary>
-        /// The containers the generator implements (see <see cref="IsGeneratedContainer"/>), whose partial accessors request
-        /// services like dependencies. Collected by the symbol action.
+        /// The containers the generator implements (see <see cref="IsGeneratedContainer"/>), with their <c>[IocContainer]</c>,
+        /// whose partial accessors request services like dependencies. Collected by the symbol action.
         /// </summary>
-        public ConcurrentBag<INamedTypeSymbol> Containers { get; } = [];
+        public ConcurrentBag<(INamedTypeSymbol Type, AttributeData Attribute)> Containers { get; } = [];
 
         /// <summary>
         /// Default settings of the compiled assembly, then of the imported modules, using DefaultSettingsMap for efficient
