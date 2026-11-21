@@ -25,7 +25,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.15" />
     <!-- Tool -->
-    <PackageVersion Include="TestableIO.System.IO.Abstractions.Wrappers" Version="23.0.0" />
+    <PackageVersion Include="TestableIO.System.IO.Abstractions.Wrappers" Version="23.0.1" />
     <PackageVersion Include="ConsoleAppFramework" Version="5.8.1" />
     <PackageVersion Include="ConsoleAppFramework.CliSchema" Version="5.8.1" />
     <PackageVersion Include="ZLogger" Version="2.6.2" />
