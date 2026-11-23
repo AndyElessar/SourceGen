@@ -9,8 +9,18 @@ internal static class Descriptors
     /// <summary>The category of every descriptor.</summary>
     public const string Category = "SourceGen.Ioc";
 
+    /// <summary>SGIOC108: the <c>Add{Name}</c> method has no valid name.</summary>
+    public static readonly DiagnosticDescriptor InvalidAddMethodName = Create(
+        "SGIOC108",
+        "Invalid Add method name",
+        "'{0}' does not give a valid name for the Add method: {1}",
+        DiagnosticSeverity.Error);
+
     /// <summary>Gets the descriptors by ID.</summary>
-    public static IReadOnlyDictionary<string, DiagnosticDescriptor> ById { get; } = new Dictionary<string, DiagnosticDescriptor>();
+    public static IReadOnlyDictionary<string, DiagnosticDescriptor> ById { get; } = new[]
+    {
+        InvalidAddMethodName,
+    }.ToDictionary(static d => d.Id);
 
     /// <summary>
     /// Creates a descriptor by the rules of Diagnostics.spec, "Descriptors": an Error has

@@ -6,7 +6,10 @@ namespace SourceGen.Ioc;
 /// </summary>
 internal static class TrackingNames
 {
-    /// <summary>The declarations and type summaries that each attribute gives.</summary>
+    /// <summary>
+    /// The declarations and type summaries that each attribute gives. The step of each registration attribute uses this
+    /// name: they are one stage of the specification, and a test checks them together.
+    /// </summary>
     public const string Declarations = nameof(Declarations);
 
     /// <summary>The demands of the resolve calls.</summary>
