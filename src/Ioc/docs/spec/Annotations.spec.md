@@ -274,8 +274,10 @@ For the three arguments that need a symbol, the generator reports `SGIOC011` (sk
 
 - The argument is not a direct `nameof(...)` expression. Examples are a string literal, a constant, and a string concatenation.
 - The operand does not bind to a symbol.
-- The symbol is not a static member, or it has the wrong kind. `Factory` MUST be a method. `Instance` MUST be a field or a property. A key MUST be a field, a property, or a constant.
-- The type that contains `Factory` or `Instance` is an open generic (`nameof(Factories<>.Create)`). The generator cannot know the type arguments.
+- The symbol has the wrong kind. `Factory` MUST be a method. `Instance` MUST be a field or a property. A key MUST be a field, a property, or a constant.
+- The symbol of a key is not a static member.
+
+When `Factory` or `Instance` binds to a symbol of the right kind, the generator applies the [checks of a factory or instance member](#checks-of-a-factory-or-instance-member).
 
 When the operand binds to a method group that has more than one method, the generator reports `SGIOC010` (skip the declaration). An `IocFactoryAttribute` that is directly on a method does not use a name, so it does not have this problem.
 
@@ -391,6 +393,43 @@ When the method returns `void`, `Task` (non-generic), `ValueTask`, `ValueTask<T>
 ### Service types of an instance
 
 When `ServiceTypes` is not set, the service type is the type of the field or property. When `ServiceTypes` is set, the service types are the specified types, and they can only be concrete types. When the type is a value type, the generator reports `SGIOC004`.
+
+### Checks of a factory or instance member
+
+These checks apply to the factory method and to the instance member. They apply when the attribute is directly on the member (`IocFactoryAttribute`, `IocInstanceAttribute`), and when `nameof()` names the member (`IocFactoryForAttribute`, `IocInstanceForAttribute`). The generator reports `SGIOC026` (skip the declaration) in these cases:
+
+| Condition | Reason |
+| --- | --- |
+| The method, field, or property is not static | The composer has no object on which to call an instance member |
+| The type that contains the member is an open generic: it, or one of its outer types, has type parameters without type arguments (`Factories<T>.Create` with the attribute on the member, `nameof(Factories<>.Create)`) | The generator cannot know the type arguments of the containing type. Use a generic factory method in a non-generic type. A closed containing type (`nameof(Factories<int>.Create)`) is valid |
+
+```csharp
+#region Define:
+// Valid: the containing type is closed
+[assembly: IocFactoryFor(nameof(Clocks<int>.Create), ServiceLifetime.Singleton)]
+
+public static class Clocks<T>
+{
+    public static IClock Create() => new SystemClock();
+}
+#endregion
+
+#region Invalid:
+public class Factories
+{
+    // SGIOC026: not static
+    [IocFactory(ServiceLifetime.Singleton)]
+    public IClock Create() => new SystemClock();
+}
+
+public static class Factories<T>
+{
+    // SGIOC026: the containing type is an open generic
+    [IocFactory(ServiceLifetime.Singleton)]
+    public static IHandler<T> Create() => new Handler<T>();
+}
+#endregion
+```
 
 ### Other checks
 

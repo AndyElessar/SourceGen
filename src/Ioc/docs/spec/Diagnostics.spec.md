@@ -21,7 +21,7 @@ The numbers are in ranges by category and start at `SGIOC0xx`. Each range has on
 | Range | Category | Consequence | Where the generator reports it |
 | --- | --- | --- | --- |
 | `SGIOC0xx` | Errors in a single declaration | Skip the declaration | The assembly that has the declaration |
-| `SGIOC1xx` | Configuration errors of a container or module | Do not generate the output | That assembly |
+| `SGIOC1xx` | Configuration errors of a container, a module, or an `Add{Name}` method | Do not generate the output | That assembly |
 | `SGIOC2xx` | Import problems | Do not generate the outputs that depend on the import | The importer |
 | `SGIOC3xx` | Errors of the dependency graph (both levels of checks find them) | Do not generate the output | Definite check: each assembly. Full check: the container |
 | `SGIOC4xx` | Errors that only the composer can find | Do not generate the output | `SGIOC401` to `SGIOC404`: the class that has `IocContainerAttribute`. `SGIOC405`: the assembly of the composer |
@@ -118,8 +118,9 @@ Error. Skip the declaration. Reported in the assembly that has the declaration.
 | `SGIOC023` | ServiceKey on non-keyed registration | `Parameter '{0}' has [ServiceKey] but '{1}' is registered without a key` | Registration attribute | [Annotations: Key specification](Annotations.spec.md#key-specification) |
 | `SGIOC024` | Member has two injection settings | `Member '{0}' is already marked with [IocInject]` | `IocInjectMemberAttribute` | [Annotations: Types that the user does not own](Annotations.spec.md#types-that-the-user-does-not-own) |
 | `SGIOC025` | Attribute on a class that is neither module nor container | `[{0}] on a class has effect only when the class has [IocModule] or [IocContainer]` | Attribute | [Annotations: Attribute declarations](Annotations.spec.md#attribute-declarations) |
+| `SGIOC026` | Invalid factory or instance member | `'{0}' cannot be a {1}: {2}` (`{1}`: `factory` / `instance`. `{2}`: `it is not static` / `its containing type is an open generic`) | Registration attribute | [Annotations: Checks of a factory or instance member](Annotations.spec.md#checks-of-a-factory-or-instance-member) |
 
-## Configuration errors of a container or module
+## Configuration errors of a container, a module, or an `Add{Name}` method
 
 Error. Do not generate the output. Reported in that assembly.
 
@@ -132,6 +133,7 @@ Error. Do not generate the output. Reported in that assembly.
 | `SGIOC105` | Inaccessible key in module output | `Key '{0}' of '{1}' is not accessible from other assemblies` | `Key` argument | The module output |
 | `SGIOC106` | Inaccessible constraint in module output | `Constraint '{0}' of '{1}' is not accessible from other assemblies` | Registration attribute | The module output |
 | `SGIOC107` | Unsupported module or container class | `'{0}' cannot be a {1}: {2}` (`{1}`: `module` / `container`) | Attribute | That output |
+| `SGIOC108` | Invalid Add method name | `'{0}' does not give a valid name for the Add method: {1}` (`{0}`: the `Name` of the attribute, or the assembly name when `Name` is not set. `{1}`: `no identifier characters remain` / `the name cannot start an identifier`) | `IocServiceCollectionExtensionsAttribute` | The `Add{Name}` method |
 
 ## Import problems
 
@@ -238,6 +240,8 @@ Generation is not affected. The user can change the level (see [Levels](#levels)
 | A member has two injection settings | `SGIOC024` |
 | An attribute on a class that is neither a module nor a container | `SGIOC025` |
 | A class that cannot be a module or a container | `SGIOC107` |
+| A factory or instance member that is not static, or whose containing type is an open generic | `SGIOC026` |
+| The name of the `Add{Name}` method is not a valid identifier | `SGIOC108` |
 | Missing dependency (with a fallback provider) | `SGIOC501` |
 | Singleton depends on Transient / Scoped depends on Transient | `SGIOC502`, `SGIOC503` |
 | Definite ambiguity in `Add{Name}` | `SGIOC504` |

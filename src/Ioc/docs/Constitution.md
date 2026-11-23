@@ -69,8 +69,9 @@ The generator decides a result from types alone only in the cases below. The dep
 4. A decorator applies only to the service types for which it has an inner parameter.
 5. A concrete registration suppresses a derived registration with the same implementation type and key.
 6. When a dependency site asks for one service, a concrete registration wins over a derived registration.
-7. A parameter with a default value, or a reference type annotated as nullable, is an optional dependency.
+7. A parameter with a default value, a reference type annotated as nullable, or a field or property that has `[IocInject]`, has an initializer, and can be assigned after construction is an optional dependency. An initializer counts only for a type whose source is in the current compilation.
 8. When a dependency site asks for `Task<T>` and the service is synchronous, the generator wraps the service in a completed task.
+9. When a dependency site asks for keyed services by key type (`KeyValuePair<TKey, T>`, a collection of them, or a dictionary), a registration matches only when its key type is exactly `TKey`. When `TKey` is `object`, all keyed registrations match.
 
 ### 4.2 Correctness
 
@@ -208,6 +209,7 @@ Diagnostic reporting MUST NOT break incremental caching.
 | 22 | When the return type of a transient factory does not show at compile time whether the object is disposable, the object is not disposed. MS.DI tracks and disposes it. | Container |
 | 23 | When a service throws during disposal, the container continues to dispose the other services and throws at the end. MS.DI stops, and the other services are not disposed. | Container |
 | 24 | Without a fallback provider, a request by `Type` for an `IEnumerable<T>` that the container does not know returns `null`, so `sp.GetServices<T>()` throws. MS.DI returns an empty collection. Calls that are visible at compile time and the strongly typed `GetServices<T>()` of the container are not affected. | Container |
+| 25 | A resolve call in code asks for `Lazy<T>` or `Func<T>`, and `T` has no registration in the assembly view (for example a service of the framework). The container creates the wrapper and resolves `T` inside it. `Add{Name}` registers no wrapper, so the call gets `null`. A dependency site is not affected: it creates the wrapper itself. | Registration |
 
 ## 9. Testing and benchmarks
 

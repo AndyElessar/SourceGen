@@ -66,8 +66,8 @@ public static class {Name}ServiceCollectionExtensions
 
 | Item | Source |
 | --- | --- |
-| `{Name}` | `IocServiceCollectionExtensionsAttribute.Name`. When it is not set, the assembly name. Characters that are not identifier characters (including `.`) are removed |
-| Namespace | The MSBuild property `RootNamespace`. When it is not set, the assembly name |
+| `{Name}` | `IocServiceCollectionExtensionsAttribute.Name`. When it is not set, the assembly name. Characters that are not identifier characters (including `.`) are removed. When no character remains, or when the first character that remains cannot start a C# identifier (for example a digit), the generator reports `SGIOC108` and does not generate the method |
+| Namespace | The MSBuild property `RootNamespace`. When it is not set, the assembly name. The generator does not check the namespace. When it is not a valid namespace, the compiler reports an error in the generated file |
 | `tags` | The tags to include. An instance definition without tags is always registered. An instance definition with tags is registered only when at least one of its tags is in `tags` |
 
 - The class name contains `{Name}`. This prevents two classes with the same name when two assemblies use the same namespace.
@@ -315,6 +315,7 @@ The method registers these only for the [demands](Analysis.Model.spec.md#sources
 | Other collection types (`IReadOnlyList<X>`, `X[]`, and so on) | The complete collection is registered as one service. The content comes from `IEnumerable<X>` | Transient |
 | Dictionary | The complete dictionary is registered as one service | Transient |
 
+- The table applies to the candidates of `S`. When `S` has no candidate, the method registers no wrapper for it. A dependency site that asks for a wrapper of such a service builds the wrapper itself (see [Dependency resolution](#dependency-resolution)).
 - When the closed definition is not Singleton, `Func<S>` is registered as Transient and not as Scoped. A Singleton service can legally depend on a `Func<T>` of a Transient service (see [Dependency resolution](Semantics.spec.md#dependency-resolution)). If the registration were Scoped, MS.DI would reject it when `ValidateScopes` is on. "One cached `Func` for each scope" is an optimization of the container and not an observable behavior.
 - With NativeAOT, MS.DI refuses to collect a collection whose element is a value type, such as `IEnumerable<KeyValuePair<TKey, T>>`. It throws `InvalidOperationException` at run time, with no warning at publish. A registration of the complete collection as one service works (tested, see the ADRs).
 - A keyed wrapper type is registered with the key of the closed definition.
@@ -332,6 +333,7 @@ The generator generates each argument in a creation method from the shape of the
 | Optional, has a default value | `sp.GetService<X>() ?? default value` |
 | Optional, keeps the initializer | `if (sp.GetService<X>() is { } value) instance.Member = value;` |
 | Optional, `X` is a value type (`KeyValuePair<TKey, T>`) | `sp.GetService(typeof(X)) is X value ? value : default value`. The generated code MUST NOT use the generic `GetService<X>()`: when there is no registration, it throws `NullReferenceException` for a value type (tested, see the ADRs). It also MUST NOT use `GetService<X?>()`, which is a different service type |
+| `Func<S>`, `Lazy<S>`, `Func<Task<S>>`, `Lazy<Task<S>>`, and `S` has no candidate without tags in the assembly view | `sp.GetService<W>() ?? {wrapper}`, or the keyed version. `W` is the requested wrapper type. When a registration of `W` exists (a candidate with tags that the tags select, or a registration of the user), it is used. Otherwise the dependency site creates the wrapper, and the wrapper resolves `S` from `sp` with `GetRequiredService` when it is called. For `Task<S>`, the wrapper uses `Task.FromResult` |
 | `IEnumerable<X>` | `sp.GetServices<X>()` or its keyed version |
 | `Task<S>` | See [Asynchronous closed definitions](#asynchronous-closed-definitions) |
 | Built-in service | `sp`, or a resolution from `sp` |
@@ -367,7 +369,7 @@ For each dependency in the assembly view that asks for a single service (its sha
 
 ## Requirements for generated code
 
-The requirements are the same as for the [container](Container.Output.spec.md#requirements-for-the-generated-code) (Container output, section "Requirements for the generated code"): the marker at the start of the file, names qualified with `global::`, no `var`, deterministic output, no reflection, and no warnings when published with NativeAOT.
+The requirements are the same as for the [container](Container.Output.spec.md#requirements-for-the-generated-code) (Container output, section "Requirements for the generated code"): the marker at the start of the file, `[GeneratedCode]` on each type that the generator declares, names qualified with `global::`, no `var`, deterministic output, no reflection, and no warnings when published with NativeAOT.
 
 ## Example
 

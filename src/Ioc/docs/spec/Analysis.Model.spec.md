@@ -367,7 +367,7 @@ For each service type pattern `S` that is not the implementation type itself:
 1. Exclude each `cⱼ` that cannot be the inner parameter. These are the parameters that specify a key (`[IocInject(Key = ...)]`, or `[FromKeyedServices(k)]` where `k` is not `null`, see [Key specification](Annotations.spec.md#key-specification)) and the parameters marked with `[ServiceKey]`. They are ordinary dependencies and take no part in the steps below. `InheritKey` and parameters without an annotation are not excluded.
    Use the type of each remaining `cⱼ` as a pattern (the variables are `Q`) and [match](#matching) `S` against it (the type parameters of `P` are constants). Only the type counts.
 2. More than one parameter matches: `SGIOC013`.
-3. Exactly one parameter matches: `Dec` **applies to** `S`, and that parameter is the **inner parameter**. The substitution from the match expresses `Q` in the types of `P`. If a type parameter of `Q` is not bound: `SGIOC014`.
+3. Exactly one parameter matches: `Dec` **applies to** `S`, and that parameter is the **inner parameter**. The substitution from the match expresses `Q` in the types of `P`. If a type parameter of `Q` is not bound: `SGIOC014`. The inner parameter always receives the inner instance. A default value or a nullable annotation on it has no effect.
 4. No parameter matches: `Dec` does not apply to `S`.
 
 If `Dec` applies to no service type: `SGIOC012`.

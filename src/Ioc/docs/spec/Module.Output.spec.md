@@ -39,6 +39,7 @@ public partial class ModModule;
 #region Generate:
 namespace Mod
 {
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "1.0.0")]
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     [global::System.Diagnostics.CodeAnalysis.Experimental("SGIOCEXP001")]
     [global::SourceGen.Ioc.IocModuleInfo("{\"version\":1,...}")]
@@ -345,6 +346,7 @@ All entries are public static methods of `public static class __IocModule` in th
 ```csharp
 partial class ModModule
 {
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "1.0.0")]
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     [global::System.Diagnostics.CodeAnalysis.Experimental("SGIOCEXP001")]
     public static class __IocModule
