@@ -226,12 +226,19 @@ public class IocHolderTests
     [Test]
     public async Task OwnTask_DisposeOnIncompleteTaskAndLaterDisposalThrows_ReportsToCallback()
     {
+        // Accept only this test's exception: a continuation of an earlier test can still report to the global callback
+        FormatException error = new("dispose failed");
         TaskCompletionSource<Exception> reported = new(TaskCreationOptions.RunContinuationsAsynchronously);
         Action<Exception>? previous = IocContainerGlobalOptions.OnDisposeException;
-        IocContainerGlobalOptions.OnDisposeException = e => reported.TrySetResult(e);
+        IocContainerGlobalOptions.OnDisposeException = e =>
+        {
+            if(ReferenceEquals(e, error))
+            {
+                reported.TrySetResult(e);
+            }
+        };
         try
         {
-            FormatException error = new("dispose failed");
             TaskCompletionSource<AsyncOnlyDisposable> creation = new(TaskCreationOptions.RunContinuationsAsynchronously);
             IocHolder<Task<AsyncOnlyDisposable>> holder = IocHolder.OwnTask(creation.Task);
 
@@ -250,11 +257,19 @@ public class IocHolderTests
     [Test]
     public async Task OwnTask_DisposeOnIncompleteChainAndTwoLayersThrow_ReportsEachExceptionSeparately()
     {
+        // Accept only this test's exception: a continuation of an earlier test can still report to the global callback
+        FormatException first = new("outer");
+        InvalidCastException second = new("middle");
         List<Exception> reported = [];
         TaskCompletionSource allReported = new(TaskCreationOptions.RunContinuationsAsynchronously);
         Action<Exception>? previous = IocContainerGlobalOptions.OnDisposeException;
         IocContainerGlobalOptions.OnDisposeException = e =>
         {
+            if(!ReferenceEquals(e, first) && !ReferenceEquals(e, second) && !(e is AggregateException a && a.InnerExceptions.Contains(first)))
+            {
+                return;
+            }
+
             lock(reported)
             {
                 reported.Add(e);
@@ -267,8 +282,6 @@ public class IocHolderTests
         try
         {
             Log log = new();
-            FormatException first = new("outer");
-            InvalidCastException second = new("middle");
             SyncDisposable outer = new("outer", log, first);
             TaskCompletionSource<IocHolder<SyncDisposable>> creation = new(TaskCreationOptions.RunContinuationsAsynchronously);
             IocHolder<Task<IocHolder<SyncDisposable>>> owner = IocHolder.OwnTask(creation.Task);
@@ -289,12 +302,19 @@ public class IocHolderTests
     [Test]
     public async Task OwnTask_ContinuationAndResultThrowsOwnAggregate_ReportsItUnchanged()
     {
+        // Accept only this test's exception: a continuation of an earlier test can still report to the global callback
+        AggregateException error = new(new FormatException("a"), new FormatException("b"));
         TaskCompletionSource<Exception> reported = new(TaskCreationOptions.RunContinuationsAsynchronously);
         Action<Exception>? previous = IocContainerGlobalOptions.OnDisposeException;
-        IocContainerGlobalOptions.OnDisposeException = e => reported.TrySetResult(e);
+        IocContainerGlobalOptions.OnDisposeException = e =>
+        {
+            if(ReferenceEquals(e, error) || ReferenceEquals(e, error.InnerExceptions[0]) || ReferenceEquals(e, error.InnerExceptions[1]))
+            {
+                reported.TrySetResult(e);
+            }
+        };
         try
         {
-            AggregateException error = new(new FormatException("a"), new FormatException("b"));
             TaskCompletionSource<AsyncOnlyDisposable> creation = new(TaskCreationOptions.RunContinuationsAsynchronously);
             IocHolder<Task<AsyncOnlyDisposable>> holder = IocHolder.OwnTask(creation.Task);
 
@@ -324,12 +344,19 @@ public class IocHolderTests
     [Test]
     public async Task OwnTask_DisposeOnCompletedTaskAndResultThrows_ThrowsSameExceptionAndDoesNotCallCallback()
     {
+        // Count only this test's exception: a continuation of an earlier test can still report to the global callback
         int calls = 0;
+        FormatException error = new("dispose failed");
         Action<Exception>? previous = IocContainerGlobalOptions.OnDisposeException;
-        IocContainerGlobalOptions.OnDisposeException = _ => Interlocked.Increment(ref calls);
+        IocContainerGlobalOptions.OnDisposeException = e =>
+        {
+            if(ReferenceEquals(e, error))
+            {
+                Interlocked.Increment(ref calls);
+            }
+        };
         try
         {
-            FormatException error = new("dispose failed");
             IocHolder<Task<SyncDisposable>> holder = IocHolder.OwnTask(Task.FromResult(new SyncDisposable("a", new Log(), error)));
 
             FormatException? thrown = await Assert.That(holder.Dispose).Throws<FormatException>();
@@ -358,16 +385,24 @@ public class IocHolderTests
     [Test]
     public async Task OwnTask_DisposeOnTaskThatFaultsLater_ReportsNothing()
     {
+        // Count only this test's exception: a continuation of an earlier test can still report to the global callback
         int calls = 0;
+        FormatException fault = new("creation failed");
         Action<Exception>? previous = IocContainerGlobalOptions.OnDisposeException;
-        IocContainerGlobalOptions.OnDisposeException = _ => Interlocked.Increment(ref calls);
+        IocContainerGlobalOptions.OnDisposeException = e =>
+        {
+            if(ReferenceEquals(e, fault) || ReferenceEquals(e.InnerException, fault))
+            {
+                Interlocked.Increment(ref calls);
+            }
+        };
         try
         {
             TaskCompletionSource<SyncDisposable> creation = new(TaskCreationOptions.RunContinuationsAsynchronously);
             IocHolder<Task<SyncDisposable>> holder = IocHolder.OwnTask(creation.Task);
 
             holder.Dispose();
-            creation.SetException(new FormatException());
+            creation.SetException(fault);
             await Task.WhenAny(creation.Task, Task.Delay(TimeSpan.FromSeconds(10)));
             await Task.Delay(100);
 
