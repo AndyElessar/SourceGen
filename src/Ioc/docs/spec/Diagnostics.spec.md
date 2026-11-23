@@ -132,7 +132,7 @@ Error. Do not generate the output. Reported in that assembly.
 | `SGIOC104` | ExplicitOnly container imports its own module | `ExplicitOnly container '{0}' cannot import module '{1}' of its own assembly` | `IocImportModuleAttribute` | That container |
 | `SGIOC105` | Inaccessible key in module output | `Key '{0}' of '{1}' is not accessible from other assemblies` | `Key` argument | The module output |
 | `SGIOC106` | Inaccessible constraint in module output | `Constraint '{0}' of '{1}' is not accessible from other assemblies` | Registration attribute | The module output |
-| `SGIOC107` | Unsupported module or container class | `'{0}' cannot be a {1}: {2}` (`{1}`: `module` / `container`) | Attribute | That output |
+| `SGIOC107` | Unsupported module or container class | `'{0}' cannot be a {1}: {2}` (`{1}`: `module` / `container`. `{2}` for a container: `it is generic` / `it is nested in a generic type`) | Attribute | That output |
 | `SGIOC108` | Invalid Add method name | `'{0}' does not give a valid name for the Add method: {1}` (`{0}`: the `Name` of the attribute, or the assembly name when `Name` is not set. `{1}`: `no identifier characters remain` / `the name cannot start an identifier`) | `IocServiceCollectionExtensionsAttribute` | The `Add{Name}` method |
 
 ## Import problems
