@@ -24,18 +24,22 @@ dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -
 ./src/Ioc/test/SourceGen.Ioc.TestAot/bin/Release/net10.0/<rid>/publish/SourceGen.Ioc.TestAot   # e.g. linux-x64; add .exe on win-x64
 ```
 
-## Specifications
+## Design documents
 
-| Spec | Scope |
+| Document | Role |
 | --- | --- |
-| [Generator SPEC](src/SourceGen.Ioc.SourceGenerator/Spec/SPEC.spec.md) | Index — registration, container generation, all sub-specs |
-| [Analyzer SPEC](src/SourceGen.Ioc.SourceGenerator/Analyzer/Spec/SPEC.spec.md) | Index — analyzer pipelines, diagnostic rules, all sub-specs |
+| [Constitution](docs/Constitution.md) | Principles, scope and limits, terms, documented differences from MS.DI. Read it first. It wins over a spec; when they disagree, tell the user. A change needs a new ADR. |
+| [Specifications](docs/spec/SPEC.spec.md) | Index of the specs. The source of truth for current behavior. |
+| [ADRs](docs/adr/) | Why a decision was made, the rejected alternatives, and the tested facts with versions. |
+
+Design documents are in English, in the style of the `ste80-humanizer` skill. See the `sourcegen-spec-writing` skill.
 
 ## Domain Rules
 
 These rules extend the root [AGENTS.md](../../AGENTS.md) for this domain:
 
-- Diagnostic IDs follow the `SGIOC` prefix pattern (e.g., `SGIOC001`)
+- Diagnostic IDs follow the `SGIOC` prefix pattern (e.g., `SGIOC001`), grouped by category (see [Diagnostics](docs/spec/Diagnostics.spec.md))
+- The generator reports IoC semantic diagnostics itself; no separate analyzer repeats its analysis
 
 ## Versioning
 

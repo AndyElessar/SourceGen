@@ -2,7 +2,7 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-    <!-- The minimum compiler consumers need; keep the SDK requirement in README.md, SourceGen.Ioc PACKAGE.md, docs/Ioc/01_Overview.md and the generator SPEC.spec.md in sync -->
+    <!-- The minimum compiler consumers need; keep the SDK requirement in README.md, SourceGen.Ioc PACKAGE.md, and docs/Ioc/01_Overview.md in sync -->
     <RoslynVersion>5.12.0</RoslynVersion>
   </PropertyGroup>
   <ItemGroup>

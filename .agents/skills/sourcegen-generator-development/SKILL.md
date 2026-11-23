@@ -1,7 +1,7 @@
 ---
 name: sourcegen-generator-development
-description: "Use when: implementing or modifying a SourceGen incremental source generator or analyzer — pipeline examples, SourceWriter emission, diagnostic analyzers, and Roslyn references."
-argument-hint: "generator feature or analyzer rule to implement"
+description: "Use when: implementing or modifying a SourceGen incremental source generator or analyzer — pipeline examples, SourceWriter emission, diagnostics reported by the generator, and Roslyn references."
+argument-hint: "generator feature or diagnostic rule to implement"
 user-invocable: true
 ---
 
@@ -11,8 +11,8 @@ Core rules are in `.github/instructions/csharp-source-generator.instructions.md`
 
 ## Workflow
 
-1. Find the analogous existing feature and follow its pipeline, model, and emission pattern. If behavior changes, update the spec first (`sourcegen-spec-writing` skill). For a bug fix, first add a test (snapshot, analyzer, or AOT) that reproduces the bug and confirm it fails.
-2. Implement: pipeline → immutable model → emission → analyzer diagnostics (if needed).
+1. Find the analogous existing feature and follow its pipeline, model, and emission pattern. If behavior changes, update the spec first (`sourcegen-spec-writing` skill). For a bug fix, first add a test (snapshot, diagnostic, or AOT) that reproduces the bug and confirm it fails.
+2. Implement: pipeline → immutable model → emission and diagnostics from the same model.
 3. Add tests following `.github/instructions/csharp-tunit.instructions.md`.
 4. If generated code changes, confirm it is AOT-safe (no reflection-based activation, no runtime `MakeGenericType`) and run the domain's AOT tests.
 
@@ -64,7 +64,7 @@ Sort inputs before emitting so the output is deterministic.
 
 ## Diagnostics
 
-Descriptors and reporting belong in a `DiagnosticAnalyzer` in the analyzer folder, never in the generator:
+The generator reports semantic diagnostics itself, from the same analysis result that it uses to generate code (rules in `csharp-source-generator.instructions.md`). An Error descriptor has `WellKnownDiagnosticTags.NotConfigurable`; a Warning or Info descriptor does not:
 
 ```csharp
 internal static readonly DiagnosticDescriptor InvalidUsage = new(
@@ -73,11 +73,12 @@ internal static readonly DiagnosticDescriptor InvalidUsage = new(
     messageFormat: "The type '{0}' cannot be used with this attribute",
     category: Constants.Category_Usage,
     DiagnosticSeverity.Error,
-    isEnabledByDefault: true);
+    isEnabledByDefault: true,
+    customTags: WellKnownDiagnosticTags.NotConfigurable);
 ```
 
-- IDs follow the domain prefix (e.g. `SGIOC`); check the analyzer spec for the next free ID and document new IDs there.
-- The generator skips invalid input silently; the analyzer reports it.
+- IDs follow the domain prefix (e.g. `SGIOC`); check the diagnostics spec (for IoC: `src/Ioc/docs/spec/Diagnostics.spec.md`) for the range of the category and the next free ID, and document new IDs there.
+- The generator skips invalid input and reports it. It never crashes on invalid input.
 
 ## Performance
 

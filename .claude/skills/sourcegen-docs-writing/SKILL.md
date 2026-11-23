@@ -54,6 +54,6 @@ For every source-generator feature, show the generated output in a collapsible b
 
 ## Accuracy
 
-- Verify every attribute, option, diagnostic, and example against the specs (`**/Spec/*.spec.md`) and source before writing.
+- Verify every attribute, option, diagnostic, and example against the specs (`src/<Domain>/docs/spec/*.spec.md`) and source before writing.
 - Prefer examples that mirror `samples/` or test cases so they are known to compile.
 - Never document features that do not exist; flag uncertain behavior instead of guessing.

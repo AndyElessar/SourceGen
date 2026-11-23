@@ -35,7 +35,8 @@ Examples, testing patterns, and references: see the `sourcegen-generator-develop
 
 ## Diagnostics and Robustness
 
-- Diagnostic descriptors and reporting live in the separate analyzer (`DiagnosticAnalyzer`), never in the generator.
+- The generator reports semantic diagnostics from the same analysis result that it uses to generate code. Do not repeat that analysis in a separate `DiagnosticAnalyzer`. An analyzer is only for an advisory check that does not affect generation.
+- Report diagnostics through a pipeline of their own. Models carry only equatable diagnostic data (ID, message arguments, file path, span), never `Diagnostic`, `Location`, or `SyntaxTree`. At the output step, combine with `CompilationProvider`, find the `SyntaxTree` by file path, and create the `Location` from that tree. A `Location` created from a path and a span alone ignores `#pragma` and `.editorconfig`.
 - Invalid input must not crash the generator: skip the invalid item and keep processing valid ones.
 
 ## Dependencies
