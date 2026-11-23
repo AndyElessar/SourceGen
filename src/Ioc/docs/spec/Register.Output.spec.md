@@ -35,7 +35,7 @@ The `Add{Name}` method and the container use the same [construction plan](Analys
 The `Add{Name}` method is opt-in. The generator generates it only for an assembly that has the assembly-level attribute below.
 
 ```csharp
-[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false)]
+[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false, Inherited = false)]
 [Conditional("SOURCEGEN")]
 public sealed class IocServiceCollectionExtensionsAttribute : Attribute
 {
@@ -255,7 +255,7 @@ The behavior depends on the state of the Task at disposal. It is the same as in 
 | Not complete | Waits for it to complete and ignores its exception. On success, disposes the result | Does not wait. Attaches a continuation that disposes the result after the Task completes successfully |
 
 - An exception from the disposal of the result is **thrown** by the rules of the [holder](#holder), the same as for a synchronous service. MS.DI then stops the disposal of the other services. The holder does not give these exceptions to the dispose-exception callback. When the disposal of an object that MS.DI tracks directly fails, the exception is always thrown. If the holder hid the exception, the same kind of error would or would not stop the disposal, as a function of whether a holder wraps the object.
-- Only the continuation in the lower right cell of the table gives its exception to [`IocContainerGlobalOptions.OnDisposeException`](Container.Output.spec.md#dispose-exception-callback) (Container output, section "Dispose-exception callback"). When the continuation runs, `Dispose` returned long before, and no caller can receive the exception.
+- Only the continuation in the lower right cell of the table gives its exception to [`IocContainerGlobalOptions.OnDisposeException`](Container.Output.spec.md#dispose-exception-callback) (Container output, section "Dispose-exception callback"). When the continuation runs, `Dispose` returned long before, and no caller can receive the exception. When the result is a decorator chain and more than one layer fails, each exception goes to the callback separately.
 - The continuation does not have the limits of synchronous `Dispose`. It disposes the result by the rules of `DisposeAsync` (it calls `IAsyncDisposable.DisposeAsync` first). Thus a result that implements only `IAsyncDisposable` is also disposed.
 - A Task that is not complete at synchronous `Dispose` is a situation with **no guarantee** (tested, see the ADRs). The continuation guarantees only that each object is disposed exactly one time in the end. It does not guarantee the order: with a decorator chain, the implementation instance can be disposed before a decorator. It also does not guarantee that the dependencies used during creation are still valid: the scope is already disposed, and a decorator created after that can get a disposed dependency. When there are asynchronous services, the user SHOULD use `DisposeAsync`. It waits for the initialization to complete, and the order and the validity are correct.
 - Only the owner disposes the result of an asynchronous definition, one time, whatever the number of its service types. `IocTask<S>` is not disposable, and `Task<S>` is not the return value of a factory delegate. This differs from synchronous Singleton and Scoped definitions (see [Number of disposals](#number-of-disposals)).

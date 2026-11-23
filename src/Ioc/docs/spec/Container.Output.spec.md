@@ -362,6 +362,7 @@ The container always aggregates and throws each exception that its `Dispose` and
 | Both | Creation fails, and the disposal of the objects that are already created throws. The original exception is thrown as usual. |
 | `Add{Name}` | During synchronous `Dispose`, the task of an asynchronous service is not yet complete. The continuation of the holder disposes the result later, and that disposal throws (see "Disposal of `OwnTask`" in [`Add{Name}` output](Register.Output.spec.md#disposal-of-owntask)). The holder always throws its other exceptions. |
 
+- The callback receives each exception separately. When the disposal of more than one object fails in one situation, for example several layers of a decorator chain, the callback is called one time for each exception. It does not receive an `AggregateException` that collects them. An `AggregateException` that user code throws itself is one exception, and the callback receives it unchanged.
 - When the callback is `null` (default), these exceptions are discarded.
 - The callback can be called on any thread. It can also be called concurrently.
 - An exception that the callback itself throws gets no special handling.
