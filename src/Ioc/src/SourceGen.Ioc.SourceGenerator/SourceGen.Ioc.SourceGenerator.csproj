@@ -8,7 +8,12 @@
     <!-- Shipped in the SourceGen.Ioc package, so it shares that package's version -->
     <GitVersionBaseDirectory>$(MSBuildThisFileDirectory)..\SourceGen.Ioc\</GitVersionBaseDirectory>
     <IncludeBuildOutput>false</IncludeBuildOutput>
+    <RootNamespace>SourceGen.Ioc</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SourceGen.Ioc.Test" />
+  </ItemGroup>
 
   <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
