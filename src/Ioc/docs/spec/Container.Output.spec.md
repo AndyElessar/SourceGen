@@ -251,7 +251,9 @@ The subsections below give the details.
 - Asynchronous closed definitions do not take part.
 - The creation order is the topological order of the dependencies, with a dependency before the service that depends on it. Services with no relation follow the ordering (see "Ordering" in [Analysis model](Analysis.Model.spec.md#ordering)). During eager resolution, the container still gets each dependency through the internal resolver. It does not read the field directly, because a factory or a call through `IServiceProvider` can ask for a service that is not yet created.
 - A Singleton that is created eagerly needs no synchronization. No other thread uses the container before the constructor of the root completes.
-- When eager resolution throws an exception, the container disposes the instances that are already created, by the rules of [Disposal](#disposal). Then the original exception continues to the caller. Otherwise a container whose constructor fails leaks the disposable objects that are already created.
+- When eager resolution throws an exception, the container disposes the instances that are already created, in the reverse topological order. Then the original exception continues to the caller. Otherwise a container whose constructor fails leaks the disposable objects that are already created.
+  - The container disposes an instance synchronously when the instance implements `IDisposable`. Otherwise it starts `DisposeAsync` and does not wait for it. The caller cannot call `DisposeAsync` on a container whose constructor failed, so the rule of synchronous `Dispose` for an object that implements only `IAsyncDisposable` does not apply here.
+  - An exception of this disposal goes to the [dispose-exception callback](#dispose-exception-callback).
 
 ## Thread safety
 
@@ -359,6 +361,8 @@ The container always aggregates and throws each exception that its `Dispose` and
 | --- | --- |
 | Container | During synchronous `Dispose`, the task of an asynchronous service is not yet complete. A continuation disposes the result later, and that disposal throws (see [Asynchronous closed definitions](#asynchronous-closed-definitions-1)). |
 | Container | The creation of a fallback scope is concurrent with the disposal of the scope, and the disposal by the creating side throws (see [Disposal of the fallback scope and the fallback provider](#disposal-of-the-fallback-scope-and-the-fallback-provider)). |
+| Container | The creation of an instance is concurrent with the disposal of the container, the creating side gets the right to dispose the instance, and that disposal throws (see [After disposal, and concurrency](#after-disposal-and-concurrency)). |
+| Container | With `CompareExchange`, the disposal of a losing instance throws (see [Thread safety](#thread-safety)). |
 | Both | Creation fails, and the disposal of the objects that are already created throws. The original exception is thrown as usual. |
 | `Add{Name}` | During synchronous `Dispose`, the task of an asynchronous service is not yet complete. The continuation of the holder disposes the result later, and that disposal throws (see "Disposal of `OwnTask`" in [`Add{Name}` output](Register.Output.spec.md#disposal-of-owntask)). The holder always throws its other exceptions. |
 
@@ -380,7 +384,9 @@ The container always aggregates and throws each exception that its `Dispose` and
 
 - `Dispose` and `DisposeAsync` can be called more than one time. The second and later calls have no effect.
 - After disposal starts, the public resolution methods (the `GetService` family, the partial accessors, `CreateScope`) throw `ObjectDisposedException`. Only the public entry points do this check. The internal resolvers do not.
+- The public resolution methods of a scope also throw `ObjectDisposedException` after the disposal of the root starts. The root disposes the Singleton instances. A scope that resolved a Singleton after that would create it again, and nothing would dispose the new instance. MS.DI also throws in this case.
 - When resolution and disposal are concurrent, the container guarantees that it does not leak. Each Singleton or Scoped instance that the container creates and that needs disposal is disposed exactly one time. To do this, the creating side checks one more time, after it stores the instance, whether disposal has started. If it has, the two sides compete for the right to dispose that instance with an atomic operation. The side that gets the right disposes the instance. The creating side throws `ObjectDisposedException`.
+  - When the creating side gets the right, it disposes the instance synchronously when the instance implements `IDisposable`. Otherwise it starts `DisposeAsync` and does not wait for it. It MUST NOT block, because the caller is a resolution and not a disposal. An exception of this disposal goes to the [dispose-exception callback](#dispose-exception-callback), because the `ObjectDisposedException` is thrown in its place.
 - For an instance that is created concurrently with disposal, the disposal order is not guaranteed to follow [Order](#order).
 - The same rules apply to the fallback scope.
 
