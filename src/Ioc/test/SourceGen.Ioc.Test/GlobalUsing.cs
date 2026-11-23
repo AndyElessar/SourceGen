@@ -5,3 +5,4 @@ global using SourceGen.Ioc;
 global using VerifyTUnit;
 global using static VerifyTUnit.Verifier;
 global using SourceGen.Ioc.Test.Helpers;
+global using Microsoft.Extensions.DependencyInjection;
