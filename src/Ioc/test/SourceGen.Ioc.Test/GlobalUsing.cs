@@ -4,4 +4,3 @@ global using TUnit.Assertions.Extensions;
 global using SourceGen.Ioc;
 global using VerifyTUnit;
 global using static VerifyTUnit.Verifier;
-global using SourceGen.Ioc.Test.Helpers;

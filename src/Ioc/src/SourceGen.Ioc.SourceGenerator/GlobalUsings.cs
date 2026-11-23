@@ -8,5 +8,3 @@ global using Microsoft.CodeAnalysis;
 global using Microsoft.CodeAnalysis.CSharp;
 global using Microsoft.CodeAnalysis.CSharp.Syntax;
 global using PolyType.Roslyn;
-global using static SourceGen.Ioc.RoslynExtensions;
-global using static SourceGen.Ioc.TypeParameterSubstitution;

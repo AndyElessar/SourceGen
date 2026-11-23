@@ -1,29 +1,11 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <!--
     This file is automatically included when referencing the SourceGen.Ioc package.
-    It defines a compile-time constant that ensures IoC attributes are preserved
-    in the compiled output, allowing the Source Generator to function correctly
-    in both Debug and Release configurations.
+    It defines the SOURCEGEN constant, so that the IoC attributes (marked with [Conditional("SOURCEGEN")])
+    are kept in the compiled output in both Debug and Release configurations.
   -->
   <PropertyGroup>
     <DefineConstants>$(DefineConstants);SOURCEGEN</DefineConstants>
   </PropertyGroup>
-
-  <!--
-    Make SourceGenIocName visible to the Source Generator for customizing
-    the generated extension method name.
-    
-    Usage in your .csproj:
-    <PropertyGroup>
-      <SourceGenIocName>CustomName</SourceGenIocName>
-    </PropertyGroup>
-    
-    This will generate: AddCustomName() instead of Add{AssemblyName}()
-  -->
-  <ItemGroup>
-    <CompilerVisibleProperty Include="SourceGenIocName" />
-    <CompilerVisibleProperty Include="SourceGenIocDefaultLifetime" />
-    <CompilerVisibleProperty Include="SourceGenIocFeatures" />
-  </ItemGroup>
 </Project>

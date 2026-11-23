@@ -1,3 +1,4 @@
+global using TUnit.Core;
+global using TUnit.Assertions;
+global using TUnit.Assertions.Extensions;
 global using Microsoft.Extensions.DependencyInjection;
-global using SourceGen.Ioc.TestCase;
-global using SourceGen.Ioc.TestAot.TestCase;
