@@ -1,6 +1,28 @@
+using Microsoft.CodeAnalysis.Text;
+using SourceGen.Ioc.Diagnostics;
 using SourceGen.Ioc.Model;
 
 namespace SourceGen.Ioc.Parse;
+
+/// <summary>Where a declaration is written, for the check of merged declarations (SGIOC001).</summary>
+/// <param name="Implementation">The identity of the declaration.</param>
+/// <param name="Name">The display name of the implementation type, for the message.</param>
+/// <param name="Lifetime">The lifetime.</param>
+/// <param name="FilePath">The path of the syntax tree of the attribute.</param>
+/// <param name="Span">The span of the attribute.</param>
+internal sealed record MergeSite(NamedTypeRef Implementation, string Name, Lifetime Lifetime, string FilePath, TextSpan Span);
+
+/// <summary>
+/// What one attribute target gives. The generation pipeline uses only <see cref="Declarations"/>, so a change of
+/// position, which changes only the sites and the diagnostics, does not run the analysis again.
+/// </summary>
+/// <param name="Declarations">The valid declarations.</param>
+/// <param name="Sites">The sites of the valid declarations.</param>
+/// <param name="Diagnostics">The diagnostics of the invalid declarations.</param>
+internal sealed record DeclarationResult(
+    ImmutableEquatableArray<RegistrationDeclaration> Declarations,
+    ImmutableEquatableArray<MergeSite> Sites,
+    ImmutableEquatableArray<DiagnosticInfo> Diagnostics);
 
 /// <summary>Reads registration declarations from the attributes (Annotations.spec, "Registration declarations").</summary>
 internal static class DeclarationReader
@@ -13,134 +35,370 @@ internal static class DeclarationReader
 
     private const string InjectAttribute = "SourceGen.Ioc.IocInjectAttribute";
     private const string ActivatorUtilitiesConstructorAttribute = "Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructorAttribute";
+    private const string ModuleAttribute = "SourceGen.Ioc.IocModuleAttribute";
+    private const string ContainerAttribute = "SourceGen.Ioc.IocContainerAttribute";
 
     /// <summary>Reads each <c>IocRegisterAttribute</c> on a class.</summary>
     /// <param name="context">The context of the attribute.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The valid declarations. An invalid one is skipped.</returns>
-    public static ImmutableEquatableArray<RegistrationDeclaration> ReadRegister(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
+    /// <returns>The declarations and the diagnostics.</returns>
+    public static DeclarationResult ReadRegister(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
     {
-        List<RegistrationDeclaration> declarations = [];
+        Builder builder = new(context.SemanticModel.Compilation, cancellationToken);
         foreach(AttributeData attribute in context.Attributes)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if(attribute.ConstructorArguments is [{ Value: int lifetime }]
-                && Read((INamedTypeSymbol)context.TargetSymbol, lifetime, attribute, context.SemanticModel.Compilation) is { } declaration)
+            AttributeSyntax? syntax = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken) as AttributeSyntax;
+            if(attribute.ConstructorArguments is [{ Value: int lifetime }])
             {
-                declarations.Add(declaration);
+                builder.Add((INamedTypeSymbol)context.TargetSymbol, lifetime, attribute, syntax, syntax);
             }
         }
 
-        return declarations.ToImmutableEquatableArray();
+        return builder.ToResult();
     }
 
-    /// <summary>Reads each <c>IocRegisterForAttribute</c> on the assembly.</summary>
+    /// <summary>Reads each <c>IocRegisterForAttribute</c> on the assembly or on a class.</summary>
     /// <param name="context">The context of the attribute.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The valid declarations. An invalid one is skipped.</returns>
-    public static ImmutableEquatableArray<RegistrationDeclaration> ReadRegisterFor(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
+    /// <returns>The declarations and the diagnostics.</returns>
+    public static DeclarationResult ReadRegisterFor(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
     {
-        List<RegistrationDeclaration> declarations = [];
+        Builder builder = new(context.SemanticModel.Compilation, cancellationToken);
+        bool onPlainClass = context.TargetSymbol is INamedTypeSymbol host
+            && !host.GetAttributes().Any(static a => a.AttributeClass?.ToDisplayString() is ModuleAttribute or ContainerAttribute);
         foreach(AttributeData attribute in context.Attributes)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if(attribute.ConstructorArguments is [{ Value: INamedTypeSymbol implementation }, { Value: int lifetime }]
-                && Read(implementation, lifetime, attribute, context.SemanticModel.Compilation) is { } declaration)
+            AttributeSyntax? syntax = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken) as AttributeSyntax;
+            if(onPlainClass)
             {
-                declarations.Add(declaration);
+                // The registration scope of an ExplicitOnly container comes in a later slice. Until then a registration
+                // on a module or container class belongs to the full assembly.
+                builder.Report(Descriptors.AttributeOnPlainClass.Id, syntax, "IocRegisterFor");
+            }
+            else if(attribute.ConstructorArguments is [{ Value: ITypeSymbol implementation }, { Value: int lifetime }])
+            {
+                builder.Add(implementation, lifetime, attribute, syntax, ImplementationTypeSyntax(syntax));
             }
         }
 
-        return declarations.ToImmutableEquatableArray();
+        return builder.ToResult();
     }
 
-    private static RegistrationDeclaration? Read(INamedTypeSymbol implementation, int lifetime, AttributeData attribute, Compilation compilation)
+    /// <summary>Collects the declarations and the diagnostics of one attribute target.</summary>
+    private sealed class Builder(Compilation compilation, CancellationToken cancellationToken)
     {
-        // The checks with diagnostics come in a later slice. Until then an unsupported declaration is skipped.
-        if(implementation is not { TypeKind: TypeKind.Class, IsAbstract: false, IsStatic: false, IsGenericType: false }
-            || lifetime is < 0 or > 2
-            || TypeRefFactory.Create(implementation, compilation) is not NamedTypeRef implementationRef
-            || SelectConstructor(implementation, compilation) is not { } constructor)
-        {
-            return null;
-        }
+        private readonly List<RegistrationDeclaration> declarations = [];
+        private readonly List<MergeSite> sites = [];
+        private readonly List<DiagnosticInfo> diagnostics = [];
 
-        List<TypeRef> serviceTypes = [];
-        foreach(KeyValuePair<string, TypedConstant> argument in attribute.NamedArguments)
+        public DeclarationResult ToResult()
+            => new(declarations.ToImmutableEquatableArray(), sites.ToImmutableEquatableArray(), diagnostics.ToImmutableEquatableArray());
+
+        public void Report(string id, SyntaxNode? node, params string[] arguments)
+            => diagnostics.Add(node is null ? DiagnosticInfo.Create(id, (Location?)null, arguments) : DiagnosticInfo.Create(id, node, arguments));
+
+        /// <summary>Reads one declaration. An invalid one is reported and skipped.</summary>
+        /// <param name="implementation">The implementation type.</param>
+        /// <param name="lifetime">The lifetime value.</param>
+        /// <param name="attribute">The attribute.</param>
+        /// <param name="syntax">The attribute syntax.</param>
+        /// <param name="typeSyntax">Where an error of the implementation type is reported.</param>
+        public void Add(ITypeSymbol type, int lifetime, AttributeData attribute, AttributeSyntax? syntax, SyntaxNode? typeSyntax)
         {
-            if(argument.Key != "ServiceTypes" || argument.Value.IsNull)
+            // The compiler already reports an error type
+            if(type.TypeKind == TypeKind.Error)
             {
-                continue;
+                return;
             }
 
-            foreach(TypedConstant element in argument.Value.Values)
+            string name = type.ToDisplayString();
+            if(ImplementationError(type) is { } reason)
             {
-                // A value type is SGIOC004, which a later slice reports. Until then the declaration is skipped
-                if(element.Value is not INamedTypeSymbol { IsUnboundGenericType: false, IsValueType: false } serviceType
-                    || TypeRefFactory.Create(serviceType, compilation) is not { } serviceRef)
+                Report(Descriptors.InvalidImplementationType.Id, typeSyntax, name, reason);
+                return;
+            }
+
+            INamedTypeSymbol implementation = (INamedTypeSymbol)type;
+
+            // Open generics and other unsupported shapes come in later slices. Until then they are skipped.
+            if(lifetime is < 0 or > 2
+                || ContainsTypeParameter(implementation)
+                || TypeRefFactory.Create(implementation, compilation) is not NamedTypeRef implementationRef)
+            {
+                return;
+            }
+
+            (IMethodSymbol? constructor, string? constructorError) = SelectConstructor(implementation);
+            if(constructor is null)
+            {
+                Report(Descriptors.ConstructorNotDetermined.Id, syntax, name, constructorError!);
+                AddError(implementationRef, lifetime);
+                return;
+            }
+
+            if(ReadServiceTypes(implementation, name, attribute, syntax) is not { } serviceTypes)
+            {
+                AddError(implementationRef, lifetime);
+                return;
+            }
+
+            if(ReadParameters(constructor) is not { } parameters)
+            {
+                return;
+            }
+
+            declarations.Add(new RegistrationDeclaration(implementationRef, (Lifetime)lifetime, serviceTypes, parameters));
+            if(syntax is not null)
+            {
+                sites.Add(new MergeSite(implementationRef, name, (Lifetime)lifetime, syntax.SyntaxTree.FilePath, syntax.Span));
+            }
+        }
+
+        /// <summary>
+        /// Records an invalid declaration. It skips the complete instance definition, also its valid declarations
+        /// (Diagnostics.spec, "Consequences").
+        /// </summary>
+        private void AddError(NamedTypeRef implementation, int lifetime)
+            => declarations.Add(new RegistrationDeclaration(implementation, (Lifetime)lifetime, [], [], IsError: true));
+
+        /// <summary>The checks of the implementation type (Annotations.spec, "Checks of the implementation type").</summary>
+        private static string? ImplementationError(ITypeSymbol type)
+        {
+            if(type is not INamedTypeSymbol { TypeKind: TypeKind.Class })
+            {
+                return "it is not a class";
+            }
+
+            if(type.IsStatic)
+            {
+                return "it is static";
+            }
+
+            if(type.IsAbstract)
+            {
+                return "it is abstract";
+            }
+
+            // Only a file type: the generated code cannot name it. Other accessibility errors are reported by the
+            // compiler (Constitution, "Diagnostic policy").
+            return ContainsFileLocal(type) ? "it uses a file type" : null;
+        }
+
+        /// <summary>Expands and checks the service types (Annotations.spec, "Expansion of service types").</summary>
+        /// <returns>The service types, or <see langword="null"/> when one of them is invalid.</returns>
+        private ImmutableEquatableArray<TypeRef>? ReadServiceTypes(INamedTypeSymbol implementation, string name, AttributeData attribute, AttributeSyntax? syntax)
+        {
+            TypedConstant argument = attribute.NamedArguments.FirstOrDefault(static a => a.Key == "ServiceTypes").Value;
+            if(argument.IsNull || argument.Kind != TypedConstantKind.Array)
+            {
+                return [];
+            }
+
+            List<TypeRef> serviceTypes = [];
+            bool valid = true;
+            for(int i = 0; i < argument.Values.Length; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if(argument.Values[i].Value is not ITypeSymbol element)
+                {
+                    continue;
+                }
+
+                SyntaxNode? elementSyntax = (SyntaxNode?)ServiceTypeSyntax(syntax, i) ?? syntax;
+                List<ITypeSymbol> expanded = element is INamedTypeSymbol { IsUnboundGenericType: true } unbound
+                    ? [.. Supertypes(implementation).Where(t => SymbolEqualityComparer.Default.Equals(t.OriginalDefinition, unbound.OriginalDefinition))]
+                    : [element];
+                if(expanded.Count == 0)
+                {
+                    Report(Descriptors.InvalidServiceType.Id, elementSyntax, element.ToDisplayString(), name, "the implementation type has no base type or interface of this generic type");
+                    valid = false;
+                    continue;
+                }
+
+                foreach(ITypeSymbol serviceType in expanded)
+                {
+                    if(ServiceTypeError(serviceType) is { } error)
+                    {
+                        if(error.Id == Descriptors.WrapperServiceType.Id)
+                        {
+                            Report(error.Id, elementSyntax, serviceType.ToDisplayString());
+                        }
+                        else
+                        {
+                            Report(error.Id, elementSyntax, serviceType.ToDisplayString(), name, error.Reason!);
+                        }
+
+                        valid = false;
+                    }
+                    else if(TypeRefFactory.Create(serviceType, compilation) is { } serviceRef)
+                    {
+                        serviceTypes.Add(serviceRef);
+                    }
+                    else
+                    {
+                        // An error type: the compiler already reports it
+                        valid = false;
+                    }
+                }
+            }
+
+            return valid ? serviceTypes.ToImmutableEquatableArray() : null;
+        }
+
+        /// <summary>The checks of one service type after expansion.</summary>
+        private static (string Id, string? Reason)? ServiceTypeError(ITypeSymbol type)
+        {
+            if(type is IPointerTypeSymbol or IFunctionPointerTypeSymbol || type.SpecialType == SpecialType.System_Void)
+            {
+                return (Descriptors.InvalidServiceType.Id, "it is a pointer or void");
+            }
+
+            // A wrapper first: KeyValuePair is a wrapper and also a value type
+            if(WrapperTypes.IsWrapper(type))
+            {
+                return (Descriptors.WrapperServiceType.Id, null);
+            }
+
+            if(type.IsValueType)
+            {
+                return (Descriptors.InvalidServiceType.Id, "it is a value type");
+            }
+
+            return BuiltInServices.IsBuiltIn(type) ? (Descriptors.InvalidServiceType.Id, "it is a built-in service") : null;
+        }
+
+        /// <summary>The constructor parameters.</summary>
+        /// <returns>The types, or <see langword="null"/> when a parameter cannot take a generated argument.</returns>
+        private ImmutableEquatableArray<ConstructorParameter>? ReadParameters(IMethodSymbol constructor)
+        {
+            List<ConstructorParameter> parameters = [];
+            foreach(IParameterSymbol parameter in constructor.Parameters)
+            {
+                // A ref or out parameter gives a compile error in the generated code. The compiler reports it
+                // (Constitution, "Diagnostic policy"). A type that the model cannot represent (a pointer) is skipped.
+                if(TypeRefFactory.Create(parameter.Type, compilation) is not { } parameterRef)
                 {
                     return null;
                 }
 
-                serviceTypes.Add(serviceRef);
-            }
-        }
-
-        List<TypeRef> parameters = [];
-        foreach(IParameterSymbol parameter in constructor.Parameters)
-        {
-            // The generated argument is a value: a ref, out, or ref readonly parameter cannot take it. An in parameter can
-            if(parameter.RefKind is RefKind.Ref or RefKind.Out or RefKind.RefReadOnlyParameter
-                || TypeRefFactory.Create(parameter.Type, compilation) is not { } parameterRef)
-            {
-                return null;
+                parameters.Add(new ConstructorParameter(parameterRef, parameter.RefKind is RefKind.In or RefKind.RefReadOnlyParameter));
             }
 
-            parameters.Add(parameterRef);
+            return parameters.ToImmutableEquatableArray();
         }
 
-        return new RegistrationDeclaration(implementationRef, (Lifetime)lifetime, serviceTypes.ToImmutableEquatableArray(), parameters.ToImmutableEquatableArray());
-    }
-
-    /// <summary>Selects the constructor (Annotations.spec, "Constructor selection").</summary>
-    /// <returns>The constructor, or <see langword="null"/> when no single constructor can be selected.</returns>
-    private static IMethodSymbol? SelectConstructor(INamedTypeSymbol type, Compilation compilation)
-    {
-        IMethodSymbol? marked = null;
-        foreach(IMethodSymbol constructor in type.InstanceConstructors)
+        /// <summary>Selects the constructor (Annotations.spec, "Constructor selection").</summary>
+        /// <returns>The constructor, or the reason for SGIOC002.</returns>
+        private (IMethodSymbol? Constructor, string? Error) SelectConstructor(INamedTypeSymbol type)
         {
-            if(constructor.GetAttributes().Any(static a => a.AttributeClass is { Name: "IocInjectAttribute" or "ActivatorUtilitiesConstructorAttribute" } attributeClass
-                && attributeClass.ToDisplayString() is InjectAttribute or ActivatorUtilitiesConstructorAttribute))
-            {
-                if(marked is not null)
-                {
-                    return null;
-                }
-
-                marked = constructor;
-            }
-        }
-
-        if(marked is not null)
-        {
-            return marked;
-        }
-
-        // A primary constructor is found from syntax, so only for a type of this compilation. The test is the assembly,
-        // not the availability of syntax: a project reference in the IDE also gives syntax. An implicitly declared
-        // constructor (the default constructor, the copy constructor of a record) has no syntax, so it never matches.
-        if(SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly))
-        {
+            IMethodSymbol? marked = null;
             foreach(IMethodSymbol constructor in type.InstanceConstructors)
             {
-                if(constructor.DeclaringSyntaxReferences.Any(static r => r.GetSyntax() is TypeDeclarationSyntax))
+                if(constructor.GetAttributes().Any(static a => a.AttributeClass is { Name: "IocInjectAttribute" or "ActivatorUtilitiesConstructorAttribute" } attributeClass
+                    && attributeClass.ToDisplayString() is InjectAttribute or ActivatorUtilitiesConstructorAttribute))
                 {
-                    return constructor;
+                    if(marked is not null)
+                    {
+                        return (null, "multiple marked constructors");
+                    }
+
+                    marked = constructor;
                 }
+            }
+
+            if(marked is not null)
+            {
+                return (marked, null);
+            }
+
+            // A primary constructor is found from syntax, so only for a type of this compilation. The test is the assembly,
+            // not the availability of syntax: a project reference in the IDE also gives syntax. An implicitly declared
+            // constructor (the default constructor, the copy constructor of a record) has no syntax, so it never matches.
+            if(SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly))
+            {
+                foreach(IMethodSymbol constructor in type.InstanceConstructors)
+                {
+                    if(constructor.DeclaringSyntaxReferences.Any(static r => r.GetSyntax() is TypeDeclarationSyntax))
+                    {
+                        return (constructor, null);
+                    }
+                }
+            }
+
+            IMethodSymbol[] publicConstructors = [.. type.InstanceConstructors.Where(static c => c.DeclaredAccessibility == Accessibility.Public)];
+            return publicConstructors.Length switch
+            {
+                1 => (publicConstructors[0], null),
+                0 => (null, "no public constructor"),
+                _ => (null, "multiple public constructors and no primary constructor"),
+            };
+        }
+    }
+
+    /// <summary>
+    /// The type itself, its base class chain, and all its interfaces. The type itself is included because writing the
+    /// implementation type in <c>ServiceTypes</c> is not an error.
+    /// </summary>
+    private static IEnumerable<INamedTypeSymbol> Supertypes(INamedTypeSymbol type)
+    {
+        for(INamedTypeSymbol? baseType = type; baseType is not null; baseType = baseType.BaseType)
+        {
+            yield return baseType;
+        }
+
+        foreach(INamedTypeSymbol interfaceType in type.AllInterfaces)
+        {
+            yield return interfaceType;
+        }
+    }
+
+    /// <summary>
+    /// Whether a part of <paramref name="type"/> is a <c>file</c> type: the type, an outer type, a type argument, or the
+    /// element of an array. Accessibility within the assembly does not cover <c>file</c> types.
+    /// </summary>
+    private static bool ContainsFileLocal(ITypeSymbol type) => type switch
+    {
+        IArrayTypeSymbol array => ContainsFileLocal(array.ElementType),
+        INamedTypeSymbol named => named.IsFileLocal
+            || (named.ContainingType is { } outer && ContainsFileLocal(outer))
+            || named.TypeArguments.Any(ContainsFileLocal),
+        _ => false,
+    };
+
+    /// <summary>The syntax of the <c>implementationType</c> argument: by its name, or else the first positional argument.</summary>
+    private static ExpressionSyntax? ImplementationTypeSyntax(AttributeSyntax? syntax)
+    {
+        SeparatedSyntaxList<AttributeArgumentSyntax> arguments = syntax?.ArgumentList?.Arguments ?? default;
+        return (arguments.FirstOrDefault(static a => a.NameColon?.Name.Identifier.ValueText == "implementationType")
+            ?? arguments.FirstOrDefault(static a => a.NameColon is null && a.NameEquals is null))?.Expression;
+    }
+
+    private static bool ContainsTypeParameter(INamedTypeSymbol type)
+    {
+        for(INamedTypeSymbol? level = type; level is not null; level = level.ContainingType)
+        {
+            if(level.IsUnboundGenericType || level.TypeArguments.Any(static a => a is ITypeParameterSymbol))
+            {
+                return true;
             }
         }
 
-        IMethodSymbol[] publicConstructors = [.. type.InstanceConstructors.Where(static c => c.DeclaredAccessibility == Accessibility.Public)];
-        return publicConstructors.Length == 1 ? publicConstructors[0] : null;
+        return false;
+    }
+
+    /// <summary>The syntax of element <paramref name="index"/> of <c>ServiceTypes</c>, or <see langword="null"/>.</summary>
+    private static ExpressionSyntax? ServiceTypeSyntax(AttributeSyntax? syntax, int index)
+    {
+        ExpressionSyntax? value = syntax?.ArgumentList?.Arguments
+            .FirstOrDefault(static a => a.NameEquals?.Name.Identifier.ValueText == "ServiceTypes")?.Expression;
+        return value switch
+        {
+            CollectionExpressionSyntax collection when index < collection.Elements.Count => (collection.Elements[index] as ExpressionElementSyntax)?.Expression,
+            ArrayCreationExpressionSyntax { Initializer: { } initializer } when index < initializer.Expressions.Count => initializer.Expressions[index],
+            ImplicitArrayCreationExpressionSyntax creation when index < creation.Initializer.Expressions.Count => creation.Initializer.Expressions[index],
+            _ => null,
+        };
     }
 }

@@ -287,15 +287,36 @@ public class AddMethodTests
     }
 
     [Test]
-    [Arguments("[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(int)])] public sealed class Bad;")]
-    [Arguments("[IocRegister(ServiceLifetime.Transient)] public sealed class Bad { public Bad(ref int value) { } }")]
-    [Arguments("[IocRegister(ServiceLifetime.Transient)] public sealed class Bad { public Bad(out int value) { value = 0; } }")]
-    [Arguments("[IocRegister(ServiceLifetime.Transient)] public sealed class Bad { public Bad(ref readonly int value) { } }")]
-    public async Task AddMethod_UnsupportedDeclaration_IsSkippedAndOutputCompiles(string declaration)
+    [Arguments("public Bad(ref int value) { }", "CS1620")]
+    [Arguments("public Bad(out int value) { value = 0; }", "CS1620")]
+    public async Task AddMethod_RefOrOutConstructorParameter_CompilerReportsTheError(string constructor, string error)
     {
-        string source = await GenerateAsync(declaration);
+        // An error that the C# compiler reports is not a generator diagnostic (Constitution, "Diagnostic policy")
+        GeneratorTestResult result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
+            Usings + $$"""[IocRegister(ServiceLifetime.Transient)] public sealed class Bad { {{constructor}} }""",
+            RootNamespace("App"));
 
-        await Assert.That(source).DoesNotContain("global::App.Bad");
+        await Assert.That(result.ReportedDiagnostics).IsEmpty();
+        await Assert.That(result.OutputCompilation.GetDiagnostics().Select(static d => d.Id)).Contains(error);
+    }
+
+    [Test]
+    [Arguments("in")]
+    [Arguments("ref readonly")]
+    public async Task AddMethod_ReferenceParameter_PassesALocalWithIn(string modifier)
+    {
+        // GenerateAsync fails on any warning in the generated file, such as CS9193 for a value passed to ref readonly
+        string source = await GenerateAsync($$"""
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class ByRef
+            {
+                public ByRef(System.IServiceProvider provider, {{modifier}} IBar bar) { }
+            }
+            """);
+
+        await Assert.That(source).Contains("global::App.IBar arg1 = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IBar>(sp);");
+        await Assert.That(source).Contains("in arg1);");
+        await Assert.That(source).DoesNotContain("arg0");
     }
 
     [Test]

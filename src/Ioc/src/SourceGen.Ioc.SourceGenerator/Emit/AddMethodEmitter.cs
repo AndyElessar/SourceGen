@@ -109,26 +109,62 @@ internal static class AddMethodEmitter
     {
         string implementation = TypeNames.CSharp(definition.Implementation);
         writer.WriteLine($"private static {implementation} {GeneratedNames.For("__Create_", definition)}(global::System.IServiceProvider sp)");
-        writer.Indentation++;
-        ImmutableEquatableArray<TypeRef> parameters = definition.ConstructorParameters;
+        ImmutableEquatableArray<ConstructorParameter> parameters = definition.ConstructorParameters;
         if(parameters.Length == 0)
         {
+            writer.Indentation++;
             writer.WriteLine($"=> new {implementation}();");
+            writer.Indentation--;
+            return;
         }
-        else
+
+        // A parameter by reference gets a local variable, passed with "in". This needs a block body
+        bool hasLocals = parameters.Any(static p => p.ByReference);
+        if(hasLocals)
         {
-            writer.WriteLine($"=> new {implementation}(");
+            writer.WriteLine('{');
             writer.Indentation++;
             for(int i = 0; i < parameters.Length; i++)
             {
-                writer.WriteLine($"{Provider}.GetRequiredService<{TypeNames.CSharp(parameters[i])}>(sp){(i < parameters.Length - 1 ? "," : ");")}");
+                if(parameters[i].ByReference)
+                {
+                    writer.WriteLine($"{TypeNames.CSharp(parameters[i].Type)} arg{i} = {Argument(parameters[i])};");
+                }
             }
 
-            writer.Indentation--;
+            writer.WriteLine($"return new {implementation}(");
+        }
+        else
+        {
+            writer.Indentation++;
+            writer.WriteLine($"=> new {implementation}(");
         }
 
-        writer.Indentation--;
+        writer.Indentation++;
+        for(int i = 0; i < parameters.Length; i++)
+        {
+            if(parameters[i].ByReference)
+            {
+                writer.WriteLine($"in arg{i}{(i < parameters.Length - 1 ? "," : ");")}");
+            }
+            else
+            {
+                writer.WriteLine($"{Argument(parameters[i])}{(i < parameters.Length - 1 ? "," : ");")}");
+            }
+        }
+
+        writer.Indentation -= 2;
+        if(hasLocals)
+        {
+            writer.WriteLine('}');
+        }
     }
+
+    /// <summary>The expression that resolves the argument of <paramref name="parameter"/> (Register.Output.spec, "Dependency resolution").</summary>
+    private static string Argument(ConstructorParameter parameter)
+        => BuiltInServices.IsServiceProvider(parameter.Type)
+            ? "sp"
+            : $"{Provider}.GetRequiredService<{TypeNames.CSharp(parameter.Type)}>(sp)";
 
     private static void WriteGet(SourceWriter writer, ClosedDefinition definition)
     {

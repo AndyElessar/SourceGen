@@ -1,3 +1,5 @@
+using SourceGen.Ioc.Diagnostics;
+using SourceGen.Ioc.Parse;
 using SourceGen.Ioc.Model;
 
 namespace SourceGen.Ioc.Analysis;
@@ -17,8 +19,9 @@ internal static class Definitions
             cancellationToken.ThrowIfCancellationRequested();
             RegistrationDeclaration first = group.First();
 
-            // A merge with another lifetime is SGIOC001, which a later slice reports. Until then the definition is skipped.
-            if(group.Any(d => d.Lifetime != first.Lifetime))
+            // An invalid declaration, or a merge with another lifetime (SGIOC001, see CheckMerge), skips the complete
+            // definition. The error nodes of the dependency graph come with the container.
+            if(group.Any(d => d.IsError || d.Lifetime != first.Lifetime))
             {
                 continue;
             }
@@ -37,5 +40,25 @@ internal static class Definitions
             .OrderBy(static d => d.Implementation.SortName, StringComparer.Ordinal)
             .ThenBy(static d => d.Implementation.CanonicalString, StringComparer.Ordinal)
             .ToImmutableEquatableArray();
+    }
+
+    /// <summary>Reports SGIOC001 on each attribute of a definition whose declarations do not agree.</summary>
+    /// <param name="sites">The sites of the valid declarations of the view.</param>
+    /// <returns>The diagnostics.</returns>
+    public static IEnumerable<DiagnosticInfo> CheckMerge(IEnumerable<MergeSite> sites)
+    {
+        foreach(IGrouping<NamedTypeRef, MergeSite> group in sites.GroupBy(static s => s.Implementation))
+        {
+            Lifetime lifetime = group.First().Lifetime;
+            if(group.All(s => s.Lifetime == lifetime))
+            {
+                continue;
+            }
+
+            foreach(MergeSite site in group)
+            {
+                yield return new DiagnosticInfo(Descriptors.InconsistentRegistration.Id, [site.Name, "Lifetime"], site.FilePath, site.Span);
+            }
+        }
     }
 }
