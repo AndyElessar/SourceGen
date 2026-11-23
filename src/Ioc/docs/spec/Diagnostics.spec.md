@@ -71,7 +71,7 @@ A diagnostic message about the dependency graph MUST name the module and the ins
 
 The consequences follow the [Diagnostic policy](../Constitution.md#7-diagnostic-policy) of the constitution:
 
-- **Skip the declaration.** The declaration, or the complete instance definition that it belongs to, is skipped. The instance definition stays in the dependency graph as an error node. A party that depends on it does not report a missing dependency as a result, and does not go to the fallback provider. Other outputs are processed as usual.
+- **Skip the declaration.** The complete instance definition that the declaration belongs to is skipped, also when its other declarations are valid. The instance definition stays in the dependency graph as an error node. A party that depends on it does not report a missing dependency as a result, and does not go to the fallback provider. Other outputs are processed as usual.
 - **Do not generate the output.** The affected container, module output, or `Add{Name}` method is not generated at all. Other outputs are not affected.
 - **Inform only.** Warning and Info. Generation is not affected.
 
@@ -95,8 +95,8 @@ Error. Skip the declaration. Reported in the assembly that has the declaration.
 | --- | --- | --- | --- | --- |
 | `SGIOC001` | Inconsistent registration settings | `'{0}' is registered with different {1}; all attributes for the same implementation and key must agree` (`{1}`: `Lifetime` / `Decorators` / `Tags`) | Each attribute that takes part in the merge | [Analysis model: Merging](Analysis.Model.spec.md#merging) |
 | `SGIOC002` | Constructor cannot be determined | `'{0}' has {1}; mark exactly one constructor with [IocInject]` (`{1}`: `multiple marked constructors` / `multiple public constructors and no primary constructor` / `no public constructor`) | Registration attribute | [Annotations: Constructor selection](Annotations.spec.md#constructor-selection) |
-| `SGIOC003` | Invalid implementation type | `'{0}' cannot be an implementation or decorator type: {1}` | Type argument of the attribute | [Annotations: Checks of the implementation type](Annotations.spec.md#checks-of-the-implementation-type) |
-| `SGIOC004` | Invalid service type | `'{0}' cannot be a service type of '{1}': {2}` | Type argument of the attribute | [Annotations: Expansion of service types](Annotations.spec.md#expansion-of-service-types) |
+| `SGIOC003` | Invalid implementation type | `'{0}' cannot be an implementation or decorator type: {1}` (`{1}`: `it is not a class` / `it is abstract` / `it is static` / `it uses a file type`) | Type argument of the attribute. For `IocRegisterAttribute`, which has no type argument, the attribute | [Annotations: Checks of the implementation type](Annotations.spec.md#checks-of-the-implementation-type) |
+| `SGIOC004` | Invalid service type | `'{0}' cannot be a service type of '{1}': {2}` (`{2}`: `it is a value type` / `it is a pointer or void` / `it is a built-in service` / `the implementation type has no base type or interface of this generic type` / `it does not use type parameter '{name}'` / `the type arguments cannot come from a closed service type`) | Type argument of the attribute | [Annotations: Expansion of service types](Annotations.spec.md#expansion-of-service-types) |
 | `SGIOC005` | Nested open generic is not supported | `'{0}' is an open generic nested in an open generic type` | Type argument of the attribute | Same as above |
 | `SGIOC006` | Wrapper type cannot be registered | `'{0}' is generated automatically and cannot be registered; wrap it in a class or depend on it directly` | Type argument of the attribute | Same as above |
 | `SGIOC007` | AnyKey cannot be used to register | `KeyedService.AnyKey cannot be used as a registration key` | `Key` argument | [Annotations: Keys](Annotations.spec.md#keys) |

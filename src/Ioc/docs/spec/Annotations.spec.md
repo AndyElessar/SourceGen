@@ -350,9 +350,12 @@ The user gives the implementation type with `typeof()` or as the class that has 
 | Condition | Diagnostic |
 | --- | --- |
 | It is not a class, or it is an abstract type, a static type, or a delegate type | `SGIOC003` |
+| It uses a `file` type: the type, one of its outer types, or one of its type arguments is a `file` type | `SGIOC003` (see the note below) |
 | It is a nested open generic (`Outer<>.Inner<>`: a containing type has type parameters that are not specified) | `SGIOC005` |
 
 A type argument that is not a concrete type (`typeof(Handler<T>)`) cannot be written in an attribute, so the generator does not handle it.
+
+The generated code is in a separate file. It cannot name a `file` type, because the compiler changes the metadata name of that type. The compile errors in the generated file would not show the cause, so the generator reports `SGIOC003`. Other accessibility errors are errors that the C# compiler reports (see the [constitution](../Constitution.md)). For example, a `private` nested implementation type gives CS0122 in the generated file, and the generator reports no diagnostic.
 
 ### Expansion of service types
 

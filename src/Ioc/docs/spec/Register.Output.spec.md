@@ -133,6 +133,8 @@ private static global::Mod.Service __Create_Service(global::System.IServiceProvi
 
 Each dependency is always resolved from `sp` (see [Dependency resolution](#dependency-resolution)). The target is not decided at compile time.
 
+An `in` or `ref readonly` parameter gets its value through a local variable of the creation method, and the call passes the variable with `in`. A value that is passed directly to a `ref readonly` parameter gives warning CS9193. The generated code MUST NOT have warnings. A `ref` or `out` parameter cannot take a resolved value. The compiler reports that error in the generated code. The generator reports no diagnostic (see the [constitution](../Constitution.md)).
+
 ### Holder
 
 MS.DI can address a registration only by "service type + key". All service types of one closed definition must share one instance, and a wrapper type must be able to point to a specific closed definition. For this, the instance of a Singleton or Scoped closed definition is put in a **holder**, which is registered with a key that is private to the generator. A decorator chain has its own holder (see [Decorator chain](#decorator-chain)). A Transient closed definition can have a holder only when it has a decorator chain.
