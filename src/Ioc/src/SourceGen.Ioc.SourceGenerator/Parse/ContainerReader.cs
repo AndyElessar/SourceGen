@@ -17,6 +17,8 @@ internal sealed record ContainingType(string Keyword, string Name);
 /// <param name="IntegrateServiceProvider">The <c>IntegrateServiceProvider</c> property.</param>
 /// <param name="ExplicitOnly">The <c>ExplicitOnly</c> property.</param>
 /// <param name="HasIncludeTags">Whether <c>IncludeTags</c> is not empty.</param>
+/// <param name="ThreadSafeStrategy">The value of <c>ThreadSafeStrategy</c>: 0 None, 1 Lock, 2 CompareExchange.</param>
+/// <param name="EagerResolveOptions">The flags of <c>EagerResolveOptions</c>: 1 Singleton, 2 Scoped.</param>
 internal sealed record ContainerModel(
     NamedTypeRef Type,
     string? Namespace,
@@ -24,7 +26,9 @@ internal sealed record ContainerModel(
     string Name,
     bool IntegrateServiceProvider,
     bool ExplicitOnly,
-    bool HasIncludeTags)
+    bool HasIncludeTags,
+    int ThreadSafeStrategy,
+    int EagerResolveOptions)
 {
     /// <summary>Gets the hint name of the generated file: the namespace, the containing types, and the name.</summary>
     public string HintName => string.Join(".", [.. Namespace is null ? [] : new[] { Namespace }, .. ContainingTypes.Select(static t => t.Name), Name]) + ".g.cs";
@@ -74,7 +78,9 @@ internal static class ContainerReader
             type.Name,
             Named(attribute, "IntegrateServiceProvider") is not { Value: false },
             Named(attribute, "ExplicitOnly") is { Value: true },
-            Named(attribute, "IncludeTags") is { Kind: TypedConstantKind.Array, Values.Length: > 0 });
+            Named(attribute, "IncludeTags") is { Kind: TypedConstantKind.Array, Values.Length: > 0 },
+            Named(attribute, "ThreadSafeStrategy") is { Value: int strategy } ? strategy : 1,
+            Named(attribute, "EagerResolveOptions") is { Value: int eager } ? eager : 1);
         ClassDeclarationSyntax declaration = (ClassDeclarationSyntax)context.TargetNode;
         return new(container, new ContainerSite(typeRef, declaration.SyntaxTree.FilePath, declaration.Identifier.Span), null);
     }

@@ -32,6 +32,20 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
         __singletons = new __Singletons();
         __singletons.Root = this;
         __isRoot = true;
+        try
+        {
+            __Get_SystemClock_28ece501();
+        }
+        catch
+        {
+            global::System.Threading.Interlocked.Exchange(ref __disposed, 1);
+            if(global::System.Threading.Interlocked.Exchange(ref __singletons.__f_SystemClock_28ece501, null) is { } i0)
+            {
+                __DisposeLost(i0);
+            }
+
+            throw;
+        }
     }
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
@@ -68,6 +82,7 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
             throw new global::System.InvalidOperationException("Cannot resolve scoped service 'App.OrderService' from the root container.");
         }
 
+        global::App.OrderService instance;
         lock(__scopedLock)
         {
             if(__f_OrderService_2487f1ef is { } existing)
@@ -76,12 +91,23 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
             }
 
             global::App.AppContainer c = this;
-            global::App.OrderService instance = new global::App.OrderService(
+            instance = new global::App.OrderService(
                 (global::App.IClock)c.__Get_SystemClock_28ece501(),
                 (global::App.Formatter)c.__Get_Formatter_47faf9b4());
-            __f_OrderService_2487f1ef = instance;
-            return instance;
+            global::System.Threading.Interlocked.Exchange(ref __f_OrderService_2487f1ef, instance);
         }
+
+        if(global::System.Threading.Volatile.Read(ref __disposed) != 0)
+        {
+            if(global::System.Object.ReferenceEquals(global::System.Threading.Interlocked.CompareExchange(ref __f_OrderService_2487f1ef, null, instance), instance))
+            {
+                __DisposeLost(instance);
+            }
+
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return instance;
     }
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
@@ -91,6 +117,7 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
     private global::App.SystemClock __Create_SystemClock_28ece501()
     {
         __Singletons s = __singletons;
+        global::App.SystemClock instance;
         lock(s.__lock_SystemClock_28ece501)
         {
             if(s.__f_SystemClock_28ece501 is { } existing)
@@ -98,12 +125,22 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
                 return existing;
             }
 
-            // The dependencies of a Singleton are resolved on the root
             global::App.AppContainer c = s.Root;
-            global::App.SystemClock instance = new global::App.SystemClock();
-            s.__f_SystemClock_28ece501 = instance;
-            return instance;
+            instance = new global::App.SystemClock();
+            global::System.Threading.Interlocked.Exchange(ref s.__f_SystemClock_28ece501, instance);
         }
+
+        if(global::System.Threading.Volatile.Read(ref s.Root.__disposed) != 0)
+        {
+            if(global::System.Object.ReferenceEquals(global::System.Threading.Interlocked.CompareExchange(ref s.__f_SystemClock_28ece501, null, instance), instance))
+            {
+                __DisposeLost(instance);
+            }
+
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return instance;
     }
 
     // The lookup table (Container.Output.spec, "Lookup by Type")
@@ -186,11 +223,15 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public void Dispose()
     {
-        if(global::System.Threading.Interlocked.Exchange(ref __disposed, 1) != 0)
+        if(global::System.Threading.Interlocked.Exchange(ref __disposed, 1) == 0)
         {
-            return;
+            __ThrowIfAny(__DisposeInstances());
         }
+    }
 
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.List<global::System.Exception>? __DisposeInstances()
+    {
         global::System.Collections.Generic.List<global::System.Exception>? errors = null;
         if(__isRoot)
         {
@@ -215,7 +256,7 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
             }
         }
 
-        __ThrowIfAny(errors);
+        return errors;
     }
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
@@ -263,7 +304,7 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     private void __ThrowIfDisposed()
     {
-        if(global::System.Threading.Volatile.Read(ref __disposed) != 0)
+        if(global::System.Threading.Volatile.Read(ref __disposed) != 0 || global::System.Threading.Volatile.Read(ref __singletons.Root.__disposed) != 0)
         {
             throw new global::System.ObjectDisposedException("AppContainer");
         }
@@ -283,5 +324,43 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
         }
 
         throw new global::System.AggregateException(errors);
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static void __DisposeLost(object instance)
+    {
+        try
+        {
+            if(instance is global::System.IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+            else if(instance is global::System.IAsyncDisposable asyncDisposable)
+            {
+                global::System.Threading.Tasks.ValueTask disposal = asyncDisposable.DisposeAsync();
+                if(disposal.IsCompletedSuccessfully)
+                {
+                    disposal.GetAwaiter().GetResult();
+                }
+                else
+                {
+                    _ = disposal.AsTask().ContinueWith(
+                        static task =>
+                        {
+                            foreach(global::System.Exception error in task.Exception!.InnerExceptions)
+                            {
+                                global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(error);
+                            }
+                        },
+                        global::System.Threading.CancellationToken.None,
+                        global::System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted | global::System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously,
+                        global::System.Threading.Tasks.TaskScheduler.Default);
+                }
+            }
+        }
+        catch(global::System.Exception e)
+        {
+            global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(e);
+        }
     }
 }

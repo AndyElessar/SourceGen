@@ -12,6 +12,16 @@ internal static class ContainerEmitter
     private const string ExceptionList = "global::System.Collections.Generic.List<global::System.Exception>";
     private const string InvalidOperation = "global::System.InvalidOperationException";
     private const string Interlocked = "global::System.Threading.Interlocked";
+    private const string Volatile = "global::System.Threading.Volatile";
+    private const string Report = "global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke";
+
+    /// <summary>The values of <c>ThreadSafeStrategy</c>.</summary>
+    private const int StrategyNone = 0;
+    private const int StrategyLock = 1;
+
+    /// <summary>The flags of <c>EagerResolveOptions</c>.</summary>
+    private const int EagerSingleton = 1;
+    private const int EagerScoped = 2;
 
     /// <summary>Generates the source of the partial container class.</summary>
     /// <param name="plan">The plan.</param>
@@ -49,9 +59,8 @@ internal static class ContainerEmitter
 
         WriteLookup(writer, plan, self);
         WriteServiceProvider(writer, self);
-        WriteDisposal(writer, plan, isAsync: false);
-        WriteDisposal(writer, plan, isAsync: true);
-        WriteHelpers(writer, container);
+        WriteDisposal(writer, plan);
+        WriteHelpers(writer, plan);
 
         writer.Indentation--;
         writer.WriteLine('}');
@@ -74,7 +83,10 @@ internal static class ContainerEmitter
 
     private static void WriteState(SourceWriter writer, ContainerPlan plan, string self)
     {
-        // The state that the root and all scopes share (Container.Output.spec, "Root and scope")
+        bool locks = plan.Container.ThreadSafeStrategy == StrategyLock;
+
+        // The state that the root and all scopes share (Container.Output.spec, "Root and scope"). Each Singleton has
+        // its own lock, so that a slow constructor does not block the first creation of the other Singletons.
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine("private sealed class __Singletons");
         writer.WriteLine('{');
@@ -82,7 +94,11 @@ internal static class ContainerEmitter
         writer.WriteLine($"public {self} Root = null!;");
         foreach(DefinitionPlan definition in plan.Definitions.Where(static d => d.Definition.Lifetime == Lifetime.Singleton))
         {
-            writer.WriteLine($"public readonly {Lock} {LockField(definition.Definition)} = new {Lock}();");
+            if(locks)
+            {
+                writer.WriteLine($"public readonly {Lock} {LockField(definition.Definition)} = new {Lock}();");
+            }
+
             writer.WriteLine($"public {TypeNames.CSharp(definition.Definition.Implementation)}? {Field(definition.Definition)};");
         }
 
@@ -95,8 +111,12 @@ internal static class ContainerEmitter
         writer.WriteLine("private readonly bool __isRoot;");
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine("private int __disposed;");
-        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-        writer.WriteLine($"private readonly {Lock} __scopedLock = new {Lock}();");
+        if(locks)
+        {
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine($"private readonly {Lock} __scopedLock = new {Lock}();");
+        }
+
         foreach(DefinitionPlan definition in plan.Definitions.Where(static d => d.Definition.Lifetime == Lifetime.Scoped))
         {
             writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
@@ -107,6 +127,7 @@ internal static class ContainerEmitter
     private static void WriteConstructors(SourceWriter writer, ContainerPlan plan, string self)
     {
         string name = plan.Container.Name;
+        int eager = plan.Container.EagerResolveOptions;
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine($"public {name}()");
@@ -115,6 +136,11 @@ internal static class ContainerEmitter
         writer.WriteLine("__singletons = new __Singletons();");
         writer.WriteLine("__singletons.Root = this;");
         writer.WriteLine("__isRoot = true;");
+        if((eager & EagerSingleton) != 0)
+        {
+            WriteEager(writer, plan, Lifetime.Singleton);
+        }
+
         writer.Indentation--;
         writer.WriteLine('}');
         writer.WriteLine();
@@ -123,6 +149,11 @@ internal static class ContainerEmitter
         writer.WriteLine('{');
         writer.Indentation++;
         writer.WriteLine("__singletons = root.__singletons;");
+        if((eager & EagerScoped) != 0)
+        {
+            WriteEager(writer, plan, Lifetime.Scoped);
+        }
+
         writer.Indentation--;
         writer.WriteLine('}');
         writer.WriteLine();
@@ -136,87 +167,181 @@ internal static class ContainerEmitter
         writer.WriteLine('}');
     }
 
+    /// <summary>
+    /// Creates each closed definition of <paramref name="lifetime"/> in the topological order, through the internal
+    /// resolvers. On a failure, it disposes what is already created, in the reverse order, and throws the original exception again
+    /// (Container.Output.spec, "Eager resolution").
+    /// </summary>
+    private static void WriteEager(SourceWriter writer, ContainerPlan plan, Lifetime lifetime)
+    {
+        ClosedDefinition[] definitions = [.. plan.TopologicalOrder
+            .Select(i => plan.Definitions[i].Definition)
+            .Where(d => d.Lifetime == lifetime)];
+        if(definitions.Length == 0)
+        {
+            return;
+        }
+
+        writer.WriteLine("try");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        foreach(ClosedDefinition definition in definitions)
+        {
+            writer.WriteLine($"{Get(definition)}();");
+        }
+
+        writer.Indentation--;
+        writer.WriteLine('}');
+
+        // The caller gets no container, so it cannot call DisposeAsync: an async-only instance starts its disposal
+        // without a wait, and each exception goes to the callback (__DisposeLost does both)
+        string owner = lifetime == Lifetime.Singleton ? "__singletons." : string.Empty;
+        writer.WriteLine("catch");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        writer.WriteLine($"{Interlocked}.Exchange(ref __disposed, 1);");
+        int variable = 0;
+        foreach(ClosedDefinition definition in Enumerable.Reverse(definitions).Where(static d => d.Disposal != Disposal.None))
+        {
+            string name = $"i{variable++}";
+            writer.WriteLine($"if({Interlocked}.Exchange(ref {owner}{Field(definition)}, null) is {{ }} {name})");
+            writer.WriteLine('{');
+            writer.WriteLine($"    __DisposeLost({name});");
+            writer.WriteLine('}');
+        }
+
+        writer.WriteLine();
+        writer.WriteLine("throw;");
+        writer.Indentation--;
+        writer.WriteLine('}');
+    }
+
     private static void WriteResolver(SourceWriter writer, ContainerPlan plan, int index, string self)
     {
         ClosedDefinition definition = plan.Definitions[index].Definition;
         string implementation = TypeNames.CSharp(definition.Implementation);
         writer.WriteLine();
-        switch(definition.Lifetime)
+        if(definition.Lifetime == Lifetime.Transient)
         {
-            case Lifetime.Singleton:
-                // The fast path is one field read and one null check, separate from the creation path
-                writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-                writer.WriteLine($"private {implementation} {Get(definition)}() => __singletons.{Field(definition)} ?? {Create(definition)}();");
-                writer.WriteLine();
-                writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-                writer.WriteLine($"private {implementation} {Create(definition)}()");
-                writer.WriteLine('{');
-                writer.Indentation++;
-                writer.WriteLine("__Singletons s = __singletons;");
-                writer.WriteLine($"lock(s.{LockField(definition)})");
-                writer.WriteLine('{');
-                writer.Indentation++;
-                writer.WriteLine($"if(s.{Field(definition)} is {{ }} existing)");
-                writer.WriteLine('{');
-                writer.WriteLine("    return existing;");
-                writer.WriteLine('}');
-                writer.WriteLine();
-                writer.WriteLine("// The dependencies of a Singleton are resolved on the root");
-                writer.WriteLine($"{self} c = s.Root;");
-                WriteCreation(writer, plan, index);
-                writer.WriteLine($"s.{Field(definition)} = instance;");
-                writer.WriteLine("return instance;");
-                writer.Indentation--;
-                writer.WriteLine('}');
-                writer.Indentation--;
-                writer.WriteLine('}');
-                break;
-            case Lifetime.Scoped:
-                writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-                writer.WriteLine($"private {implementation} {Get(definition)}() => {Field(definition)} ?? {Create(definition)}();");
-                writer.WriteLine();
-                writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-                writer.WriteLine($"private {implementation} {Create(definition)}()");
-                writer.WriteLine('{');
-                writer.Indentation++;
-                writer.WriteLine("if(__isRoot)");
-                writer.WriteLine('{');
-                writer.WriteLine($"    throw new {InvalidOperation}(\"Cannot resolve scoped service '{definition.Implementation.SortName}' from the root container.\");");
-                writer.WriteLine('}');
-                writer.WriteLine();
-                writer.WriteLine("lock(__scopedLock)");
-                writer.WriteLine('{');
-                writer.Indentation++;
-                writer.WriteLine($"if({Field(definition)} is {{ }} existing)");
-                writer.WriteLine('{');
-                writer.WriteLine("    return existing;");
-                writer.WriteLine('}');
-                writer.WriteLine();
-                writer.WriteLine($"{self} c = this;");
-                WriteCreation(writer, plan, index);
-                writer.WriteLine($"{Field(definition)} = instance;");
-                writer.WriteLine("return instance;");
-                writer.Indentation--;
-                writer.WriteLine('}');
-                writer.Indentation--;
-                writer.WriteLine('}');
-                break;
-            default:
-                writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-                writer.WriteLine($"private {implementation} {Get(definition)}()");
-                writer.WriteLine('{');
-                writer.Indentation++;
-                writer.WriteLine($"{self} c = this;");
-                WriteCreation(writer, plan, index);
-                writer.WriteLine("return instance;");
-                writer.Indentation--;
-                writer.WriteLine('}');
-                break;
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine($"private {implementation} {Get(definition)}()");
+            writer.WriteLine('{');
+            writer.Indentation++;
+            writer.WriteLine($"{self} c = this;");
+            WriteCreation(writer, plan, index, declare: true);
+            writer.WriteLine("return instance;");
+            writer.Indentation--;
+            writer.WriteLine('}');
+            return;
         }
+
+        bool singleton = definition.Lifetime == Lifetime.Singleton;
+        string owner = singleton ? "s." : string.Empty;
+        string field = $"{owner}{Field(definition)}";
+        int strategy = plan.Container.ThreadSafeStrategy;
+
+        // The fast path is one field read and one null check, separate from the creation path
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private {implementation} {Get(definition)}() => {(singleton ? "__singletons." : string.Empty)}{Field(definition)} ?? {Create(definition)}();");
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private {implementation} {Create(definition)}()");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        if(singleton)
+        {
+            writer.WriteLine("__Singletons s = __singletons;");
+        }
+        else
+        {
+            writer.WriteLine("if(__isRoot)");
+            writer.WriteLine('{');
+            writer.WriteLine($"    throw new {InvalidOperation}(\"Cannot resolve scoped service '{definition.Implementation.SortName}' from the root container.\");");
+            writer.WriteLine('}');
+            writer.WriteLine();
+        }
+
+        if(strategy == StrategyLock)
+        {
+            writer.WriteLine($"{implementation} instance;");
+            writer.WriteLine(singleton ? $"lock(s.{LockField(definition)})" : "lock(__scopedLock)");
+            writer.WriteLine('{');
+            writer.Indentation++;
+            WriteExisting(writer, field);
+            WriteContext(writer, singleton, self);
+            WriteCreation(writer, plan, index, declare: false);
+            WriteStore(writer, field);
+            writer.Indentation--;
+            writer.WriteLine('}');
+        }
+        else if(strategy == StrategyNone)
+        {
+            // No guarantee: concurrent first resolution can create more than one instance
+            WriteExisting(writer, field);
+            WriteContext(writer, singleton, self);
+            WriteCreation(writer, plan, index, declare: true);
+            WriteStore(writer, field);
+        }
+        else
+        {
+            // CompareExchange keeps the first instance. A losing instance is disposed at once
+            WriteContext(writer, singleton, self);
+            WriteCreation(writer, plan, index, declare: true);
+            writer.WriteLine($"if({Interlocked}.CompareExchange(ref {field}, instance, null) is {{ }} winner)");
+            writer.WriteLine('{');
+            if((definition.Disposal & Disposal.Sync) != 0)
+            {
+                writer.WriteLine("    __DisposeLoser(instance);");
+            }
+
+            writer.WriteLine("    return winner;");
+            writer.WriteLine('}');
+        }
+
+        // Check one more time after the store: a disposal that started meanwhile and this side compete for the
+        // instance, so that it is disposed exactly one time (Container.Output.spec, "After disposal, and concurrency")
+        writer.WriteLine();
+        writer.WriteLine($"if({Volatile}.Read(ref {(singleton ? "s.Root.__disposed" : "__disposed")}) != 0)");
+        writer.WriteLine('{');
+        if(definition.Disposal != Disposal.None)
+        {
+            writer.WriteLine($"    if(global::System.Object.ReferenceEquals({Interlocked}.CompareExchange(ref {field}, null, instance), instance))");
+            writer.WriteLine("    {");
+            writer.WriteLine("        __DisposeLost(instance);");
+            writer.WriteLine("    }");
+            writer.WriteLine();
+        }
+
+        writer.WriteLine($"    throw new global::System.ObjectDisposedException(\"{plan.Container.Name}\");");
+        writer.WriteLine('}');
+        writer.WriteLine();
+        writer.WriteLine("return instance;");
+        writer.Indentation--;
+        writer.WriteLine('}');
     }
 
-    /// <summary>Writes the local <c>instance</c>: <c>new</c> with each argument resolved on <c>c</c>.</summary>
-    private static void WriteCreation(SourceWriter writer, ContainerPlan plan, int index)
+    /// <summary>
+    /// Stores the instance with a full fence. The check of the disposed flag follows, and a plain store could be
+    /// reordered after that read, so a concurrent disposal could miss the instance.
+    /// </summary>
+    private static void WriteStore(SourceWriter writer, string field)
+        => writer.WriteLine($"{Interlocked}.Exchange(ref {field}, instance);");
+
+    private static void WriteExisting(SourceWriter writer, string field)
+    {
+        writer.WriteLine($"if({field} is {{ }} existing)");
+        writer.WriteLine('{');
+        writer.WriteLine("    return existing;");
+        writer.WriteLine('}');
+        writer.WriteLine();
+    }
+
+    /// <summary>Writes the local <c>c</c>: the container that resolves the dependencies. A Singleton uses the root.</summary>
+    private static void WriteContext(SourceWriter writer, bool singleton, string self)
+        => writer.WriteLine(singleton ? $"{self} c = s.Root;" : $"{self} c = this;");
+
+    /// <summary>Writes <c>instance = new ...</c> with each argument resolved on <c>c</c>.</summary>
+    private static void WriteCreation(SourceWriter writer, ContainerPlan plan, int index, bool declare)
     {
         DefinitionPlan definition = plan.Definitions[index];
         string implementation = TypeNames.CSharp(definition.Definition.Implementation);
@@ -229,13 +354,14 @@ internal static class ContainerEmitter
             }
         }
 
+        string target = declare ? $"{implementation} instance" : "instance";
         if(parameters.Length == 0)
         {
-            writer.WriteLine($"{implementation} instance = new {implementation}();");
+            writer.WriteLine($"{target} = new {implementation}();");
             return;
         }
 
-        writer.WriteLine($"{implementation} instance = new {implementation}(");
+        writer.WriteLine($"{target} = new {implementation}(");
         writer.Indentation++;
         for(int i = 0; i < parameters.Length; i++)
         {
@@ -367,14 +493,34 @@ internal static class ContainerEmitter
     }
 
     /// <summary>
-    /// Writes <c>Dispose</c> or <c>DisposeAsync</c>: the instances of one lifetime in the reverse topological order, each
-    /// one time, with the exceptions collected (Container.Output.spec, "Disposal").
+    /// Writes <c>Dispose</c>, <c>DisposeAsync</c>, and <c>__DisposeInstances</c>: the instances of one lifetime in the
+    /// reverse topological order, each one time, with the exceptions collected (Container.Output.spec, "Disposal").
     /// </summary>
-    private static void WriteDisposal(SourceWriter writer, ContainerPlan plan, bool isAsync)
+    private static void WriteDisposal(SourceWriter writer, ContainerPlan plan)
     {
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-        writer.WriteLine(isAsync ? "public async global::System.Threading.Tasks.ValueTask DisposeAsync()" : "public void Dispose()");
+        writer.WriteLine("public void Dispose()");
+        writer.WriteLine('{');
+        writer.WriteLine($"    if({Interlocked}.Exchange(ref __disposed, 1) == 0)");
+        writer.WriteLine("    {");
+        writer.WriteLine("        __ThrowIfAny(__DisposeInstances());");
+        writer.WriteLine("    }");
+        writer.WriteLine('}');
+
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private {ExceptionList}? __DisposeInstances()");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        WriteDisposalBody(writer, plan, isAsync: false);
+        writer.WriteLine("return errors;");
+        writer.Indentation--;
+        writer.WriteLine('}');
+
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine("public async global::System.Threading.Tasks.ValueTask DisposeAsync()");
         writer.WriteLine('{');
         writer.Indentation++;
         writer.WriteLine($"if({Interlocked}.Exchange(ref __disposed, 1) != 0)");
@@ -382,6 +528,14 @@ internal static class ContainerEmitter
         writer.WriteLine("    return;");
         writer.WriteLine('}');
         writer.WriteLine();
+        WriteDisposalBody(writer, plan, isAsync: true);
+        writer.WriteLine("__ThrowIfAny(errors);");
+        writer.Indentation--;
+        writer.WriteLine('}');
+    }
+
+    private static void WriteDisposalBody(SourceWriter writer, ContainerPlan plan, bool isAsync)
+    {
         writer.WriteLine($"{ExceptionList}? errors = null;");
         writer.WriteLine("if(__isRoot)");
         writer.WriteLine('{');
@@ -397,9 +551,6 @@ internal static class ContainerEmitter
         writer.Indentation--;
         writer.WriteLine('}');
         writer.WriteLine();
-        writer.WriteLine("__ThrowIfAny(errors);");
-        writer.Indentation--;
-        writer.WriteLine('}');
     }
 
     private static void WriteDisposals(SourceWriter writer, ContainerPlan plan, Lifetime lifetime, string owner, bool isAsync)
@@ -413,6 +564,7 @@ internal static class ContainerEmitter
                 continue;
             }
 
+            // The exchange is the right to dispose: a creation that runs at the same time competes for it
             string name = $"i{variable++}";
             writer.WriteLine($"if({Interlocked}.Exchange(ref {owner}{Field(definition)}, null) is {{ }} {name})");
             writer.WriteLine('{');
@@ -447,17 +599,23 @@ internal static class ContainerEmitter
         }
     }
 
-    private static void WriteHelpers(SourceWriter writer, ContainerModel container)
+    private static void WriteHelpers(SourceWriter writer, ContainerPlan plan)
     {
+        ContainerModel container = plan.Container;
+        DefinitionPlan[] stored = [.. plan.Definitions.Where(static d => d.Definition.Lifetime != Lifetime.Transient)];
+
+        // A scope also stops after the disposal of the root starts: the root disposes the Singletons, and a scope
+        // would otherwise create one again that nothing disposes
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine("private void __ThrowIfDisposed()");
         writer.WriteLine('{');
-        writer.WriteLine("    if(global::System.Threading.Volatile.Read(ref __disposed) != 0)");
+        writer.WriteLine($"    if({Volatile}.Read(ref __disposed) != 0 || {Volatile}.Read(ref __singletons.Root.__disposed) != 0)");
         writer.WriteLine("    {");
         writer.WriteLine($"        throw new global::System.ObjectDisposedException(\"{container.Name}\");");
         writer.WriteLine("    }");
         writer.WriteLine('}');
+
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine($"private static void __ThrowIfAny({ExceptionList}? errors)");
@@ -473,6 +631,80 @@ internal static class ContainerEmitter
         writer.WriteLine("    }");
         writer.WriteLine();
         writer.WriteLine("    throw new global::System.AggregateException(errors);");
+        writer.WriteLine('}');
+
+        if(stored.Any(static d => d.Definition.Disposal != Disposal.None))
+        {
+            WriteDisposeLost(writer);
+        }
+
+        if(container.ThreadSafeStrategy is not (StrategyNone or StrategyLock) && stored.Any(static d => (d.Definition.Disposal & Disposal.Sync) != 0))
+        {
+            WriteDisposeLoser(writer);
+        }
+    }
+
+    /// <summary>
+    /// An instance that is created while the container is disposed. The resolution must not block, and its
+    /// <c>ObjectDisposedException</c> takes the place of an exception of this disposal.
+    /// </summary>
+    private static void WriteDisposeLost(SourceWriter writer)
+    {
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine("private static void __DisposeLost(object instance)");
+        writer.WriteLine('{');
+        writer.WriteLine("    try");
+        writer.WriteLine("    {");
+        writer.WriteLine("        if(instance is global::System.IDisposable disposable)");
+        writer.WriteLine("        {");
+        writer.WriteLine("            disposable.Dispose();");
+        writer.WriteLine("        }");
+        writer.WriteLine("        else if(instance is global::System.IAsyncDisposable asyncDisposable)");
+        writer.WriteLine("        {");
+        writer.WriteLine("            global::System.Threading.Tasks.ValueTask disposal = asyncDisposable.DisposeAsync();");
+        writer.WriteLine("            if(disposal.IsCompletedSuccessfully)");
+        writer.WriteLine("            {");
+        writer.WriteLine("                disposal.GetAwaiter().GetResult();");
+        writer.WriteLine("            }");
+        writer.WriteLine("            else");
+        writer.WriteLine("            {");
+        writer.WriteLine("                _ = disposal.AsTask().ContinueWith(");
+        writer.WriteLine("                    static task =>");
+        writer.WriteLine("                    {");
+        writer.WriteLine("                        foreach(global::System.Exception error in task.Exception!.InnerExceptions)");
+        writer.WriteLine("                        {");
+        writer.WriteLine($"                            {Report}(error);");
+        writer.WriteLine("                        }");
+        writer.WriteLine("                    },");
+        writer.WriteLine("                    global::System.Threading.CancellationToken.None,");
+        writer.WriteLine("                    global::System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted | global::System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously,");
+        writer.WriteLine("                    global::System.Threading.Tasks.TaskScheduler.Default);");
+        writer.WriteLine("            }");
+        writer.WriteLine("        }");
+        writer.WriteLine("    }");
+        writer.WriteLine($"    catch({Exception} e)");
+        writer.WriteLine("    {");
+        writer.WriteLine($"        {Report}(e);");
+        writer.WriteLine("    }");
+        writer.WriteLine('}');
+    }
+
+    /// <summary>A losing instance of <c>CompareExchange</c>: only a synchronous disposal, and it does not throw.</summary>
+    private static void WriteDisposeLoser(SourceWriter writer)
+    {
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine("private static void __DisposeLoser(global::System.IDisposable instance)");
+        writer.WriteLine('{');
+        writer.WriteLine("    try");
+        writer.WriteLine("    {");
+        writer.WriteLine("        instance.Dispose();");
+        writer.WriteLine("    }");
+        writer.WriteLine($"    catch({Exception} e)");
+        writer.WriteLine("    {");
+        writer.WriteLine($"        {Report}(e);");
+        writer.WriteLine("    }");
         writer.WriteLine('}');
     }
 }
