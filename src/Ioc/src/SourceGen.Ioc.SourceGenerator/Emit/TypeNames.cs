@@ -15,6 +15,11 @@ internal static class TypeNames
         return builder.ToString();
     }
 
+    /// <summary>Gets the name of <paramref name="type"/> for a message: the C# display format without <c>global::</c>.</summary>
+    /// <param name="type">A closed type.</param>
+    /// <returns>The name, for example <c>App.IRepo</c>.</returns>
+    public static string Display(TypeRef type) => CSharp(type).Replace("global::", string.Empty);
+
     private static void Append(StringBuilder builder, TypeRef type)
     {
         switch(type)

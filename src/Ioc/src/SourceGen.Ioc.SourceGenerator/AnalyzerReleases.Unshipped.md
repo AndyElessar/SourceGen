@@ -8,4 +8,7 @@ SGIOC003 | SourceGen.Ioc | Error | Invalid implementation type
 SGIOC004 | SourceGen.Ioc | Error | Invalid service type
 SGIOC006 | SourceGen.Ioc | Error | Wrapper type cannot be registered
 SGIOC025 | SourceGen.Ioc | Error | Attribute on a class that is neither module nor container
+SGIOC107 | SourceGen.Ioc | Error | Unsupported module or container class
 SGIOC108 | SourceGen.Ioc | Error | Invalid Add method name
+SGIOC401 | SourceGen.Ioc | Error | Ambiguous dependency
+SGIOC402 | SourceGen.Ioc | Error | Missing dependency

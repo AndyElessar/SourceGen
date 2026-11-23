@@ -130,17 +130,18 @@ internal static class DeclarationReader
                 return;
             }
 
+            // The service types first: an invalid declaration still records the valid ones, so that a dependency on
+            // them finds the error node and causes no other diagnostic
+            (ImmutableEquatableArray<TypeRef> serviceTypes, bool validServiceTypes) = ReadServiceTypes(implementation, name, attribute, syntax);
             (IMethodSymbol? constructor, string? constructorError) = SelectConstructor(implementation);
             if(constructor is null)
             {
                 Report(Descriptors.ConstructorNotDetermined.Id, syntax, name, constructorError!);
-                AddError(implementationRef, lifetime);
-                return;
             }
 
-            if(ReadServiceTypes(implementation, name, attribute, syntax) is not { } serviceTypes)
+            if(constructor is null || !validServiceTypes)
             {
-                AddError(implementationRef, lifetime);
+                AddError(implementationRef, lifetime, serviceTypes);
                 return;
             }
 
@@ -149,7 +150,7 @@ internal static class DeclarationReader
                 return;
             }
 
-            declarations.Add(new RegistrationDeclaration(implementationRef, (Lifetime)lifetime, serviceTypes, parameters));
+            declarations.Add(new RegistrationDeclaration(implementationRef, (Lifetime)lifetime, serviceTypes, parameters, DisposalOf(implementation)));
             if(syntax is not null)
             {
                 sites.Add(new MergeSite(implementationRef, name, (Lifetime)lifetime, syntax.SyntaxTree.FilePath, syntax.Span));
@@ -160,8 +161,8 @@ internal static class DeclarationReader
         /// Records an invalid declaration. It skips the complete instance definition, also its valid declarations
         /// (Diagnostics.spec, "Consequences").
         /// </summary>
-        private void AddError(NamedTypeRef implementation, int lifetime)
-            => declarations.Add(new RegistrationDeclaration(implementation, (Lifetime)lifetime, [], [], IsError: true));
+        private void AddError(NamedTypeRef implementation, int lifetime, ImmutableEquatableArray<TypeRef> validServiceTypes)
+            => declarations.Add(new RegistrationDeclaration(implementation, (Lifetime)lifetime, validServiceTypes, [], IsError: true));
 
         /// <summary>The checks of the implementation type (Annotations.spec, "Checks of the implementation type").</summary>
         private static string? ImplementationError(ITypeSymbol type)
@@ -187,13 +188,13 @@ internal static class DeclarationReader
         }
 
         /// <summary>Expands and checks the service types (Annotations.spec, "Expansion of service types").</summary>
-        /// <returns>The service types, or <see langword="null"/> when one of them is invalid.</returns>
-        private ImmutableEquatableArray<TypeRef>? ReadServiceTypes(INamedTypeSymbol implementation, string name, AttributeData attribute, AttributeSyntax? syntax)
+        /// <returns>The valid service types, and whether all of them are valid.</returns>
+        private (ImmutableEquatableArray<TypeRef> Types, bool Valid) ReadServiceTypes(INamedTypeSymbol implementation, string name, AttributeData attribute, AttributeSyntax? syntax)
         {
             TypedConstant argument = attribute.NamedArguments.FirstOrDefault(static a => a.Key == "ServiceTypes").Value;
             if(argument.IsNull || argument.Kind != TypedConstantKind.Array)
             {
-                return [];
+                return ([], true);
             }
 
             List<TypeRef> serviceTypes = [];
@@ -244,7 +245,7 @@ internal static class DeclarationReader
                 }
             }
 
-            return valid ? serviceTypes.ToImmutableEquatableArray() : null;
+            return (serviceTypes.ToImmutableEquatableArray(), valid);
         }
 
         /// <summary>The checks of one service type after expansion.</summary>
@@ -283,7 +284,7 @@ internal static class DeclarationReader
                     return null;
                 }
 
-                parameters.Add(new ConstructorParameter(parameterRef, parameter.RefKind is RefKind.In or RefKind.RefReadOnlyParameter));
+                parameters.Add(new ConstructorParameter(parameterRef, parameter.Name, parameter.RefKind is RefKind.In or RefKind.RefReadOnlyParameter));
             }
 
             return parameters.ToImmutableEquatableArray();
@@ -373,6 +374,26 @@ internal static class DeclarationReader
         SeparatedSyntaxList<AttributeArgumentSyntax> arguments = syntax?.ArgumentList?.Arguments ?? default;
         return (arguments.FirstOrDefault(static a => a.NameColon?.Name.Identifier.ValueText == "implementationType")
             ?? arguments.FirstOrDefault(static a => a.NameColon is null && a.NameEquals is null))?.Expression;
+    }
+
+    /// <summary>
+    /// The disposal kind of a type that is created with <c>new</c>: its run-time type is known, so the interfaces decide
+    /// (Analysis.Model.spec, "Disposal kind").
+    /// </summary>
+    private static Disposal DisposalOf(INamedTypeSymbol type)
+    {
+        Disposal disposal = Disposal.None;
+        foreach(INamedTypeSymbol interfaceType in type.AllInterfaces)
+        {
+            disposal |= interfaceType.ToDisplayString() switch
+            {
+                "System.IDisposable" => Disposal.Sync,
+                "System.IAsyncDisposable" => Disposal.Async,
+                _ => Disposal.None,
+            };
+        }
+
+        return disposal;
     }
 
     private static bool ContainsTypeParameter(INamedTypeSymbol type)

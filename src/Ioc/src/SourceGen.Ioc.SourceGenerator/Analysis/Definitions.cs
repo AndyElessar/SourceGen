@@ -33,7 +33,7 @@ internal static class Definitions
                 .OrderBy(static t => t.SortName, StringComparer.Ordinal)
                 .ThenBy(static t => t.CanonicalString, StringComparer.Ordinal)];
 
-            definitions.Add(new ClosedDefinition(first.Implementation, first.Lifetime, [first.Implementation, .. others], first.ConstructorParameters));
+            definitions.Add(new ClosedDefinition(first.Implementation, first.Lifetime, [first.Implementation, .. others], first.ConstructorParameters, first.Disposal));
         }
 
         return definitions

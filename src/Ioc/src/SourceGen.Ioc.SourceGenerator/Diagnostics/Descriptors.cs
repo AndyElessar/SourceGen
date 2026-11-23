@@ -51,6 +51,27 @@ internal static class Descriptors
         "[{0}] on a class has effect only when the class has [IocModule] or [IocContainer]",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC107: the class cannot be a module or a container.</summary>
+    public static readonly DiagnosticDescriptor UnsupportedOutputClass = Create(
+        "SGIOC107",
+        "Unsupported module or container class",
+        "'{0}' cannot be a {1}: {2}",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC401: a single dependency has more than one candidate.</summary>
+    public static readonly DiagnosticDescriptor AmbiguousDependency = Create(
+        "SGIOC401",
+        "Ambiguous dependency",
+        "'{0}' requires a single '{1}' but {2} registrations provide it: {3}; use a key or depend on a collection",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC402: a required dependency has no candidate and the container has no fallback provider.</summary>
+    public static readonly DiagnosticDescriptor MissingDependency = Create(
+        "SGIOC402",
+        "Missing dependency",
+        "'{0}' requires '{1}', which is not registered",
+        DiagnosticSeverity.Error);
+
     /// <summary>SGIOC108: the <c>Add{Name}</c> method has no valid name.</summary>
     public static readonly DiagnosticDescriptor InvalidAddMethodName = Create(
         "SGIOC108",
@@ -67,7 +88,10 @@ internal static class Descriptors
         InvalidServiceType,
         WrapperServiceType,
         AttributeOnPlainClass,
+        UnsupportedOutputClass,
         InvalidAddMethodName,
+        AmbiguousDependency,
+        MissingDependency,
     }.ToDictionary(static d => d.Id);
 
     /// <summary>

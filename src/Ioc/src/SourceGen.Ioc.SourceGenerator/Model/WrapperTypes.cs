@@ -49,6 +49,14 @@ internal static class BuiltInServices
     /// <returns>Whether it is a built-in service type.</returns>
     public static bool IsBuiltIn(ITypeSymbol type) => type is INamedTypeSymbol { ContainingType: null, Arity: 0 } && Names.Contains(type.ToDisplayString());
 
+    /// <summary>
+    /// Gets a value indicating whether the built-in service with <paramref name="metadataName"/> is the root in the
+    /// container: <c>IServiceScopeFactory</c>, <c>IServiceProviderIsService</c>, <c>IServiceProviderIsKeyedService</c>.
+    /// </summary>
+    /// <param name="metadataName">The full metadata name of a non-generic type.</param>
+    /// <returns>Whether the container resolves it to the root.</returns>
+    public static bool IsRootService(string metadataName) => metadataName != ServiceProvider && Names.Contains(metadataName);
+
     /// <summary>Gets a value indicating whether <paramref name="type"/> is <c>IServiceProvider</c>.</summary>
     /// <param name="type">The type.</param>
     /// <returns>Whether it is <c>IServiceProvider</c>.</returns>
