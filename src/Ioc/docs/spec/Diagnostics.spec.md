@@ -72,6 +72,7 @@ A diagnostic message about the dependency graph MUST name the module and the ins
 The consequences follow the [Diagnostic policy](../Constitution.md#7-diagnostic-policy) of the constitution:
 
 - **Skip the declaration.** The complete instance definition that the declaration belongs to is skipped, also when its other declarations are valid. The instance definition stays in the dependency graph as an error node. A party that depends on it does not report a missing dependency as a result, and does not go to the fallback provider. Other outputs are processed as usual.
+  - When the key of a declaration is invalid (`SGIOC007`, `SGIOC011`, `SGIOC022`), the key is unknown. The declaration then belongs to no instance definition that another declaration has, and only that declaration is skipped. A valid declaration of the same implementation type, for example one without a key, is not affected.
 - **Do not generate the output.** The affected container, module output, or service collection extension is not generated at all. Other outputs are not affected.
 - **Inform only.** Warning and Info. Generation is not affected.
 
