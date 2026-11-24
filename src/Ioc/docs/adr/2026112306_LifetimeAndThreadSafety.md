@@ -13,7 +13,7 @@ The previous design had five `ThreadSafeStrategy` values, reported "singleton de
 
 ## Decision outcome
 
-1. **A disposable transient service is an error in the container.** The container does not track transient instances. The rule also covers the `T` of `Func<..., T>`, a transient definition with a disposable decorator, and a transient factory whose return type is known to be disposable. `Add{Name}` does not report it, because MS.DI disposes the instance.
+1. **A disposable transient service is an error in the container.** The container does not track transient instances. The rule also covers the `T` of `Func<..., T>`, a transient definition with a disposable decorator, and a transient factory whose return type is known to be disposable. The service collection extension does not report it, because MS.DI disposes the instance.
 2. **A captive dependency is an error.** A singleton cannot depend on a scoped service, also through `Lazy<T>`, `Func<T>`, or a transient service.
 3. **A singleton or scoped service that holds a transient service causes a Warning.** `SGIOC502` is for a singleton and `SGIOC503` for a scoped service. A dependency through `Func<T>` or `Func<..., T>` causes no warning, because the holder keeps only the factory.
 4. **`ThreadSafeStrategy` has three values:** `None`, `Lock` (default), and `CompareExchange`. `SemaphoreSlim` and `SpinLock` are removed. `CompareExchange` has the value `1 << 1`. In the previous version, `SemaphoreSlim` was `1 << 1`, `SpinLock` was `1 << 2`, and `CompareExchange` was `1 << 3`. `KeyType` and `EagerResolveOptions` keep their previous values.

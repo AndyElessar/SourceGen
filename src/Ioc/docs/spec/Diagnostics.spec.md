@@ -21,11 +21,11 @@ The numbers are in ranges by category and start at `SGIOC0xx`. Each range has on
 | Range | Category | Consequence | Where the generator reports it |
 | --- | --- | --- | --- |
 | `SGIOC0xx` | Errors in a single declaration | Skip the declaration | The assembly that has the declaration |
-| `SGIOC1xx` | Configuration errors of a container, a module, or an `Add{Name}` method | Do not generate the output | That assembly |
+| `SGIOC1xx` | Configuration errors of a container, a module, or a service collection extension | Do not generate the output | That assembly |
 | `SGIOC2xx` | Import problems | Do not generate the outputs that depend on the import | The importer |
 | `SGIOC3xx` | Errors of the dependency graph (both levels of checks find them) | Do not generate the output | Definite check: each assembly. Full check: the container |
-| `SGIOC4xx` | Errors that only the composer can find | Do not generate the output | `SGIOC401` to `SGIOC404`: the class that has `IocContainerAttribute`. `SGIOC405`: the assembly of the composer |
-| `SGIOC5xx` | Diagnostics that do not affect generation (Warning and Info) | None | `SGIOC501`: the class that has `IocContainerAttribute`. `SGIOC502` and `SGIOC503`: each assembly for the definite check, and the container for the full check. `SGIOC504`: the assembly that generates the `Add{Name}` method |
+| `SGIOC4xx` | Errors that only the composition root can find | Do not generate the output | `SGIOC401` to `SGIOC404`: the class that has `IocContainerAttribute`. `SGIOC405`: the assembly of the composition root |
+| `SGIOC5xx` | Diagnostics that do not affect generation (Warning and Info) | None | `SGIOC501`: the class that has `IocContainerAttribute`. `SGIOC502` and `SGIOC503`: each assembly for the definite check, and the container for the full check. `SGIOC504`: the assembly that generates the service collection extension |
 
 ### Levels
 
@@ -72,7 +72,7 @@ A diagnostic message about the dependency graph MUST name the module and the ins
 The consequences follow the [Diagnostic policy](../Constitution.md#7-diagnostic-policy) of the constitution:
 
 - **Skip the declaration.** The complete instance definition that the declaration belongs to is skipped, also when its other declarations are valid. The instance definition stays in the dependency graph as an error node. A party that depends on it does not report a missing dependency as a result, and does not go to the fallback provider. Other outputs are processed as usual.
-- **Do not generate the output.** The affected container, module output, or `Add{Name}` method is not generated at all. Other outputs are not affected.
+- **Do not generate the output.** The affected container, module output, or service collection extension is not generated at all. Other outputs are not affected.
 - **Inform only.** Warning and Info. Generation is not affected.
 
 ### Two pipelines
@@ -120,7 +120,7 @@ Error. Skip the declaration. Reported in the assembly that has the declaration.
 | `SGIOC025` | Attribute on a class that is neither module nor container | `[{0}] on a class has effect only when the class has [IocModule] or [IocContainer]` | Attribute | [Annotations: Attribute declarations](Annotations.spec.md#attribute-declarations) |
 | `SGIOC026` | Invalid factory or instance member | `'{0}' cannot be a {1}: {2}` (`{1}`: `factory` / `instance`. `{2}`: `it is not static` / `its containing type is an open generic`) | Registration attribute | [Annotations: Checks of a factory or instance member](Annotations.spec.md#checks-of-a-factory-or-instance-member) |
 
-## Configuration errors of a container, a module, or an `Add{Name}` method
+## Configuration errors of a container, a module, or a service collection extension
 
 Error. Do not generate the output. Reported in that assembly.
 
@@ -133,11 +133,11 @@ Error. Do not generate the output. Reported in that assembly.
 | `SGIOC105` | Inaccessible key in module output | `Key '{0}' of '{1}' is not accessible from other assemblies` | `Key` argument | The module output |
 | `SGIOC106` | Inaccessible constraint in module output | `Constraint '{0}' of '{1}' is not accessible from other assemblies` | Registration attribute | The module output |
 | `SGIOC107` | Unsupported module or container class | `'{0}' cannot be a {1}: {2}` (`{1}`: `module` / `container`. `{2}` for a container: `it is generic` / `it is nested in a generic type`) | Attribute | That output |
-| `SGIOC108` | Invalid Add method name | `'{0}' does not give a valid name for the Add method: {1}` (`{0}`: the `Name` of the attribute, or the assembly name when `Name` is not set. `{1}`: `no identifier characters remain` / `the name cannot start an identifier`) | `IocServiceCollectionExtensionsAttribute` | The `Add{Name}` method |
+| `SGIOC108` | Invalid Add method name | `'{0}' does not give a valid name for the Add method: {1}` (`{0}`: the `Name` of the attribute, or the assembly name when `Name` is not set. `{1}`: `no identifier characters remain` / `the name cannot start an identifier`) | `IocServiceCollectionExtensionsAttribute` | The service collection extension |
 
 ## Import problems
 
-Error. Reported on the `IocImportModuleAttribute` of the importer. The outputs that depend on the import are not generated. An import with assembly scope affects the module output, the `Add{Name}` method, and all ordinary containers. An import on an `ExplicitOnly` container affects only that container. Each problem is reported one time only, and it does not cause more diagnostics.
+Error. Reported on the `IocImportModuleAttribute` of the importer. The outputs that depend on the import are not generated. An import with assembly scope affects the module output, the service collection extension, and all ordinary containers. An import on an `ExplicitOnly` container affects only that container. Each problem is reported one time only, and it does not cause more diagnostics.
 
 | ID | Title | Message | Rule |
 | --- | --- | --- | --- |
@@ -166,9 +166,9 @@ Error. Do not generate the output. The definite check reports one time in each a
 | `SGIOC305` | Invalid Func with arguments | `'{0}' cannot be generated: {1}` | [Analysis model: Mapping of `Func<..., T>`](Analysis.Model.spec.md#mapping-of-func-t) |
 | `SGIOC306` | Infinitely recursive generic | `Closing '{0}' requires '{1}', which nests type arguments without end` | [Analysis model: Infinitely recursive generics](Analysis.Model.spec.md#infinitely-recursive-generics) |
 
-## Errors that only the composer can find
+## Errors that only the composition root can find
 
-Error. Do not generate the output. Only a container reports `SGIOC401` to `SGIOC404`, on the container class, and that container is not generated. `SGIOC402` applies only to a container without a fallback provider. A container reports `SGIOC405`, and so does an assembly that generates an `Add{Name}` method (an assembly that has `IocServiceCollectionExtensionsAttribute`). The generator reports `SGIOC405` in the assembly of the composer, and that container or `Add{Name}` method is not generated.
+Error. Do not generate the output. Only a container reports `SGIOC401` to `SGIOC404`, on the container class, and that container is not generated. `SGIOC402` applies only to a container without a fallback provider. A container reports `SGIOC405`, and so does an assembly that generates a service collection extension (an assembly that has `IocServiceCollectionExtensionsAttribute`). The generator reports `SGIOC405` in the assembly of the composition root, and that container or service collection extension is not generated.
 
 | ID | Title | Message | Rule |
 | --- | --- | --- | --- |
@@ -190,13 +190,13 @@ Generation is not affected. Reported on the container class, and only for a cont
 
 ### Warning
 
-Generation is not affected. The user can change the level (see [Levels](#levels)). For `SGIOC502` and `SGIOC503`, the definite check reports at the location of the dependency site (parameter or member), and the full check reports on the container class. The two do not report the same problem twice. See [Analysis model: Two levels of checks](Analysis.Model.spec.md#two-levels-of-checks). `SGIOC504` is reported only in an assembly that generates an `Add{Name}` method.
+Generation is not affected. The user can change the level (see [Levels](#levels)). For `SGIOC502` and `SGIOC503`, the definite check reports at the location of the dependency site (parameter or member), and the full check reports on the container class. The two do not report the same problem twice. See [Analysis model: Two levels of checks](Analysis.Model.spec.md#two-levels-of-checks). `SGIOC504` is reported only in an assembly that generates a service collection extension.
 
 | ID | Title | Message | Rule |
 | --- | --- | --- | --- |
 | `SGIOC502` | Singleton holds a transient service | `Singleton '{0}' holds transient '{1}' for the lifetime of the container; depend on Func<{2}> to create instances on demand` | [Analysis model: Warning for a held Transient](Analysis.Model.spec.md#warning-for-a-held-transient) |
 | `SGIOC503` | Scoped service holds a transient service | `Scoped '{0}' holds transient '{1}' for the lifetime of the scope; depend on Func<{2}> to create instances on demand` | [Analysis model: Warning for a held Transient](Analysis.Model.spec.md#warning-for-a-held-transient) |
-| `SGIOC504` | Ambiguous registrations in Add method | `'{0}' requires a single '{1}' but {2} untagged registrations provide it: {3}; {4} resolves '{5}'` (`{4}`: the method name. `{5}`: the candidate that wins when no tag is given) | [`Add{Name}` output: Definite ambiguity](Register.Output.spec.md#definite-ambiguity) |
+| `SGIOC504` | Ambiguous registrations in Add method | `'{0}' requires a single '{1}' but {2} untagged registrations provide it: {3}; {4} resolves '{5}'` (`{4}`: the method name. `{5}`: the candidate that wins when no tag is given) | [Service collection extension output: Definite ambiguity](ServiceCollection.Output.spec.md#definite-ambiguity) |
 
 ## Diagnostics by problem
 
@@ -234,17 +234,17 @@ Generation is not affected. The user can change the level (see [Levels](#levels)
 | Missing dependency (no fallback provider) | `SGIOC402` |
 | Disposable Transient | `SGIOC403` |
 | Duplicate key of a dictionary | `SGIOC404` |
-| An open generic must be closed with a type that the composer cannot write | `SGIOC405` |
+| An open generic must be closed with a type that the composition root cannot write | `SGIOC405` |
 | The type of a key value is not supported | `SGIOC022` |
 | `[ServiceKey]` on a parameter of a registration without a key | `SGIOC023` |
 | A member has two injection settings | `SGIOC024` |
 | An attribute on a class that is neither a module nor a container | `SGIOC025` |
 | A class that cannot be a module or a container | `SGIOC107` |
 | A factory or instance member that is not static, or whose containing type is an open generic | `SGIOC026` |
-| The name of the `Add{Name}` method is not a valid identifier | `SGIOC108` |
+| The method name `Add{Name}` is not a valid identifier | `SGIOC108` |
 | Missing dependency (with a fallback provider) | `SGIOC501` |
 | Singleton depends on Transient / Scoped depends on Transient | `SGIOC502`, `SGIOC503` |
-| Definite ambiguity in `Add{Name}` | `SGIOC504` |
+| Definite ambiguity in the service collection extension | `SGIOC504` |
 
 ## Tests
 

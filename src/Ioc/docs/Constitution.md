@@ -46,8 +46,9 @@ Rules:
 | Dependency site | A place that asks for a dependency: a constructor parameter, an injected member, a parameter of a factory method, a parameter of a decorator, or a partial accessor. |
 | Module | An assembly that marks a class with `IocModuleAttribute` so that other assemblies can import its registrations. |
 | Importer | An assembly that imports a module with `IocImportModuleAttribute`. An importer can be a module too. |
-| Composer | The party that flattens all imported modules into one dependency graph and owns the instances. A composer is a generated container or the `Add{Name}` method of an assembly. |
-| Output | One of the three independent results of the generator: a container, a module output (module info and entries), or an `Add{Name}` method. |
+| Composition root | The output that flattens all imported modules into one dependency graph: a generated container, or the service collection extension of an assembly. A container owns its instances. With the service collection extension, MS.DI owns them. |
+| Service collection extension | The `IServiceCollection` extension method `Add{Name}` that the generator emits for an assembly with `[assembly: IocServiceCollectionExtensions]`. It registers the dependency graph with MS.DI. |
+| Output | One of the three independent results of the generator: a container, a module output (module info and entries), or a service collection extension. |
 | Fallback provider | The `IServiceProvider` that a container asks when it has no registration for a request. |
 | Suppression | The rule that a concrete registration removes a derived registration with the same implementation type and key. |
 | Definite edge | A dependency edge whose target cannot change when tags change or when an importer adds registrations. |
@@ -134,18 +135,18 @@ These features are outside the core. They are handled as extensions after the co
 - The activator interfaces of MVC and Blazor.
 - Feature switches (`SourceGenIocFeatures`).
 - A tool that shows the dependency graph.
-- A generic visitor that lets a module close an open generic of the composer with an inaccessible type.
+- A generic visitor that lets a module close an open generic of the composition root with an inaccessible type.
 - Service lookup by a generated `switch` in the container.
-- A compile-time check for a call to an `Add{Name}` method that another `Add{Name}` method already covers.
+- A compile-time check for a call to a service collection extension that another service collection extension already covers.
 
 ## 6. Composition model
 
-Only the composer owns instances.
+A module owns no instance. Only the composition root builds the dependency graph.
 
-- A module holds no instance. It gives registration information and entries.
-- The composer flattens the registrations of all modules into one dependency graph. It manages lifetime, caching, and disposal itself.
+- The composition root flattens the registrations of all modules into one dependency graph. A container manages lifetime, caching, and disposal itself. The service collection extension leaves them to MS.DI.
+- A module gives registration information and entries.
 - A module gives its information to the importer at compile time only. The information MUST be complete enough that the importer does not depend on a symbol that it cannot access.
-- A module gives public entries so that the composer can create and use types that are internal to the module.
+- A module gives public entries so that the composition root can create and use types that are internal to the module.
 - The order of registrations does not depend on which assembly declares them or on the order of imports. An assembly cannot override a registration of a module that it imports.
 - A public type or member that exists only for generated code is not a user API. Its shape can change with the version of the generator.
 
@@ -167,7 +168,7 @@ Levels:
 Each diagnostic MUST have exactly one of these consequences:
 
 - **Skip the declaration.** The generator skips that declaration and continues. The skipped instance definition stays in the dependency graph as an error node. A dependency on an error node does not cause another diagnostic and does not go to the fallback provider.
-- **Do not generate the output.** The affected container, module output, or `Add{Name}` method is not generated. Other outputs are not affected.
+- **Do not generate the output.** The affected container, module output, or service collection extension is not generated. Other outputs are not affected.
 - **Inform only.** Warning or Info. Generation is not affected.
 
 The generator checks the dependency graph at two levels:
@@ -181,7 +182,7 @@ Diagnostic reporting MUST NOT break incremental caching.
 
 ## 8. Documented differences from MS.DI
 
-"Container" means the generated container. "Registration" means the `Add{Name}` method.
+"Container" means the generated container. "Service collection extension" means the `IServiceCollection` extension method. "Both" means both outputs.
 
 | # | Difference | Applies to |
 | --- | --- | --- |
@@ -201,15 +202,15 @@ Diagnostic reporting MUST NOT break incremental caching.
 | 14 | `KeyedService.AnyKey` cannot be used to register. | Both |
 | 15 | Wrapper types cannot be registered as service types. | Both |
 | 16 | Only reference types can be registered as service types. | Both |
-| 17 | A dependency site that the generator sees at compile time matches keys by their compile-time identity. A lookup at run time by `Type` and key uses `Equals`, as MS.DI does. MS.DI uses `Equals` in both cases, so two keys with different identities that are equal at run time match in `Add{Name}` and do not match at a compile-time dependency site of the container. | Container |
-| 18 | Ambiguity, missing dependencies, and disposable transient services are not checked at compile time. MS.DI handles them at run time. | Registration |
-| 19 | `Task<T>` is not registered as a service. An asynchronous service cannot be resolved with `GetService<Task<T>>()`. | Registration |
-| 20 | When a service type has asynchronous candidates, `GetServices<T>()` returns only the synchronous candidates. The container throws. | Registration |
-| 21 | MS.DI calls `Dispose` on the same Singleton or Scoped object more than once: once through its holder and once for each service type registration that returns it. The container disposes it once. | Registration |
+| 17 | A dependency site that the generator sees at compile time matches keys by their compile-time identity. A lookup at run time by `Type` and key uses `Equals`, as MS.DI does. MS.DI uses `Equals` in both cases, so two keys with different identities that are equal at run time match in the service collection extension and do not match at a compile-time dependency site of the container. | Container |
+| 18 | Ambiguity, missing dependencies, and disposable transient services are not checked at compile time. MS.DI handles them at run time. | Service collection extension |
+| 19 | `Task<T>` is not registered as a service. An asynchronous service cannot be resolved with `GetService<Task<T>>()`. | Service collection extension |
+| 20 | When a service type has asynchronous candidates, `GetServices<T>()` returns only the synchronous candidates. The container throws. | Service collection extension |
+| 21 | MS.DI calls `Dispose` on the same Singleton or Scoped object more than once: once through its holder and once for each service type registration that returns it. The container disposes it once. | Service collection extension |
 | 22 | When the return type of a transient factory does not show at compile time whether the object is disposable, the object is not disposed. MS.DI tracks and disposes it. | Container |
 | 23 | When a service throws during disposal, the container continues to dispose the other services and throws at the end. MS.DI stops, and the other services are not disposed. | Container |
 | 24 | Without a fallback provider, a request by `Type` for an `IEnumerable<T>` that the container does not know returns `null`, so `sp.GetServices<T>()` throws. MS.DI returns an empty collection. Calls that are visible at compile time and the strongly typed `GetServices<T>()` of the container are not affected. | Container |
-| 25 | A resolve call in code asks for `Lazy<T>` or `Func<T>`, and `T` has no registration in the assembly view (for example a service of the framework). The container creates the wrapper and resolves `T` inside it. `Add{Name}` registers no wrapper, so the call gets `null`. A dependency site is not affected: it creates the wrapper itself. | Registration |
+| 25 | A resolve call in code asks for `Lazy<T>` or `Func<T>`, and `T` has no registration in the assembly view (for example a service of the framework). The container creates the wrapper and resolves `T` inside it. The service collection extension registers no wrapper, so the call gets `null`. A dependency site is not affected: it creates the wrapper itself. | Service collection extension |
 
 ## 9. Testing and benchmarks
 

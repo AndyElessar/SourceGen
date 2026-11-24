@@ -2,7 +2,7 @@
 
 namespace SourceGen.Ioc.Test.Library;
 
-/// <summary>The guard against duplicate registration (Register.Output.spec, "Guard against duplicate registration").</summary>
+/// <summary>The guard against duplicate registration (ServiceCollection.Output.spec, "Guard against duplicate registration").</summary>
 public class IocRegistrationMarkerTests
 {
     [Test]

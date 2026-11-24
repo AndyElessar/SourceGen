@@ -2,7 +2,7 @@ using SourceGen.Ioc.Model;
 
 namespace SourceGen.Ioc.Emit;
 
-/// <summary>Generates the <c>Add{Name}</c> method (Register.Output.spec).</summary>
+/// <summary>Generates the <c>Add{Name}</c> method (ServiceCollection.Output.spec).</summary>
 internal static class AddMethodEmitter
 {
     private const string Services = "global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions";
@@ -160,7 +160,7 @@ internal static class AddMethodEmitter
         }
     }
 
-    /// <summary>The expression that resolves the argument of <paramref name="parameter"/> (Register.Output.spec, "Dependency resolution").</summary>
+    /// <summary>The expression that resolves the argument of <paramref name="parameter"/> (ServiceCollection.Output.spec, "Dependency resolution").</summary>
     private static string Argument(ConstructorParameter parameter)
         => BuiltInServices.IsServiceProvider(parameter.Type)
             ? "sp"

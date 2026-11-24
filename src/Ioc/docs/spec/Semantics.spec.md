@@ -6,7 +6,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY in this document are t
 
 ## Overview
 
-This specification defines what a registration means and how a dependency is resolved. These rules do not depend on the output. They apply to the container, to the module output and to `Add{Name}`, unless a rule names one output.
+This specification defines what a registration means and how a dependency is resolved. These rules do not depend on the output. They apply to the container, to the module output and to the service collection extension, unless a rule names one output.
 
 The constitution holds the terms, the principles, the scope and the diagnostic policy. This specification adds only the details that the constitution does not state. In this document, each statement that something "is an error" is an IoC semantic error. The generator always reports it at the Error level. For the ID of each diagnostic, see the [diagnostic list](Diagnostics.spec.md).
 
@@ -36,7 +36,7 @@ The constitution holds the terms, the principles, the scope and the diagnostic p
   - If more than one candidate stays after that rule, a dependency site that asks for one service gets an ambiguity error. The user MUST use a key or a collection. A request for one service at run time throws `InvalidOperationException`.
   - A collection contains all instance definitions and does not apply the priority rule. A dictionary applies the priority rule first and then checks for duplicate keys.
 - Ordering. The two outputs share it, and it does not depend on how registrations are imported. Derived registrations come first, and concrete registrations come second. In each group, the ordering is ordinal, by the fully qualified name of the instance definition (implementation type, factory method, instance member) and the canonical form of the key.
-  - Consequence: a registration of the assembly does not override a registration of an imported module. When more than one concrete registration provides the same service type, the container reports an ambiguity. In `Add{Name}`, the registration that is last by name wins, and it does not matter which assembly imports which.
+  - Consequence: a registration of the assembly does not override a registration of an imported module. When more than one concrete registration provides the same service type, the container reports an ambiguity. In the service collection extension, the registration that is last by name wins, and it does not matter which assembly imports which.
 
 For the detailed rules, see [Constructor selection](Annotations.spec.md#constructor-selection), [Instance definitions](Analysis.Model.spec.md#instance-definitions), [Suppression](Analysis.Model.spec.md#suppression) and [Single service](Analysis.Model.spec.md#single-service).
 
@@ -187,7 +187,7 @@ For the detailed rules, see [Keys](Annotations.spec.md#keys) and [Key specificat
 - A service without tags is always included.
 - A service with tags is included only when at least one tag matches.
 - Tags belong to the instance definition.
-- The container specifies tags at compile time with `IncludeTags`. `Add{Name}` specifies tags at run time with the parameters of the method.
+- The container specifies tags at compile time with `IncludeTags`. The service collection extension specifies tags at run time with the parameters of the method.
 
 For the detailed rules, see [Tags](Analysis.Model.spec.md#tags).
 
@@ -202,13 +202,13 @@ There are two registration scopes only: the whole assembly, or private to one `E
 | The same attributes as the row above | A container class with `ExplicitOnly = true` | That container only |
 | `IocInjectAttribute`, `[FromKeyedServices]`, `[ServiceKey]`, `[ActivatorUtilitiesConstructor]` | Members and parameters of the type | An annotation that belongs to the type itself. It is visible to all registration scopes |
 
-- Registrations and imports of the whole-assembly scope: all ordinary containers of the assembly include them, and they go to the module output and to `Add{Name}`.
-- An `ExplicitOnly` container is isolated. It includes only the registrations and imports that are on itself, and it cannot see the registrations and imports of the assembly scope. Its own registrations also do not go to the module output or to `Add{Name}`. Thus the two registration scopes cannot have a conflict of instance definitions.
+- Registrations and imports of the whole-assembly scope: all ordinary containers of the assembly include them, and they go to the module output and to the service collection extension.
+- An `ExplicitOnly` container is isolated. It includes only the registrations and imports that are on itself, and it cannot see the registrations and imports of the assembly scope. Its own registrations also do not go to the module output or to the service collection extension. Thus the two registration scopes cannot have a conflict of instance definitions.
 - An `ExplicitOnly` container does not apply tags. It includes everything that is on it. `ExplicitOnly` together with `IncludeTags` is an error.
 - One class MUST NOT be both an `ExplicitOnly` container and a module. An `ExplicitOnly` container MUST NOT import the module of its own assembly. Both are errors.
 - `IocInjectMemberAttribute` MUST be in the same assembly and the same registration scope as the **registration attribute** of that implementation type. If it is not, it is an error. The limit is on the position of the registration, not on the position of the type definition:
   - Allowed: the type is defined in a third-party library. The user registers it in the user's own assembly with `IocRegisterForAttribute` and puts `IocInjectMemberAttribute` in the same assembly.
-  - Not allowed: a module registers a type, and the importer puts `IocInjectMemberAttribute` on that type. The construction is enclosed in the construction entry of the module, and the importer cannot add to it. One instance definition also MUST NOT have different constructions for different composers.
+  - Not allowed: a module registers a type, and the importer puts `IocInjectMemberAttribute` on that type. The construction is enclosed in the construction entry of the module, and the importer cannot add to it. One instance definition also MUST NOT have different constructions for different composition roots.
   - Not allowed: the registration is in the assembly scope and `IocInjectMemberAttribute` is on an `ExplicitOnly` container, or the reverse.
 - An assembly that has no container and no module can import a module with an assembly-level `IocImportModuleAttribute`.
 - A demand that a resolve call discovers belongs to the whole assembly. It also has an effect on an `ExplicitOnly` container, but the generator generates only for the registrations that the container already has.
@@ -237,7 +237,7 @@ The generated container does not dispose Transient services, which is different 
 
 More rules for this limit:
 
-- The generator reports it on the container only. `Add{Name}` does not report it, because MS.DI disposes the service.
+- The generator reports it on the container only. The service collection extension does not report it, because MS.DI disposes the service.
 - This limit is not relaxed. The DI guidelines of .NET recommend that an `IDisposable` is not registered as transient. The registrations of the framework are all in the fallback provider, so this limit does not affect them.
 - When the return type of a Transient factory does not show at compile time whether the object is disposable (an interface or a class that is not sealed), it is not an error. The container does not check the object and does not track it. The returned object is not disposed.
 
@@ -255,5 +255,5 @@ This limit is for registration only. When the type of a dependency is a value ty
 - [Analysis model](Analysis.Model.spec.md)
 - [Module output](Module.Output.spec.md)
 - [Container output](Container.Output.spec.md)
-- [`Add{Name}` output](Register.Output.spec.md)
+- [Service collection extension output](ServiceCollection.Output.spec.md)
 - [Diagnostic list](Diagnostics.spec.md)

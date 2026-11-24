@@ -7,7 +7,7 @@ date: 2026-11-23
 
 ## Context and problem statement
 
-MS.DI addresses a registration only by service type and key. One closed definition can have several service types, decorator chains, and wrappers, and all of them must share one instance. `Add{Name}` therefore registers hidden objects under private keys.
+MS.DI addresses a registration only by service type and key. One closed definition can have several service types, decorator chains, and wrappers, and all of them must share one instance. The service collection extension therefore registers hidden objects under private keys.
 
 MS.DI disposes only the objects that it tracks: those that a factory delegate returns. An object that generated code creates inside a factory delegate and does not return is never disposed, unless something that MS.DI tracks disposes it.
 

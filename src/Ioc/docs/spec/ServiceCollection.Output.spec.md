@@ -1,4 +1,4 @@
-# `Add{Name}` output
+# Service collection extension output
 
 > Parent document: [Constitution](../Constitution.md). If this document and the constitution disagree, the constitution wins.
 
@@ -6,23 +6,23 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY in this document are t
 
 ## Overview
 
-An assembly marked with `[assembly: IocServiceCollectionExtensions]` generates one `Add{Name}` extension method. The method is opt-in (see [Conditions for generation](#conditions-for-generation)). It registers the complete dependency graph of the [assembly view](Analysis.Model.spec.md#views) (Analysis model, section "Views") in the `IServiceCollection`. MS.DI owns the instances: MS.DI handles lifetime, caching, the selection of a single service, and disposal.
+An assembly marked with `[assembly: IocServiceCollectionExtensions]` generates one service collection extension: an `IServiceCollection` extension method named `Add{Name}`. The method is opt-in (see [Conditions for generation](#conditions-for-generation)). It registers the complete dependency graph of the [assembly view](Analysis.Model.spec.md#views) (Analysis model, section "Views") in the `IServiceCollection`. MS.DI owns the instances: MS.DI handles lifetime, caching, the selection of a single service, and disposal.
 
-As with the container, the composer registers everything. The complete dependency graph has two parts:
+As with the container, the service collection extension registers everything. The complete dependency graph has two parts:
 
 - The instance definitions of the scope of this assembly.
 - The instance definitions of all imported modules, indirect imports included.
 
 The method creates the internal types of other assemblies through the construction entries of the modules.
 
-The `Add{Name}` method supports all features of [Semantics](Semantics.spec.md). It implements them with `sp => ...` factory delegates. The exceptions are:
+The service collection extension supports all features of [Semantics](Semantics.spec.md). It implements them with `sp => ...` factory delegates. The exceptions are:
 
 - An instance registration (see [Registration for each lifetime](#registration-for-each-lifetime)).
 - An asynchronous service (see [Asynchronous closed definitions](#asynchronous-closed-definitions)).
 
-The `Add{Name}` method and the container use the same [construction plan](Analysis.Model.spec.md#construction-plan) (Analysis model, section "Construction plan"). The differences are:
+The service collection extension and the container use the same [construction plan](Analysis.Model.spec.md#construction-plan) (Analysis model, section "Construction plan"). The differences are:
 
-| Item | Container | `Add{Name}` |
+| Item | Container | Service collection extension |
 | --- | --- | --- |
 | Tags | Compile time (`IncludeTags`) | Run time (a parameter of the method) |
 | Checks | Full check | Definite check, plus `SGIOC405` and `SGIOC504` |
@@ -32,7 +32,7 @@ The `Add{Name}` method and the container use the same [construction plan](Analys
 
 ## Conditions for generation
 
-The `Add{Name}` method is opt-in. The generator generates it only for an assembly that has the assembly-level attribute below.
+The service collection extension is opt-in. The generator generates it only for an assembly that has the assembly-level attribute below.
 
 ```csharp
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false, Inherited = false)]
@@ -48,10 +48,10 @@ public sealed class IocServiceCollectionExtensionsAttribute : Attribute
 ```
 
 - The name of the attribute matches the generated class `{Name}ServiceCollectionExtensions`. The `Name` property of the attribute gives the `{Name}` part of the method name. The attribute is the only source of the method name.
-- An assembly without this attribute does not generate an `Add{Name}` method. The definite check, the module output, and the containers are not affected.
+- An assembly without this attribute does not generate a service collection extension. The definite check, the module output, and the containers are not affected.
 - When the assembly has this attribute but the assembly view has no instance definition (its own or imported), the generator still generates the method. The method does only the [guard against duplicate registration](#guard-against-duplicate-registration).
 - When the definite check has an Error, the generator does not generate the method (see [Checks](#checks)).
-- Reason: each `Add{Name}` method contains all the modules that it imports. If each assembly generated one, the registration code of a module that is imported through several levels would compile again at each level. The user could also think that the method of each module must be called.
+- Reason: each service collection extension contains all the modules that it imports. If each assembly generated one, the registration code of a module that is imported through several levels would compile again at each level. The user could also think that the method of each module must be called.
 
 ## Method
 
@@ -71,11 +71,11 @@ public static class {Name}ServiceCollectionExtensions
 | `tags` | The tags to include. An instance definition without tags is always registered. An instance definition with tags is registered only when at least one of its tags is in `tags` |
 
 - The class name contains `{Name}`. This prevents two classes with the same name when two assemblies use the same namespace.
-- The user calls only the `Add{Name}` method of the final assembly. A module MUST NOT be imported and also have its own `Add{Name}` method called separately. On a violation, the [guard against duplicate registration](#guard-against-duplicate-registration) throws at run time.
+- The user calls only the service collection extension of the final assembly. A module MUST NOT be imported and also have its own service collection extension called separately. On a violation, the [guard against duplicate registration](#guard-against-duplicate-registration) throws at run time.
 
 ## Guard against duplicate registration
 
-Before it registers any service, the `Add{Name}` method checks for markers and leaves markers. The `SourceGen.Ioc` library gives:
+Before it registers any service, the service collection extension checks for markers and leaves markers. The `SourceGen.Ioc` library gives:
 
 ```csharp
 [EditorBrowsable(EditorBrowsableState.Never)]
@@ -94,9 +94,9 @@ public sealed class IocRegistrationMarker
 - A marker is registered as an instance with `IocRegistrationMarker` as the service type. MS.DI does not dispose an object that is registered as an instance. The check scans `services` linearly one time.
 - When one of the `assemblies` already has a marker, the method throws `InvalidOperationException`. The message names that assembly, the method that registered it before, and the rule "call only the method of the final assembly". In this case `services` is not modified.
 - The guard stops three situations:
-  - The same `Add{Name}` method is called two times. This includes one call for each of two different sets of tags: all tags MUST be given in the same call.
-  - A module is imported, and its own `Add{Name}` method is also called separately, in either order.
-  - The host calls two `Add{Name}` methods that import the same module. This combination is not supported. In this case the user MUST create a final assembly that imports both.
+  - The same service collection extension is called two times. This includes one call for each of two different sets of tags: all tags MUST be given in the same call.
+  - A module is imported, and its own service collection extension is also called separately, in either order.
+  - The host calls two service collection extensions that import the same module. This combination is not supported. In this case the user MUST create a final assembly that imports both.
 - This is not a compile-time check. A compile-time diagnostic is left for a later evaluation, because the project of the caller does not always have the generator.
 
 ## Registration order
@@ -107,8 +107,8 @@ The method processes the closed definitions one by one in their [ordering](Analy
 - The order of a collection is the same as in the container, without the merge with the fallback.
 - When more than one concrete registration gives the same "service type + key", the last one in the ordering wins. In the container this situation is a compile-time error.
   - The sort name decides the winner. The assembly that declares the registration and the direction of the imports have no effect. **A registration of this assembly does not override a registration of an imported module.** This differs from the MS.DI convention that a later registration overrides an earlier one.
-  - To replace an implementation that a module gives, use a different key. As an alternative, the module gives that registration with a tag, and the composer decides whether to enable it.
-  - This applies only inside one `Add{Name}` method. A service that the user registers after the call to `Add{Name}` still overrides it by the rules of MS.DI.
+  - To replace an implementation that a module gives, use a different key. As an alternative, the module gives that registration with a tag, and the composition root decides whether to enable it.
+  - This applies only inside one service collection extension. A service that the user registers after the call to the service collection extension still overrides it by the rules of MS.DI.
 
 ## Tags
 
@@ -116,7 +116,7 @@ At its start, the method converts `tags` to one boolean value for each tag. The 
 
 - When a derived registration records a [suppressor](Analysis.Model.spec.md#suppression) (Analysis model, section "Suppression"), it is registered only when the suppressor is not included. The method filters first, then suppresses.
 - The registrations of decorator chains, wrapper types, and collections follow the closed definition that they belong to.
-- The content of a dictionary is decided by the tags at the call to `Add{Name}`. When one key still has more than one instance definition after concrete registrations win, `Add{Name}` throws `InvalidOperationException`.
+- The content of a dictionary is decided by the tags at the call to the service collection extension. When one key still has more than one instance definition after concrete registrations win, the service collection extension throws `InvalidOperationException`.
 
 ## Registration of closed definitions
 
@@ -216,7 +216,7 @@ MS.DI tracks each object that a factory delegate returns. Thus the same Singleto
 
 ## Asynchronous closed definitions
 
-The `Add{Name}` method does not register `Task<T>`. MS.DI tracks and disposes the Task that a factory delegate returns. A Task that is not complete throws when it is disposed, and this stops the disposal of the other services (tested, see the ADRs).
+The service collection extension does not register `Task<T>`. MS.DI tracks and disposes the Task that a factory delegate returns. A Task that is not complete throws when it is disposed, and this stops the disposal of the other services (tested, see the ADRs).
 
 The method registers an asynchronous service with a hidden holder. The holder caches the Task and, on disposal, disposes the result of the Task. The dependency site gets the Task through a stand-in type that disposes nothing. Thus an asynchronous service needs two roles. Two types fill them.
 
@@ -241,7 +241,7 @@ public sealed class IocTask<T>(Task<T> task)
 
 - All these registrations have the same lifetime as the closed definition. A Transient closed definition also has an owner, so that MS.DI tracks the owner and disposes the result.
 - The sources of the keys:
-  - The private key is a `private static readonly object` field in the generated `Add{Name}` class. There is one for each closed definition, the same as for the [holder](#holder). Code outside the class cannot get this object, so it cannot collide with another registration.
+  - The private key is a `private static readonly object` field in the generated class of the service collection extension. There is one for each closed definition, the same as for the [holder](#holder). Code outside the class cannot get this object, so it cannot collide with another registration.
   - The key of the closed definition is the key that the user gives on the registration attribute. When no key is given, the registration is not keyed.
 - When a dependency site asks for `Task<S>`, the generated code resolves `IocTask<S>` from `sp` and reads `Task`. When there is more than one candidate, MS.DI takes the last registration. `IEnumerable<Task<S>>` gets all of them from `sp.GetServices<IocTask<S>>()`.
 - The `S` of an asynchronous service has no registration itself. `sp.GetService<S>()` is `null`, and `sp.GetServices<S>()` has only the synchronous candidates ([documented differences 19 and 20](../Constitution.md#8-documented-differences-from-msdi)).
@@ -347,14 +347,14 @@ Thus MS.DI handles ambiguity and missing dependencies at run time, by its own se
 
 ## Checks
 
-- The generator generates the `Add{Name}` method only when the [definite check](Analysis.Model.spec.md#two-levels-of-checks) (Analysis model, section "Two levels of checks") has no Error.
-- When an open generic must be closed with a type that the composer cannot write, the generator reports `SGIOC405`: there is no code that it can generate.
+- The generator generates the service collection extension only when the [definite check](Analysis.Model.spec.md#two-levels-of-checks) (Analysis model, section "Two levels of checks") has no Error.
+- When an open generic must be closed with a type that the composition root cannot write, the generator reports `SGIOC405`: there is no code that it can generate.
 - The generator does not check missing dependencies, disposable Transient services, or duplicate keys of a dictionary. For the last one, the method throws when it is called.
 - The generator checks only the definite part of ambiguity. The level is Warning (see below).
 
 ### Definite ambiguity
 
-The `Add{Name}` method is not a closed world. The tags are decided at run time, and the user can also register other services in the `IServiceCollection`. Thus an ambiguity cannot be an Error. But one situation is true for every set of tags.
+The service collection extension is not a closed world. The tags are decided at run time, and the user can also register other services in the `IServiceCollection`. Thus an ambiguity cannot be an Error. But one situation is true for every set of tags.
 
 For each dependency in the assembly view that asks for a single service (its shape is `Deferred`, including wrappers such as `Lazy<S>` and `Func<S>`), the generator finds the candidates by `(S, key)`. It counts only the closed definitions **without tags**:
 
@@ -366,7 +366,7 @@ For each dependency in the assembly view that asks for a single service (its sha
 
 - The message lists all candidates. It also names the candidate that wins when no tag is given, which is the last one in the [ordering](Analysis.Model.spec.md#ordering) (Analysis model, section "Ordering").
 - The diagnostic is reported at the location of the dependency site (parameter or member). When the dependency site comes from an imported module, the diagnostic is reported on `IocServiceCollectionExtensionsAttribute`. There is one diagnostic for each dependency.
-- The diagnostic is reported only in the assembly that generates the `Add{Name}` method. For the same situation, a container reports `SGIOC401` (Error). Each one reports independently, and they do not suppress each other.
+- The diagnostic is reported only in the assembly that generates the service collection extension. For the same situation, a container reports `SGIOC401` (Error). Each one reports independently, and they do not suppress each other.
 - The Warning does not affect generation. The user can change its level.
 
 ## Requirements for generated code

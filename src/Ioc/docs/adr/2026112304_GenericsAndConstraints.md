@@ -18,7 +18,7 @@ Open generics were the most repaired area of the previous design.
 ## Decision outcome
 
 1. **Open generics support only the closed types that the generator finds at compile time.** A closed type is found from a dependency, from `IocDiscoverAttribute`, or from a resolve call that is visible in source.
-2. **`Add{Name}` does not register the open generic itself.** It registers only the derived registrations.
+2. **The service collection extension does not register the open generic itself.** It registers only the derived registrations.
 3. **The generator decides constraints with its own rule table.** `Compilation.ClassifyConversion` decides type constraints, with these additions:
    - `new()` is not satisfied when the type has a `required` member, also an inherited one, unless the parameterless constructor has `[SetsRequiredMembers]`.
    - `unmanaged` needs the `struct` rule as well as `ITypeSymbol.IsUnmanagedType`.
@@ -27,7 +27,7 @@ Open generics were the most repaired area of the previous design.
 
 ## Rejected options
 
-- **Also register the open generic with MS.DI in `Add{Name}`**, as the previous design did. A closed type that appears only at run time would then work, but:
+- **Also register the open generic with MS.DI in the service collection extension**, as the previous design did. A closed type that appears only at run time would then work, but:
   - The same service gets two behaviors. A closed type found at compile time uses generated code. A closed type that appears at run time is created by MS.DI with reflection and loses member injection, injection methods, the chosen constructor, keys from `[IocInject]`, decorators, asynchronous initialization, optional dependencies by nullable annotation, and its wrappers.
   - Collections contain duplicates (see Evidence).
   - Under NativeAOT, MS.DI rejects an open generic closed with a value type at run time, with no publish warning.

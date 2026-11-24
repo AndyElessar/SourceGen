@@ -3,7 +3,7 @@
 namespace SourceGen.Ioc.Test.Library;
 
 /// <summary>
-/// The disposal rules of the holders (Register.Output.spec, "Holder" and "Disposal of OwnTask").
+/// The disposal rules of the holders (ServiceCollection.Output.spec, "Holder" and "Disposal of OwnTask").
 /// </summary>
 [NotInParallel(nameof(IocContainerGlobalOptions))]
 public class IocHolderTests

@@ -11,9 +11,9 @@ A class that has `IocModuleAttribute` makes its assembly a module. The generator
 | Output | Location | Reader |
 | --- | --- | --- |
 | Module info | `IocModuleInfoAttribute` on the carrier type. The content is a JSON string. | The generator of the importer, at compile time only |
-| Entries | The nested static class `__IocModule` in the module class | The code that the composer generates, at run time |
+| Entries | The nested static class `__IocModule` in the module class | The generated code of the composition root, at run time |
 
-Only the composer owns instances (see [Composition model](../Constitution.md#6-composition-model)). A module holds no instance. It gives only registration information and entries. The composer uses the module info to merge the instance definitions of the module into its own dependency graph. The composer flattens the registrations of all modules into that one graph and manages Lifetime, caching and disposal itself. The composer calls an entry when it must create an object, get a `Type`, or get a wrapper type.
+A module owns no instance (see [Composition model](../Constitution.md#6-composition-model)). It gives only registration information and entries. The composition root uses the module info to merge the instance definitions of the module into its own dependency graph. The composition root flattens the registrations of all modules into that one graph. The composition root calls an entry when it must create an object, get a `Type`, or get a wrapper type.
 
 The module output contains only the instance definitions of the assembly scope (see [Registration scope](Semantics.spec.md#registration-scope) and [Views](Analysis.Model.spec.md#views)). An imported module is recorded only in the import list. The module output does not contain the private registrations of an `ExplicitOnly` container.
 
@@ -176,7 +176,7 @@ The format version is an integer. It is `1` now. It increases with each incompat
 | `imports` | Type[] | `[]` | The module classes that this module imports at assembly scope |
 | `demands` | Demand[] | `[]` | The `IocDiscoverAttribute` declarations and the resolve calls of this assembly |
 | `definitions` | Instance definition[] | `[]` | The instance definitions of the assembly scope, and the derived registrations that the module closes itself |
-| `types` | Type entry[] | `[]` | The types that the composer cannot write |
+| `types` | Type entry[] | `[]` | The types that the composition root cannot write |
 
 ### Types
 
@@ -220,7 +220,7 @@ A key in the module output is always accessible (`SGIOC105`). The importer write
 
 ### Demands
 
-The demand list holds the dependency demands of this assembly that belong to no instance definition: the types that `IocDiscoverAttribute` and resolve calls ask for. With it, the composer can generate closed generics and wrapper types for the code in the module. The key of each demand is in one of three states: no key, a specified key, or all keyed registrations of that type.
+The demand list holds the dependency demands of this assembly that belong to no instance definition: the types that `IocDiscoverAttribute` and resolve calls ask for. With it, the composition root can generate closed generics and wrapper types for the code in the module. The key of each demand is in one of three states: no key, a specified key, or all keyed registrations of that type.
 
 | Property | Default | Content |
 | --- | --- | --- |
@@ -281,7 +281,7 @@ Disposal kind: `disposable` is for `IDisposable`, and `asyncDisposable` is for `
 | `key` | `null` | The key. The module has already replaced `InheritKey` with the key of the instance definition that owns the dependency. |
 | `optional` | `false` | Whether the dependency is optional |
 | `constructor` | `false` | Whether the dependency is a constructor parameter (used to map `Func<..., T>`) |
-| `serviceKey` | `false` | Appears only on a decorator: this parameter has `[ServiceKey]`, and the composer passes the key of the decorated instance definition |
+| `serviceKey` | `false` | Appears only on a decorator: this parameter has `[ServiceKey]`, and the composition root passes the key of the decorated instance definition |
 
 The `[ServiceKey]` parameters of the instance definition itself are not in `dependencies`. An entry belongs to one instance definition, and the entry supplies the key itself.
 
@@ -305,7 +305,7 @@ Each element of `chains` is a result of the mapping at the definition level (see
 | `inner` | Required | The index in `dependencies`: the inner parameter |
 | `arguments` | Omitted | The type arguments of the decorator, expressed with the type parameters of the instance definition. Omitted for a non-generic decorator. |
 
-When the composer closes an instance definition, it substitutes the type arguments into `arguments` to get the type arguments of the decorator. Then it substitutes those into the `dependencies` of the decorator. The composer does not need to match types itself.
+When the composition root closes an instance definition, it substitutes the type arguments into `arguments` to get the type arguments of the decorator. Then it substitutes those into the `dependencies` of the decorator. The composition root does not need to match types itself.
 
 ### Type entries
 
@@ -322,12 +322,12 @@ The owner of a type entry, and how type entries are matched:
 - A type entry belongs to one scope at most. A type entry without type parameters has no owner. In the other cases the owner is one instance definition or one decorator type. One `type` never contains type parameters of two scopes, because the dependencies of a decorator are expressed only with the type parameters of the decorator itself.
 - The key for the removal of duplicates is "type + owner", not the type only. `IInternalLog<{parameter 0}>` as a service type of an open registration and as a dependency of a generic decorator gives the same JSON. But the constraints of the entry come from different owners, so there MUST be two type entries.
 - When more than one instance definition uses the same decorator type, the generator generates the type entries of its dependencies only once. `definition` and `decorator` point to the first such instance definition in `definitions`.
-- How the composer matches:
-  - An entry that belongs to an instance definition: `definition` is equal to the instance definition that the composer closes, and `type` is structurally equal to the requested type.
-  - An entry that belongs to a decorator: `decorators[].type` is equal to the decorator type in use, and `type` is structurally equal to the type of the dependency (expressed with the type parameters of the decorator). The composer does not compare the index of the instance definition.
+- How the composition root matches:
+  - An entry that belongs to an instance definition: `definition` is equal to the instance definition that the composition root closes, and `type` is structurally equal to the requested type.
+  - An entry that belongs to a decorator: `decorators[].type` is equal to the decorator type in use, and `type` is structurally equal to the type of the dependency (expressed with the type parameters of the decorator). The composition root does not compare the index of the instance definition.
   - An entry without an owner: `type` is structurally equal.
-- `definition` and `decorator` are structural pointers. The composer resolves them before it filters tags and applies suppression. The type entry stays valid also when the composer filters out the instance definition that it points to.
-- Type arguments of the entry: when the entry belongs to a decorator, the composer substitutes the type arguments of the instance definition that it closes into the `chains[].arguments` of that chain. When the same decorator applies to more than one service type of the same definition, the composer calculates each chain separately.
+- `definition` and `decorator` are structural pointers. The composition root resolves them before it filters tags and applies suppression. The type entry stays valid also when the composition root filters out the instance definition that it points to.
+- Type arguments of the entry: when the entry belongs to a decorator, the composition root substitutes the type arguments of the instance definition that it closes into the `chains[].arguments` of that chain. When the same decorator applies to more than one service type of the same definition, the composition root calculates each chain separately.
 
 The rules above work when an open registration and a concrete registration share one generic decorator, and the importer uses only the JSON that it reads (tested, see the ADRs).
 
@@ -378,7 +378,7 @@ The entry restores an inaccessible parameter with a cast (`(IRepo)repo`). This i
 
 ### Construction entry
 
-Each instance definition has one construction entry. The composer creates all imported instance definitions through the construction entry, and this includes types that are fully public. The entry hides which constructor is used, how members are injected, and what the default values are. The entry MUST let the caller omit optional dependencies.
+Each instance definition has one construction entry. The composition root creates all imported instance definitions through the construction entry, and this includes types that are fully public. The entry hides which constructor is used, how members are injected, and what the default values are. The entry MUST let the caller omit optional dependencies.
 
 ```text
 public static {return} {entry}{<type parameters>}({parameters}...) {where constraints}
@@ -455,7 +455,7 @@ public static async global::System.Threading.Tasks.Task<object> Create_AsyncServ
 #endregion
 ```
 
-In this example, the `int retries` of `Worker` is a dependency (type `System.Int32`, optional). The composer finds no registration for `int` and passes `hasRetries: false`.
+In this example, the `int retries` of `Worker` is a dependency (type `System.Int32`, optional). The composition root finds no registration for `int` and passes `hasRetries: false`.
 
 The construction entry of an open registration is a generic method:
 
@@ -473,7 +473,7 @@ public static object Create_Handler<T>(global::Mod.IClock clock) where T : class
 #endregion
 ```
 
-The composer calls `ModModule.__IocModule.Create_Handler<global::App.Order>(...)` and casts the result to `IHandler<Order>`.
+The composition root calls `ModModule.__IocModule.Create_Handler<global::App.Order>(...)` and casts the result to `IHandler<Order>`.
 
 The construction entry of an instance registration has no parameters. It returns the static member:
 
@@ -490,8 +490,8 @@ public static {return} {entry}{<type parameters of the decorator>}({parameters}.
 ```
 
 - Return: the decorator type after erasure. When `async` is `true`, it is `Task<that type>`.
-- Parameters: one for each item of the `dependencies` of the decorator, in order. The rules are the same as for the construction entry. The inner parameter is one of them. The composer passes the inner instance at the position that `chains[].inner` gives.
-- The type of a parameter with `serviceKey` equal to `true` is its declared type after erasure. The composer passes the key.
+- Parameters: one for each item of the `dependencies` of the decorator, in order. The rules are the same as for the construction entry. The inner parameter is one of them. The composition root passes the inner instance at the position that `chains[].inner` gives.
+- The type of a parameter with `serviceKey` equal to `true` is its declared type after erasure. The composition root passes the key.
 
 ```csharp
 #region Define:
@@ -506,9 +506,9 @@ public static object Decorate_LoggingHandler<T>(global::Mod.IHandler<T> inner, g
 
 ### Type entry and wrapper entry
 
-The composer cannot write an inaccessible type, but it still needs two things:
+The composition root cannot write an inaccessible type, but it still needs two things:
 
-- The `Type` object of the type. The composer uses it to answer a request by `Type` at run time (code in the module calls `sp.GetService(typeof(IRepo))`). It also uses it to resolve from the fallback provider by `Type` (`ILogger<InternalService>`).
+- The `Type` object of the type. The composition root uses it to answer a request by `Type` at run time (code in the module calls `sp.GetService(typeof(IRepo))`). It also uses it to resolve from the fallback provider by `Type` (`ILogger<InternalService>`).
 - A way to create an instance of the type when it is a wrapper type (`Lazy<IRepo>`, `IRepo[]`).
 
 Each item in `types` has one entry that returns `Type`. A wrapper type also has a wrapper entry.
@@ -529,7 +529,7 @@ A wrapper entry accepts the inner value after erasure and returns `object`. The 
 | Collection (each interface or an array) | `ReadOnlySpan<E(X)>` | `X[]` |
 | Dictionary (each kind) | `ReadOnlySpan<KeyValuePair<K, E(X)>>` | `Dictionary<K, X>` |
 
-`E(X)` is the type of `X` after erasure: `X` when `X` is accessible, and `object` when it is not. When the inner type is also an inaccessible wrapper type, the composer first calls the wrapper entry of the inner type. Then it passes the resulting `object` to the outer wrapper entry. Thus the entries of the layers together build a wrapper with more than one layer.
+`E(X)` is the type of `X` after erasure: `X` when `X` is accessible, and `object` when it is not. When the inner type is also an inaccessible wrapper type, the composition root first calls the wrapper entry of the inner type. Then it passes the resulting `object` to the outer wrapper entry. Thus the entries of the layers together build a wrapper with more than one layer.
 
 ```csharp
 public static global::System.Type Type_Lazy_IRepo() => typeof(global::System.Lazy<global::Mod.IRepo>);
@@ -560,19 +560,19 @@ After the closing of the assembly view is complete, the generator collects the i
 2. `IEnumerable<S>` for each type `S` of item 1 (always generated for each registered service type). When the instance definition is asynchronous, these are `IEnumerable<Task<S>>` and its inner `Task<S>` instead.
 3. Each layer of the requested type, for the dependencies of each instance definition and decorator of this module and for the demand list: the full requested type, each wrapper layer, and the core service type.
 
-The core service type of item 3 covers the case of an open generic of the fallback provider in the table of [Closing entry](#closing-entry). `ILogger<InternalService>` has no registration in the module or in its imports. The module still generates a type entry for it, and the composer resolves from the fallback provider with that `Type`.
+The core service type of item 3 covers the case of an open generic of the fallback provider in the table of [Closing entry](#closing-entry). `ILogger<InternalService>` has no registration in the module or in its imports. The module still generates a type entry for it, and the composition root resolves from the fallback provider with that `Type`.
 
-An accessible type has no entry. The composer writes it itself.
+An accessible type has no entry. The composition root writes it itself.
 
 ### Closing entry
 
-When the core service type of a demand contains an inaccessible type argument (`IValidator<InternalDto>`), the composer cannot write `Create_Validator<InternalDto>(...)`. It also cannot check the constraints. The module does this closing in its own assembly view:
+When the core service type of a demand contains an inaccessible type argument (`IValidator<InternalDto>`), the composition root cannot write `Create_Validator<InternalDto>(...)`. It also cannot check the constraints. The module does this closing in its own assembly view:
 
 1. The closing process of the module (see [Closing](Analysis.Model.spec.md#closing)) produces derived registrations. The module outputs those whose closed type arguments contain an inaccessible type as instance definitions with `derived: true`.
 2. Each of them has its own construction entry, which is a non-generic method. When the open registration comes from an imported module, the entry calls the generic construction entry of that module.
 3. Their decorators are closed too. `decorators[].type` is the closed type. `entry` points to the non-generic decorator entry that the module generates for this closing. `chains[].arguments` is omitted.
 4. The closed service types (always inaccessible) get type entries by the rules of the previous section.
-5. The module does not decide suppression. The module outputs the derived registration and also the concrete registration that can suppress it. The composer applies suppression (see [Suppression](Analysis.Model.spec.md#suppression)) after it filters tags.
+5. The module does not decide suppression. The module outputs the derived registration and also the concrete registration that can suppress it. The composition root applies suppression (see [Suppression](Analysis.Model.spec.md#suppression)) after it filters tags.
 
 ```csharp
 #region Define:
@@ -591,24 +591,24 @@ internal sealed class DtoConsumer(IValidator<Dto> validator);
 // The generic entry of the open registration
 public static global::Mod.Validator<T> Create_Validator<T>() => new global::Mod.Validator<T>();
 
-// The closing entry of Validator<Dto>: the composer cannot write Dto
+// The closing entry of Validator<Dto>: the composition root cannot write Dto
 public static object Create_Validator_Dto() => new global::Mod.Validator<global::Mod.Dto>();
 #endregion
 ```
 
 When code in the module needs an open generic closed with an inaccessible type, the handling depends on the source of the open generic:
 
-| Source of the open generic | Output of the module | What the composer does |
+| Source of the open generic | Output of the module | What the composition root does |
 | --- | --- | --- |
 | The module itself, or a module that it imports | An instance definition with `derived: true`, and a closing entry | Handles it as a normal closed definition |
 | None of them | A type entry for the core service type | With a fallback provider: resolves from the fallback provider by `Type`. Without one: missing dependency. |
-| The assembly of the composer itself, or another module that this module does not import | Same as above (the module cannot know) | `SGIOC405`: the composer finds in its own view a service type pattern of an open registration that matches this type, but there is no related closing |
+| The assembly of the composition root itself, or another module that this module does not import | Same as above (the module cannot know) | `SGIOC405`: the composition root finds in its own view a service type pattern of an open registration that matches this type, but there is no related closing |
 
 An example of the second case is an open generic of the fallback provider, such as `ILogger<>` or `IOptions<>`.
 
-The third case is not supported. It is an error at the composer. The module cannot know this case at its compile time, so the error is not in the module.
+The third case is not supported. It is an error at the composition root. The module cannot know this case at its compile time, so the error is not in the module.
 
-A "generic visitor" can solve the third case: the module gives an entry that accepts a visitor, and the composer implements the visitor. This works under NativeAOT (tested, see the ADRs). It is a deferred feature (see [Deferred features](../Constitution.md#53-deferred-features)).
+A "generic visitor" can solve the third case: the module gives an entry that accepts a visitor, and the composition root implements the visitor. This works under NativeAOT (tested, see the ADRs). It is a deferred feature (see [Deferred features](../Constitution.md#53-deferred-features)).
 
 ## Checks on the module side
 
@@ -629,11 +629,11 @@ When the module output is not generated, the importer sees a class that has `Ioc
 
 ### Import rules
 
-- The tag settings of the composer decide the filter. The composer treats imported registrations and its own registrations the same.
+- The tag settings of the composition root decide the filter. The composition root treats imported registrations and its own registrations the same.
 - An `ExplicitOnly` container includes all registrations that it imports.
 - The module info of each module contains only the registrations and the import list of its own assembly. The importer walks the imports recursively itself (see [Read sequence](#read-sequence)).
-- The composer applies decorators.
-- The composer decides the closed generics from the complete dependency graph. The exception is a closed generic whose type arguments contain an inaccessible type (see [Closing entry](#closing-entry)).
+- The composition root applies decorators.
+- The composition root decides the closed generics from the complete dependency graph. The exception is a closed generic whose type arguments contain an inaccessible type (see [Closing entry](#closing-entry)).
 - The order of imports does not affect any observable behavior (see the ordering rule in [Registration model](Semantics.spec.md#registration-model)).
 
 ### Read sequence
@@ -941,7 +941,7 @@ The JSON on `Mod.ModModule__IocModuleInfo` follows. The real output has no white
 Notes on this output:
 
 - `imports` records only the module class. The definitions of `Core.CoreModule` are not in this JSON.
-- The demand comes from `IocDiscoverAttribute`. Its `mode` is `"key"`, so it has a `key`. All type arguments of `IHandler<Order>` are accessible, so the module outputs no derived registration. The composer closes `Handler<Order>` with the generic entry `Create_Handler`.
+- The demand comes from `IocDiscoverAttribute`. Its `mode` is `"key"`, so it has a `key`. All type arguments of `IHandler<Order>` are accessible, so the module outputs no derived registration. The composition root closes `Handler<Order>` with the generic entry `Create_Handler`.
 - The order of `definitions` follows the sort names: `Mod.Clocks.Utc`, ``Mod.Handler`1``, `Mod.Reports.CreateAsync(...)`, `Mod.Store`. The type entries use the index `1` of `Handler<>` in this order.
 - `Keys.UtcClock` is a static field that is not `const`, so it is a symbol key. `"main"` is a value key.
 - The source code gives the tags as `web`, `api`. The JSON has them in ordinal order.
@@ -959,5 +959,5 @@ Notes on this output:
 - [Semantics](Semantics.spec.md)
 - [Analysis model of the dependency graph](Analysis.Model.spec.md)
 - [Container output](Container.Output.spec.md)
-- [`Add{Name}` output](Register.Output.spec.md)
+- [Service collection extension output](ServiceCollection.Output.spec.md)
 - [Diagnostic list](Diagnostics.spec.md)

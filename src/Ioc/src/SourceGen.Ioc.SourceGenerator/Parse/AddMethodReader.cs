@@ -9,7 +9,7 @@ namespace SourceGen.Ioc.Parse;
 /// <param name="Span">The span of the attribute.</param>
 internal sealed record AddMethodAttribute(string? Name, string FilePath, Microsoft.CodeAnalysis.Text.TextSpan Span);
 
-/// <summary>Reads the settings of <c>Add{Name}</c> (Register.Output.spec, "Conditions for generation" and "Method").</summary>
+/// <summary>Reads the settings of <c>Add{Name}</c> (ServiceCollection.Output.spec, "Conditions for generation" and "Method").</summary>
 internal static class AddMethodReader
 {
     /// <summary>The metadata name of <c>IocServiceCollectionExtensionsAttribute</c>.</summary>

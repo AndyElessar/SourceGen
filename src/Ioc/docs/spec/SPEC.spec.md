@@ -18,7 +18,7 @@ Read them in this sequence.
 | 3 | [Analysis model of the dependency graph](Analysis.Model.spec.md) | The type model, instance definitions, views, demands, the grammar of wrapper types, closing, generic constraints, dependency resolution, decorators, asynchronous services, the two levels of checks, the construction plan, the incremental pipeline |
 | 4 | [Module output](Module.Output.spec.md) | The carrier type, the JSON syntax of the module info, the signatures of the construction entry / decorator entry / type entry / wrapper entry / closing entry, the reading flow of the importer |
 | 5 | [Container output](Container.Output.spec.md) | The root and scopes, resolution, lookup by `Type`, the caching of wrapper types and collections, the behavior of the fallback provider item by item, eager resolution, thread safety, disposal, partial accessors |
-| 6 | [`Add{Name}` output](Register.Output.spec.md) | The method signature, tags, holders, the disposal of decorator chains, asynchronous services, the registration of wrapper types and collections |
+| 6 | [Service collection extension output](ServiceCollection.Output.spec.md) | The method signature, tags, holders, the disposal of decorator chains, asynchronous services, the registration of wrapper types and collections |
 | 7 | [Diagnostic list](Diagnostics.spec.md) | The common rules (numbering, levels, the two pipelines), the ID, message, level, consequence, and location of each diagnostic, and an index of the diagnostics by problem |
 
 "How the generator reads annotations" is the preliminary part that was separated from the analysis model.
@@ -64,4 +64,4 @@ Questions for which there was not enough basis to decide at the time of writing:
 - The benchmark specification: the list of items to verify one by one, and the pass criteria.
 - The naming rules for generated members: only the requirements are specified (deterministic, no collisions), not the exact names.
 - The structure of the generator project itself (the division into files, the use of `SourceWriter`).
-- The features that the constitution lists as deferred (see [Scope](../Constitution.md#5-scope), section 5.3): the activators of MVC and Blazor, feature switches, the tool that shows the dependency graph, the generic visitor, service lookup by a generated `switch`, and the compile-time check for a covered `Add{Name}` call.
+- The features that the constitution lists as deferred (see [Scope](../Constitution.md#5-scope), section 5.3): the activators of MVC and Blazor, feature switches, the tool that shows the dependency graph, the generic visitor, service lookup by a generated `switch`, and the compile-time check for a call to a service collection extension that another one already covers.

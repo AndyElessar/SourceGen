@@ -1,6 +1,6 @@
 namespace SourceGen.Ioc.Test.Generator;
 
-/// <summary>The <c>Add{Name}</c> method (Register.Output.spec): conditions, name, namespace, and registrations.</summary>
+/// <summary>The <c>Add{Name}</c> method (ServiceCollection.Output.spec): conditions, name, namespace, and registrations.</summary>
 public class AddMethodTests
 {
     private const string Services = """

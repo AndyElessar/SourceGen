@@ -6,7 +6,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY in this document are t
 
 ## Overview
 
-The generator adds the container implementation to a class that has `IocContainerAttribute`. The container is the composer. It gets the complete dependency graph from its own view (see "Views" in [Analysis model](Analysis.Model.spec.md#views)). It owns all instances. It manages lifetime, caching, and disposal.
+The generator adds the container implementation to a class that has `IocContainerAttribute`. The container is the composition root. It gets the complete dependency graph from its own view (see "Views" in [Analysis model](Analysis.Model.spec.md#views)). It owns all instances. It manages lifetime, caching, and disposal.
 
 This document defines the observable behavior of the container. It also defines the structural requirements that performance and NativeAOT make necessary. The implementation decides each generation detail that this document does not list as a requirement, such as member names, the data structure of the lookup table, and the granularity of the locks. The generated code in this document is an illustration.
 
@@ -93,7 +93,7 @@ Each closed definition has one internal resolver in the container. Its behavior 
 
 - The creation steps follow the construction plan (see "Construction plan" in [Analysis model](Analysis.Model.spec.md#construction-plan)). The container always resolves a dependency on the current instance (root or scope). It resolves the dependencies of a Singleton on the root.
 - The fast path of a Singleton or Scoped service (the instance exists) MUST be one field read and one null check. It MUST NOT take a lock and MUST NOT allocate memory. The creation path and the fast path are two separate methods, so that the fast path can be inlined.
-- Failure during creation: during the creation of an instance or a decorator chain, a step after `new` can throw. These steps are the assignment of fields and properties, the injection methods, and the constructors of the later decorator layers. In that case, nothing disposes the objects that are created but not yet stored in the container. The container disposes them, outer objects first and inner objects last. Then it throws the original exception again. The rule is the same as for [`Add{Name}`](Register.Output.spec.md#failure-during-creation) (see "Failure during creation"). It applies to asynchronous creation too. The container does not store the failed instance. The next resolution creates it again.
+- Failure during creation: during the creation of an instance or a decorator chain, a step after `new` can throw. These steps are the assignment of fields and properties, the injection methods, and the constructors of the later decorator layers. In that case, nothing disposes the objects that are created but not yet stored in the container. The container disposes them, outer objects first and inner objects last. Then it throws the original exception again. The rule is the same as for [the service collection extension](ServiceCollection.Output.spec.md#failure-during-creation) (see "Failure during creation"). It applies to asynchronous creation too. The container does not store the failed instance. The next resolution creates it again.
   - The container stores the layers of a decorator chain only after the whole chain is built. Otherwise a layer is disposed one time at the failure and one more time when the container is disposed. The container stores the implementation instance before it builds the chain. The failure handling of the chain does not dispose the implementation instance.
   - A Transient path does not have this handling. The generator generates it only when the object is disposable, and the container does not support a disposable Transient (`SGIOC403`).
   - After a failed creation, the field is empty, the lock is released, a retry succeeds, and a concurrent first resolution does not leak an object or dispose an object two times (tested, see the ADRs).
@@ -283,7 +283,7 @@ Lock allocation:
 
 ## Disposal
 
-This section describes the generated container. MS.DI does the disposal for `Add{Name}`. For the differences, see [Holder](Register.Output.spec.md#holder), [Decorator chain](Register.Output.spec.md#decorator-chain) and [Number of disposals](Register.Output.spec.md#number-of-disposals).
+This section describes the generated container. MS.DI does the disposal for the service collection extension. For the differences, see [Holder](ServiceCollection.Output.spec.md#holder), [Decorator chain](ServiceCollection.Output.spec.md#decorator-chain) and [Number of disposals](ServiceCollection.Output.spec.md#number-of-disposals).
 
 ### What the container disposes
 
@@ -364,7 +364,7 @@ The container always aggregates and throws each exception that its `Dispose` and
 | Container | The creation of an instance is concurrent with the disposal of the container, the creating side gets the right to dispose the instance, and that disposal throws (see [After disposal, and concurrency](#after-disposal-and-concurrency)). |
 | Container | With `CompareExchange`, the disposal of a losing instance throws (see [Thread safety](#thread-safety)). |
 | Both | Creation fails, and the disposal of the objects that are already created throws. The original exception is thrown as usual. |
-| `Add{Name}` | During synchronous `Dispose`, the task of an asynchronous service is not yet complete. The continuation of the holder disposes the result later, and that disposal throws (see "Disposal of `OwnTask`" in [`Add{Name}` output](Register.Output.spec.md#disposal-of-owntask)). The holder always throws its other exceptions. |
+| Service collection extension | During synchronous `Dispose`, the task of an asynchronous service is not yet complete. The continuation of the holder disposes the result later, and that disposal throws (see "Disposal of `OwnTask`" in [Service collection extension output](ServiceCollection.Output.spec.md#disposal-of-owntask)). The holder always throws its other exceptions. |
 
 - The callback receives each exception separately. When the disposal of more than one object fails in one situation, for example several layers of a decorator chain, the callback is called one time for each exception. It does not receive an `AggregateException` that collects them. An `AggregateException` that user code throws itself is one exception, and the callback receives it unchanged.
 - When the callback is `null` (default), these exceptions are discarded.
@@ -556,5 +556,5 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer,
 - [Semantics](Semantics.spec.md)
 - [Analysis model](Analysis.Model.spec.md)
 - [Module output](Module.Output.spec.md)
-- [`Add{Name}` output](Register.Output.spec.md)
+- [Service collection extension output](ServiceCollection.Output.spec.md)
 - [Diagnostics](Diagnostics.spec.md)

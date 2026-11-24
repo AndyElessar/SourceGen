@@ -7,16 +7,16 @@ date: 2026-11-23
 
 ## Context and problem statement
 
-An application often spreads its registrations over several assemblies. Many implementation types are internal to their assembly. The assembly that builds the final container or the final `Add{Name}` method cannot name those types.
+An application often spreads its registrations over several assemblies. Many implementation types are internal to their assembly. The assembly that builds the final container or the final service collection extension cannot name those types.
 
-In the previous design, an imported module was a container of its own. The importing container merged the resolver tables of its modules at run time through `IIocContainer<TContainer>.Resolvers`. Each module held instances, and the user called the `Add{Name}` method of every module.
+In the previous design, an imported module was a container of its own. The importing container merged the resolver tables of its modules at run time through `IIocContainer<TContainer>.Resolvers`. Each module held instances, and the user called the service collection extension of every module.
 
 ## Decision outcome
 
-1. **Only the composer owns instances.** A module holds no instance. It gives registration information (module info) and public entries. The composer flattens all modules into one dependency graph and manages lifetime, caching, and disposal.
+1. **A module owns no instance.** It gives registration information (module info) and public entries. The composition root flattens all modules into one dependency graph. A container manages lifetime, caching, and disposal. The service collection extension leaves them to MS.DI.
 2. **`IIocContainer` is not generic.** The type parameter `TContainer` existed only for the static abstract `Resolvers` member, which is removed.
 3. **Module info is a JSON string in an attribute on a carrier type.** The generator emits a separate type, `{ModuleClass}__IocModuleInfo`, and puts `IocModuleInfoAttribute(string json)` on it. No generated code refers to the carrier type, not even with `typeof`. The importer reads it only at compile time through the symbol API.
-4. **Entries let the composer use internal types.** A module emits public construction entries, decorator entries, type entries, wrapper entries, and closing entries. An entry signature never contains an inaccessible type. Such a type is passed as `object` and cast inside the entry.
+4. **Entries let the composition root use internal types.** A module emits public construction entries, decorator entries, type entries, wrapper entries, and closing entries. An entry signature never contains an inaccessible type. Such a type is passed as `object` and cast inside the entry.
 5. **The JSON reader and writer are written by hand.** They do not use `System.Text.Json`. The generator and the CLI share the same source files. Reading is strict: an unknown version, an unknown enum string, a duplicate property, an index out of range, or an invalid combination of properties is an error.
 6. **Ordering does not depend on imports.** Derived registrations come before concrete registrations. Inside each group the order is by sort name, then key. The order ignores which assembly declares a registration. An assembly therefore cannot override a registration of a module that it imports.
 7. **Types that exist only for generated code are marked.** `__IocModule`, the carrier type, `IocModuleInfoAttribute`, `IocHolder`, `IocTask`, and `IocRegistrationMarker` have `[EditorBrowsable(Never)]` and `[Experimental("SGIOCEXP001")]`. Each generated file starts with `#pragma warning disable SGIOCEXP001`.
@@ -31,7 +31,7 @@ In the previous design, an imported module was a container of its own. The impor
   - The loaded `System.Text.Json` version depends on the host. The escaping of strings depends on that version, and the output must be identical byte for byte.
   - Its built-in encoders cannot write all non-ASCII characters unescaped, and they replace an unpaired surrogate with U+FFFD.
   - Loading inside the Visual Studio IDE was not verified.
-- **Order the registrations of the current assembly after the imported ones**, so that the application overrides a module. The order would depend on the import structure, and the container (where ambiguity is an error) and `Add{Name}` would differ more. To replace an implementation of a module, use a key or a tag.
+- **Order the registrations of the current assembly after the imported ones**, so that the application overrides a module. The order would depend on the import structure, and the container (where ambiguity is an error) and the service collection extension would differ more. To replace an implementation of a module, use a key or a tag.
 - **`[EditorBrowsable(Never)]` only.** It hides a name from IntelliSense but does not stop a user from typing it, and it often has no effect for project references.
 
 ## Evidence

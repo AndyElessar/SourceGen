@@ -31,7 +31,7 @@ All attributes are `sealed` and have `Inherited = false`.
 | `IocImportModuleAttribute` | `Assembly \| Class` | `true` |
 | `IocModuleAttribute` | `Class` | `false` |
 | `IocContainerAttribute` | `Class` | `false` |
-| `IocServiceCollectionExtensionsAttribute` | `Assembly` | `false` (opt-in to generate `Add{Name}`. See [Conditions for generation](Register.Output.spec.md#conditions-for-generation) in the `Add{Name}` output specification) |
+| `IocServiceCollectionExtensionsAttribute` | `Assembly` | `false` (opt-in to generate the service collection extension. See [Conditions for generation](ServiceCollection.Output.spec.md#conditions-for-generation) in the service collection extension output specification) |
 
 - These attributes have `[Conditional("SOURCEGEN")]`. The file `build\SourceGen.Ioc.props` of the package defines `SOURCEGEN`. The annotation that belongs to the type itself (`IocInjectAttribute`) therefore goes into metadata. Another assembly that registers the type with `IocRegisterForAttribute` can read it. `IocModuleInfoAttribute` carries the module info and MUST NOT have `[Conditional]` (see [Carrier type](Module.Output.spec.md#carrier-type)).
 - When an `Assembly | Class` attribute is on a class, that class MUST have `IocModuleAttribute` or `IocContainerAttribute`. If it does not, the generator reports `SGIOC025` (skip the declaration). These attributes have no meaning on an ordinary class, and to ignore them silently is against explicitness.
@@ -403,7 +403,7 @@ These checks apply to the factory method and to the instance member. They apply 
 
 | Condition | Reason |
 | --- | --- |
-| The method, field, or property is not static | The composer has no object on which to call an instance member |
+| The method, field, or property is not static | The composition root has no object on which to call an instance member |
 | The type that contains the member is an open generic: it, or one of its outer types, has type parameters without type arguments (`Factories<T>.Create` with the attribute on the member, `nameof(Factories<>.Create)`) | The generator cannot know the type arguments of the containing type. Use a generic factory method in a non-generic type. A closed containing type (`nameof(Factories<int>.Create)`) is valid |
 
 ```csharp

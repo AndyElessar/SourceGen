@@ -6,7 +6,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY in this document are t
 
 ## Overview
 
-The three outputs (container, module output, `Add{Name}`) and all IoC semantic diagnostics share one analysis result. This document defines that analysis:
+The three outputs (container, module output, service collection extension) and all IoC semantic diagnostics share one analysis result. This document defines that analysis:
 
 - How the model represents types.
 - How declarations merge into instance definitions.
@@ -25,7 +25,7 @@ flowchart TD
     V1 --> K1[Close → resolve → definite check]
     V2 --> K2[Close → resolve → full check]
     K1 --> P1[Module output]
-    K1 --> P2["Add{Name}"]
+    K1 --> P2["Service collection extension"]
     K2 --> P3[Container]
     K1 & K2 --> D[Diagnostics]
 ```
@@ -63,7 +63,7 @@ A named type is **accessible** if and only if its declared accessibility and the
 
 `InternalsVisibleTo` has no effect. An internal type is always inaccessible, also when the importer is a friend assembly. A `protected` nested type is inaccessible too.
 
-Accessibility has a meaning only across assemblies: for the signatures of the module output, and for whether the composer can write a type.
+Accessibility has a meaning only across assemblies: for the signatures of the module output, and for whether the composition root can write a type.
 
 ### Canonical string of a type
 
@@ -109,7 +109,7 @@ An open registration is not a node of the dependency graph. It is only a templat
 
 ### Ordering
 
-Every place that needs an order uses the same total order. These places are the element order of a collection, the registration order of `Add{Name}`, the order of generated members, and the order in which the generator goes through the worklist.
+Every place that needs an order uses the same total order. These places are the element order of a collection, the registration order of the service collection extension, the order of generated members, and the order in which the generator goes through the worklist.
 
 1. Derived registrations come first, and concrete registrations come after them.
 2. Then by **sort name** (ordinal comparison):
@@ -120,7 +120,7 @@ Every place that needs an order uses the same total order. These places are the 
 3. Then by the canonical form of the key (ordinal comparison). No key is the empty string, which comes first.
 4. If they are still equal, by the full canonical string (with the assembly). For a factory or an instance, this is the sort name written with the full canonical strings of the containing type and the parameter types.
 
-The ordering does not use whether an instance definition comes from this assembly or from an imported module. Thus the order does not change with the structure of the imports. One result is that "this assembly overrides an imported module" does not exist. When more than one concrete registration provides the same service type, the container reports an ambiguity (`SGIOC401`). In `Add{Name}`, the registration that is last in the ordering wins. See [Registration order](Register.Output.spec.md#registration-order).
+The ordering does not use whether an instance definition comes from this assembly or from an imported module. Thus the order does not change with the structure of the imports. One result is that "this assembly overrides an imported module" does not exist. When more than one concrete registration provides the same service type, the container reports an ambiguity (`SGIOC401`). In the service collection extension, the registration that is last in the ordering wins. See [Registration order](ServiceCollection.Output.spec.md#registration-order).
 
 ## Views
 
@@ -135,14 +135,14 @@ A **view** is a set of instance definitions and a set of demands. It is the rang
 | Output | View used |
 | --- | --- |
 | Module output | Assembly view. It outputs only the definitions of this assembly. It closes only to find the types for which the module must generate entries itself |
-| `Add{Name}` | Assembly view |
+| Service collection extension | Assembly view |
 | Definite check | Assembly view |
 | Container and full check | The view of that container |
 
 ### Tags
 
 - Container view: the generator filters before it closes. A definition without tags stays. A definition with tags stays only when at least one of its tags is in `IncludeTags`.
-- Assembly view: the generator does not filter. Tags are decided when `Add{Name}` runs. Thus each definition with tags is **conditional**: the analysis treats it as a definition that can exist or not exist. This has an effect on two things: suppression (see [Suppression](#suppression)) and definite edges (see [Definite edges](#definite-edges)).
+- Assembly view: the generator does not filter. Tags are decided when the service collection extension runs. Thus each definition with tags is **conditional**: the analysis treats it as a definition that can exist or not exist. This has an effect on two things: suppression (see [Suppression](#suppression)) and definite edges (see [Definite edges](#definite-edges)).
 
 ## Sources of demands
 
@@ -265,7 +265,7 @@ Variance is not supported. `IHandler<object>` does not match the pattern of `IHa
 The derived registration `(Handler<>, σ, key)` is suppressed if and only if the view contains a concrete registration whose implementation type is equal to `Handler<σ>` and whose key is the same. Suppression applies only to registrations of an implementation type. A derived registration of a generic factory is never suppressed.
 
 - Container view: the tags are already filtered. A concrete registration that the filter removes is not in the view, and it suppresses nothing.
-- Assembly view: when the suppressor has tags, the generator produces the derived registration as usual and records its **suppressor**. At run time, `Add{Name}` registers this derived registration only when the suppressor is excluded. When the suppressor has no tags, the generator does not produce the derived registration.
+- Assembly view: when the suppressor has tags, the generator produces the derived registration as usual and records its **suppressor**. At run time, the service collection extension registers this derived registration only when the suppressor is excluded. When the suppressor has no tags, the generator does not produce the derived registration.
 
 ### Infinitely recursive generics
 
@@ -320,7 +320,7 @@ For a `(T, key mode)`, the generator finds the **candidates** in the view after 
 
 For the types below with no key, the result is **built-in**. The generator does not look at the candidates.
 
-| Type | Value in the container | Value in `Add{Name}` |
+| Type | Value in the container | Value in the service collection extension |
 | --- | --- | --- |
 | `IServiceProvider` | The container instance that resolves it (root or scope) | The `sp` of the factory delegate |
 | `IServiceScopeFactory` | The root | `sp.GetRequiredService<IServiceScopeFactory>()` |
@@ -344,7 +344,7 @@ A built-in service has no lifetime. It does not take part in the lifetime checks
 
 When the candidate is a skipped instance definition (an **error node**), the result "points to an error node". The generator does not report a missing dependency and does not go to the fallback provider. The output is generated as usual. In the generated code, an expression that throws an exception replaces that dependency. The compilation has already failed at this point because of the original error.
 
-The generator reports ambiguity and missing dependencies only in the full check of a container. `Add{Name}` leaves the resolution of a single service to MS.DI.
+The generator reports ambiguity and missing dependencies only in the full check of a container. The service collection extension leaves the resolution of a single service to MS.DI.
 
 ### Multiple services
 
@@ -453,10 +453,10 @@ The definite check is the check of the assembly view. It uses only definite edge
 | Missing dependency | `SGIOC402` / `SGIOC501` | No | Yes |
 | Disposable Transient | `SGIOC403` | No | Yes |
 | Duplicate key of a Dictionary | `SGIOC404` | No | Yes |
-| Closing needs a type that cannot be written | `SGIOC405` | Only in an assembly that generates `Add{Name}` (it is the composer) | Yes |
+| Closing needs a type that cannot be written | `SGIOC405` | Only in an assembly that generates the service collection extension (it is the composition root) | Yes |
 | Singleton depends on Transient (Warning) | `SGIOC502` | Definite edges, and the dependency site is declared in this assembly | All |
 | Scoped depends on Transient (Warning) | `SGIOC503` | Definite edges, and the dependency site is declared in this assembly | All |
-| Definite ambiguity in `Add{Name}` (Warning) | `SGIOC504` | Only in an assembly that generates `Add{Name}`. See [Definite ambiguity](Register.Output.spec.md#definite-ambiguity) | No |
+| Definite ambiguity in the service collection extension (Warning) | `SGIOC504` | Only in an assembly that generates the service collection extension. See [Definite ambiguity](ServiceCollection.Output.spec.md#definite-ambiguity) | No |
 
 Reporting rules:
 
@@ -531,7 +531,7 @@ Known limit: the analysis cannot see an interface that a different generator add
 
 ## Construction plan
 
-The construction plan is the final result of the analysis. The code that generates the container and `Add{Name}` reads only the construction plan. It does not go back to query types or attributes. There is one plan for each closed definition:
+The construction plan is the final result of the analysis. The code that generates the container and the service collection extension reads only the construction plan. It does not go back to query types or attributes. There is one plan for each closed definition:
 
 | Field | Content |
 | --- | --- |
@@ -583,5 +583,5 @@ A resolution result is one of these:
 - [How the generator reads annotations](Annotations.spec.md)
 - [Module output](Module.Output.spec.md)
 - [Container output](Container.Output.spec.md)
-- [`Add{Name}` output](Register.Output.spec.md)
+- [Service collection extension output](ServiceCollection.Output.spec.md)
 - [Diagnostic list](Diagnostics.spec.md)

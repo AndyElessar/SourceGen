@@ -3,19 +3,19 @@ status: accepted
 date: 2026-11-24
 ---
 
-# Wrapper of a service that the Add method does not register
+# Wrapper of a service that the service collection extension does not register
 
 ## Context and problem statement
 
-The `Add{Name}` method registers `Lazy<S>`, `Func<S>`, and the related wrapper types once for each candidate of `S` in the assembly view (see [`Add{Name}` output](../spec/Register.Output.spec.md#wrapper-types-and-collections)). A dependency site can ask for a wrapper of a service that has no candidate there, for example `Func<ILogger<T>>` or `Lazy<IOptions<X>>`. These services come from the framework or from registrations of the user outside the method. Then no wrapper is registered, and MS.DI fails at run time when it creates the service that has the dependency site.
+The service collection extension registers `Lazy<S>`, `Func<S>`, and the related wrapper types once for each candidate of `S` in the assembly view (see [Service collection extension output](../spec/ServiceCollection.Output.spec.md#wrapper-types-and-collections)). A dependency site can ask for a wrapper of a service that has no candidate there, for example `Func<ILogger<T>>` or `Lazy<IOptions<X>>`. These services come from the framework or from registrations of the user outside the method. Then no wrapper is registered, and MS.DI fails at run time when it creates the service that has the dependency site.
 
 The container behaves differently. It creates the wrapper itself and resolves `S` from the fallback provider inside the wrapper (see [Container output](../spec/Container.Output.spec.md#behavior-for-each-request)). Section 1 of the [constitution](../Constitution.md) requires that the two outputs behave the same where possible.
 
-"No candidate" is not always known at compile time. A candidate with tags exists only when the tags given to `Add{Name}` at run time include one of its tags.
+"No candidate" is not always known at compile time. A candidate with tags exists only when the tags given to the service collection extension at run time include one of its tags.
 
 ## Decision outcome
 
-The `Add{Name}` method does not register a wrapper for a service without a candidate. The dependency site builds the wrapper itself.
+The service collection extension does not register a wrapper for a service without a candidate. The dependency site builds the wrapper itself.
 
 When the core service `S` of a dependency site has no candidate without tags in the assembly view, the generated argument is `sp.GetService<W>() ?? {new wrapper}`:
 
