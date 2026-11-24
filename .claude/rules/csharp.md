@@ -10,6 +10,7 @@ paths:
 - Always use the latest C# 15 features where applicable.
 - Use pattern matching and switch expressions wherever possible.
 - Use `nameof` instead of string literals when referring to member names.
+- Declare a source-generated regex as a partial property: `[GeneratedRegex(...)] private static partial Regex Name { get; }`. Do not use the partial method form (`partial Regex Name();`).
 
 ## Naming Conventions
 

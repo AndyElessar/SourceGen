@@ -338,7 +338,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:f07c8f93ed44565f2969a18692647cf25e0f9c890c2c1d4e2bc50bac993daf43
+  content_hash: sha256:2e0771ea2a19a995b3fdf09dee3aaf0d33723399ad334356edeaa60e26ddd603
 - kind: project-relative
   target: claude
   value: .claude/skills/sourcegen-ci-workflows
@@ -644,7 +644,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:836a0c44076d50f2adaed3cc20e89f2c3101a94cb497574ceaa63e58400b0191
+  content_hash: sha256:bae93f32fb45ccce58d0ac27f309a3c1b15612a8699261f1366a47fb9eb6ead6
 local_deployed_files:
 - .agents/skills/sourcegen-ci-workflows
 - .agents/skills/sourcegen-ci-workflows/SKILL.md
@@ -732,7 +732,7 @@ local_deployed_file_hashes:
   .claude/agents/sourcegen-code-review.md: sha256:ae51313f52e61fc7bc3a4d398ce70ec8b9a46c30b1c6402ace13420a1b957746
   .claude/rules/csharp-source-generator.md: sha256:64dafaf4b7b55a05912df52d3f38fa7de95a56c618847fc48db07854019f5ffa
   .claude/rules/csharp-tunit.md: sha256:856cc30fe3516fbd453867d4bf50003212bb63437bc67d9433f1849da79cee26
-  .claude/rules/csharp.md: sha256:f07c8f93ed44565f2969a18692647cf25e0f9c890c2c1d4e2bc50bac993daf43
+  .claude/rules/csharp.md: sha256:2e0771ea2a19a995b3fdf09dee3aaf0d33723399ad334356edeaa60e26ddd603
   .claude/skills/sourcegen-ci-workflows/SKILL.md: sha256:15e3382e9f1a1a12e10f9bc07b57fccfd1b301136d9dfa712e59dae3d5a96dcb
   .claude/skills/sourcegen-docs-writing/SKILL.md: sha256:22406e328192fb8387fc5b0d337e6fa2be34228f098fad955c3312ee34038b9c
   .claude/skills/sourcegen-generator-development/SKILL.md: sha256:4ce5a324d31212e3c4f2cfae569121aba000ba6edf2908f36a3875783080b0aa
@@ -756,4 +756,4 @@ local_deployed_file_hashes:
   .github/agents/sourcegen-code-review.agent.md: sha256:ae51313f52e61fc7bc3a4d398ce70ec8b9a46c30b1c6402ace13420a1b957746
   .github/instructions/csharp-source-generator.instructions.md: sha256:5338c49d3545caece75bb1b8bb547bc87679c2043f7340f93c989e72b1287d3f
   .github/instructions/csharp-tunit.instructions.md: sha256:4e50991bcab08d56cc708ff8d8cc22d597612eb03795e978f34057c73a462b9c
-  .github/instructions/csharp.instructions.md: sha256:836a0c44076d50f2adaed3cc20e89f2c3101a94cb497574ceaa63e58400b0191
+  .github/instructions/csharp.instructions.md: sha256:bae93f32fb45ccce58d0ac27f309a3c1b15612a8699261f1366a47fb9eb6ead6
