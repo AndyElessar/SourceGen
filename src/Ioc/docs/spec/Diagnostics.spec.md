@@ -65,7 +65,7 @@ A diagnostic message about the dependency graph MUST name the module and the ins
 
 - Instance definition: the sort name (see [Analysis model: Ordering](Analysis.Model.spec.md#ordering)). When it has a key, ` (Key: {Key})` follows. When it comes from an imported module, ` [module {module class}]` follows.
 - Type: the C# display format, without `global::`.
-- Dependency site: `{owning instance definition} → {name of the parameter or member}`.
+- Dependency site: `{owning instance definition} → {name of the parameter or member}`. For a partial accessor, the owner is the container class (`App.AppContainer → Clock`).
 
 ### Consequences
 
