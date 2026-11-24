@@ -28,19 +28,23 @@ internal sealed record GraphProblem(string Id, ImmutableEquatableArray<string> A
 /// </remarks>
 internal static class DependencyGraph
 {
-    /// <summary>Gets the closed definitions that provide each service type.</summary>
+    /// <summary>Gets the closed definitions that provide each service type with each key.</summary>
     /// <param name="definitions">The closed definitions.</param>
-    /// <returns>The indexes of the providers, by service type, in the ordering.</returns>
-    public static Dictionary<TypeRef, List<int>> Providers(ImmutableEquatableArray<ClosedDefinition> definitions)
+    /// <returns>
+    /// The indexes of the providers, by service type and the canonical string of the key (the empty string for no key), in
+    /// the ordering.
+    /// </returns>
+    public static Dictionary<(TypeRef Type, string Key), List<int>> Providers(ImmutableEquatableArray<ClosedDefinition> definitions)
     {
-        Dictionary<TypeRef, List<int>> providers = [];
+        Dictionary<(TypeRef, string), List<int>> providers = [];
         for(int i = 0; i < definitions.Length; i++)
         {
+            string key = KeyRef.CanonicalOf(definitions[i].Key);
             foreach(TypeRef serviceType in definitions[i].ServiceTypes)
             {
-                if(!providers.TryGetValue(serviceType, out List<int>? list))
+                if(!providers.TryGetValue((serviceType, key), out List<int>? list))
                 {
-                    providers[serviceType] = list = [];
+                    providers[(serviceType, key)] = list = [];
                 }
 
                 list.Add(i);
@@ -57,7 +61,7 @@ internal static class DependencyGraph
     /// <param name="definitions">The closed definitions.</param>
     /// <param name="providers">The providers of each service type.</param>
     /// <returns>The edges, by the index of the closed definition that owns them.</returns>
-    private static List<GraphEdge>[] Edges(ImmutableEquatableArray<ClosedDefinition> definitions, Dictionary<TypeRef, List<int>> providers)
+    private static List<GraphEdge>[] Edges(ImmutableEquatableArray<ClosedDefinition> definitions, Dictionary<(TypeRef Type, string Key), List<int>> providers)
     {
         List<GraphEdge>[] edges = new List<GraphEdge>[definitions.Length];
         for(int i = 0; i < definitions.Length; i++)
@@ -66,7 +70,7 @@ internal static class DependencyGraph
             ImmutableEquatableArray<ConstructorParameter> parameters = definitions[i].ConstructorParameters;
             for(int p = 0; p < parameters.Length; p++)
             {
-                if(providers.TryGetValue(parameters[p].Type, out List<int>? candidates) && candidates.Count == 1)
+                if(providers.TryGetValue((parameters[p].Type, string.Empty), out List<int>? candidates) && candidates.Count == 1)
                 {
                     edges[i].Add(new GraphEdge(i, p, candidates[0]));
                 }
@@ -105,7 +109,7 @@ internal static class DependencyGraph
                 continue;
             }
 
-            IEnumerable<string> names = cycle.Select(e => definitions[e.From].Implementation.SortName).Append(definitions[start].Implementation.SortName);
+            IEnumerable<string> names = cycle.Select(e => KeyNames.Definition(definitions[e.From])).Append(KeyNames.Definition(definitions[start]));
             yield return Problem(Descriptors.CircularDependency.Id, [string.Join(" → ", names)], definitions, cycle[0]);
         }
     }
@@ -136,10 +140,10 @@ internal static class DependencyGraph
                             List<GraphEdge> path = [.. PathTo(edge.From, singleton, previous), edge];
                             string through = path.Count == 1
                                 ? string.Empty
-                                : " through " + string.Join(" → ", path.Select(e => definitions[e.From].Implementation.SortName).Append(definitions[edge.To].Implementation.SortName));
+                                : " through " + string.Join(" → ", path.Select(e => KeyNames.Definition(definitions[e.From])).Append(KeyNames.Definition(definitions[edge.To])));
                             yield return Problem(
                                 Descriptors.CaptiveDependency.Id,
-                                [definitions[singleton].Implementation.SortName, definitions[edge.To].Implementation.SortName, through],
+                                [KeyNames.Definition(definitions[singleton]), KeyNames.Definition(definitions[edge.To]), through],
                                 definitions,
                                 path[0]);
                             break;
@@ -167,7 +171,7 @@ internal static class DependencyGraph
             string id = holder.Lifetime == Lifetime.Singleton ? Descriptors.SingletonHoldsTransient.Id : Descriptors.ScopedHoldsTransient.Id;
             yield return Problem(
                 id,
-                [holder.Implementation.SortName, definitions[edge.To].Implementation.SortName, TypeNames.Display(holder.ConstructorParameters[edge.Parameter].Type)],
+                [KeyNames.Definition(holder), KeyNames.Definition(definitions[edge.To]), TypeNames.Display(holder.ConstructorParameters[edge.Parameter].Type)],
                 definitions,
                 edge);
         }

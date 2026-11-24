@@ -1,16 +1,18 @@
 using Microsoft.CodeAnalysis.Text;
 using SourceGen.Ioc.Diagnostics;
+using SourceGen.Ioc.Emit;
 using SourceGen.Ioc.Model;
 
 namespace SourceGen.Ioc.Parse;
 
 /// <summary>Where a declaration is written, for the check of merged declarations (SGIOC001).</summary>
-/// <param name="Implementation">The identity of the declaration.</param>
-/// <param name="Name">The display name of the implementation type, for the message.</param>
+/// <param name="Implementation">The implementation type: the identity of the declaration, with the key.</param>
+/// <param name="Key">The key, or <see langword="null"/>.</param>
+/// <param name="Name">The name of the instance definition, for the message.</param>
 /// <param name="Lifetime">The lifetime.</param>
 /// <param name="FilePath">The path of the syntax tree of the attribute.</param>
 /// <param name="Span">The span of the attribute.</param>
-internal sealed record MergeSite(NamedTypeRef Implementation, string Name, Lifetime Lifetime, string FilePath, TextSpan Span);
+internal sealed record MergeSite(NamedTypeRef Implementation, KeyRef? Key, string Name, Lifetime Lifetime, string FilePath, TextSpan Span);
 
 /// <summary>
 /// Where a dependency site is written, for the definite check (Analysis.Model.spec, "Two levels of checks"). A
@@ -148,15 +150,21 @@ internal static class DeclarationReader
             // The service types first: an invalid declaration still records the valid ones, so that a dependency on
             // them finds the error node and causes no other diagnostic
             (ImmutableEquatableArray<TypeRef> serviceTypes, bool validServiceTypes) = ReadServiceTypes(implementation, name, attribute, syntax);
+            KeyResult key = KeyReader.Read(attribute, syntax, compilation);
+            if(key.ErrorId is { } keyError)
+            {
+                Report(keyError, key.ErrorNode, key.ErrorArguments ?? []);
+            }
+
             (IMethodSymbol? constructor, string? constructorError) = SelectConstructor(implementation);
             if(constructor is null)
             {
                 Report(Descriptors.ConstructorNotDetermined.Id, syntax, name, constructorError!);
             }
 
-            if(constructor is null || !validServiceTypes)
+            if(constructor is null || !validServiceTypes || key.ErrorId is not null)
             {
-                AddError(implementationRef, lifetime, serviceTypes);
+                AddError(implementationRef, key.ErrorId is null ? key.Key : KeyRef.Invalid(implementationRef), lifetime, serviceTypes);
                 return;
             }
 
@@ -165,10 +173,10 @@ internal static class DeclarationReader
                 return;
             }
 
-            declarations.Add(new RegistrationDeclaration(implementationRef, (Lifetime)lifetime, serviceTypes, parameters, DisposalOf(implementation)));
+            declarations.Add(new RegistrationDeclaration(implementationRef, key.Key, (Lifetime)lifetime, serviceTypes, parameters, DisposalOf(implementation)));
             if(syntax is not null)
             {
-                sites.Add(new MergeSite(implementationRef, name, (Lifetime)lifetime, syntax.SyntaxTree.FilePath, syntax.Span));
+                sites.Add(new MergeSite(implementationRef, key.Key, KeyNames.Definition(implementationRef, key.Key), (Lifetime)lifetime, syntax.SyntaxTree.FilePath, syntax.Span));
             }
 
             for(int i = 0; i < constructor.Parameters.Length; i++)
@@ -188,8 +196,8 @@ internal static class DeclarationReader
         /// Records an invalid declaration. It skips the complete instance definition, also its valid declarations
         /// (Diagnostics.spec, "Consequences").
         /// </summary>
-        private void AddError(NamedTypeRef implementation, int lifetime, ImmutableEquatableArray<TypeRef> validServiceTypes)
-            => declarations.Add(new RegistrationDeclaration(implementation, (Lifetime)lifetime, validServiceTypes, [], IsError: true));
+        private void AddError(NamedTypeRef implementation, KeyRef? key, int lifetime, ImmutableEquatableArray<TypeRef> validServiceTypes)
+            => declarations.Add(new RegistrationDeclaration(implementation, key, (Lifetime)lifetime, validServiceTypes, [], IsError: true));
 
         /// <summary>The checks of the implementation type (Annotations.spec, "Checks of the implementation type").</summary>
         private static string? ImplementationError(ITypeSymbol type)

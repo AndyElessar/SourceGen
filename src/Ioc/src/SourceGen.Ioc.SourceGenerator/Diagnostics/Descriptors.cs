@@ -44,6 +44,27 @@ internal static class Descriptors
         "'{0}' is generated automatically and cannot be registered; wrap it in a class or depend on it directly",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC007: <c>KeyedService.AnyKey</c> is used as a registration key.</summary>
+    public static readonly DiagnosticDescriptor AnyKeyRegistration = Create(
+        "SGIOC007",
+        "AnyKey cannot be used to register",
+        "KeyedService.AnyKey cannot be used as a registration key",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC011: an argument that needs a symbol is not a <c>nameof()</c> expression of the right member.</summary>
+    public static readonly DiagnosticDescriptor NameofTargetNotFound = Create(
+        "SGIOC011",
+        "nameof target not found",
+        "{0} must be a nameof() expression that refers to {1}",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC022: the type of a key value is not supported.</summary>
+    public static readonly DiagnosticDescriptor UnsupportedKey = Create(
+        "SGIOC022",
+        "Unsupported key value",
+        "A key of type '{0}' is not supported",
+        DiagnosticSeverity.Error);
+
     /// <summary>SGIOC025: an assembly-or-class attribute is on a class that is neither a module nor a container.</summary>
     public static readonly DiagnosticDescriptor AttributeOnPlainClass = Create(
         "SGIOC025",
@@ -129,6 +150,9 @@ internal static class Descriptors
         InvalidImplementationType,
         InvalidServiceType,
         WrapperServiceType,
+        AnyKeyRegistration,
+        NameofTargetNotFound,
+        UnsupportedKey,
         AttributeOnPlainClass,
         UnsupportedOutputClass,
         InvalidServiceCollectionExtensionName,

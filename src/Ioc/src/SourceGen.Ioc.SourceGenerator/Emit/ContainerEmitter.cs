@@ -293,7 +293,7 @@ internal static class ContainerEmitter
         {
             writer.WriteLine("if(__isRoot)");
             writer.WriteLine('{');
-            writer.WriteLine($"    throw new {InvalidOperation}(\"Cannot resolve scoped service '{definition.Implementation.SortName}' from the root container.\");");
+            writer.WriteLine($"    throw new {InvalidOperation}({SymbolDisplay.FormatLiteral($"Cannot resolve scoped service '{KeyNames.Definition(definition)}' from the root container.", quote: true)});");
             writer.WriteLine('}');
             writer.WriteLine();
         }
@@ -524,56 +524,165 @@ internal static class ContainerEmitter
         }
     }
 
+    /// <summary>
+    /// The lookup tables (Container.Output.spec, "Lookup by Type"): <c>__lookup</c> without a key, <c>__keyedLookup</c>
+    /// by type and key, and <c>__collections</c>, which gives the collection of a known service type for a key that has no
+    /// registration. The keyed table is built when the container type is initialized: it reads each symbol key one time,
+    /// and two keys that are equal at run time on the same type throw.
+    /// </summary>
     private static void WriteLookup(SourceWriter writer, ContainerPlan plan, string self)
     {
+        bool fallback = plan.Container.IntegrateServiceProvider;
         string function = $"global::System.Func<{self}, object>";
-        string dictionary = $"global::System.Collections.Generic.Dictionary<global::System.Type, {function}>";
+        string keyedFunction = $"global::System.Func<{self}, object, object>";
+        string typeAndKey = "(global::System.Type, object)";
+        TypeRef[] serviceTypes = [.. plan.Lookup.Select(static e => e.ServiceType).Distinct()];
+        LookupEntry[] keyed = [.. plan.Lookup.Where(static e => e.Key is not null)];
+
         writer.WriteLine();
-        writer.WriteLine("// The lookup table (Container.Output.spec, \"Lookup by Type\")");
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine($"private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, {function}> __lookup =");
         writer.Indentation++;
-        writer.WriteLine($"global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new {dictionary}");
+        writer.WriteLine($"global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, {function}>");
         writer.WriteLine('{');
         writer.Indentation++;
         writer.WriteLine("{ typeof(global::System.IServiceProvider), static c => c },");
         writer.WriteLine("{ typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c.__singletons.Root },");
         writer.WriteLine("{ typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService), static c => c.__singletons.Root },");
         writer.WriteLine("{ typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService), static c => c.__singletons.Root },");
-        if(!plan.Lookup.Any(entry => entry.ServiceType.Equals(plan.Container.Type)))
+        if(!plan.Lookup.Any(entry => entry.Key is null && entry.ServiceType.Equals(plan.Container.Type)))
         {
             writer.WriteLine($"{{ typeof({self}), static c => c }},");
         }
 
-        foreach(LookupEntry entry in plan.Lookup)
+        foreach(TypeRef serviceType in serviceTypes)
         {
-            string service = TypeNames.CSharp(entry.ServiceType);
-            if(entry.Candidates.Length == 1)
+            string service = TypeNames.CSharp(serviceType);
+            LookupEntry? entry = plan.Lookup.FirstOrDefault(e => e.Key is null && e.ServiceType.Equals(serviceType));
+            if(entry is not null)
             {
-                writer.WriteLine($"{{ typeof({service}), static c => ({service})c.{Get(plan.Definitions[entry.Candidates[0]].Definition)}() }},");
-            }
-            else
-            {
-                string names = string.Join(", ", entry.Candidates.Select(i => plan.Definitions[i].Definition.Implementation.SortName));
-                writer.WriteLine($"{{ typeof({service}), static c => throw new {InvalidOperation}(\"More than one registration provides '{TypeNames.Display(entry.ServiceType)}': {names}.\") }},");
+                writer.WriteLine($"{{ typeof({service}), static c => {Single(plan, entry, service)} }},");
             }
 
-            // With a fallback provider, its services come first (Container.Output.spec, "Behavior for each request")
-            string elements = string.Join(", ", entry.Candidates.Select(i => $"({service})c.{Get(plan.Definitions[i].Definition)}()"));
-            if(plan.Container.IntegrateServiceProvider)
-            {
-                writer.WriteLine($"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static c => __Merge(c.__Fallback(), new {service}[] {{ {elements} }}) }},");
-            }
-            else
-            {
-                writer.WriteLine($"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static c => new {service}[] {{ {elements} }} }},");
-            }
+            // Only the registrations without a key. With a fallback provider, its services come first
+            string elements = Elements(plan, entry?.Candidates ?? [], service);
+            writer.WriteLine(fallback
+                ? $"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static c => __Merge(c.__Fallback(), {elements}) }},"
+                : $"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static c => {elements} }},");
         }
 
         writer.Indentation--;
         writer.WriteLine("});");
         writer.Indentation--;
+
+        // A known collection type with a key that has no registration: an empty collection, merged with the fallback provider
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, {keyedFunction}> __collections =");
+        writer.Indentation++;
+        writer.WriteLine($"global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, {keyedFunction}>");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        foreach(TypeRef serviceType in serviceTypes)
+        {
+            string service = TypeNames.CSharp(serviceType);
+            writer.WriteLine(fallback
+                ? $"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static (c, key) => __MergeKeyed(c.__Fallback(), key, global::System.Array.Empty<{service}>()) }},"
+                : $"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static (c, _) => global::System.Array.Empty<{service}>() }},");
+        }
+
+        writer.Indentation--;
+        writer.WriteLine("});");
+        writer.Indentation--;
+
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private static readonly global::System.Collections.Frozen.FrozenDictionary<{typeAndKey}, {keyedFunction}> __keyedLookup = __BuildKeyedLookup();");
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private static global::System.Collections.Frozen.FrozenDictionary<{typeAndKey}, {keyedFunction}> __BuildKeyedLookup()");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        writer.WriteLine($"global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}> table = new global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}>();");
+        if(keyed.Length > 0)
+        {
+            writer.WriteLine($"global::System.Collections.Generic.HashSet<{typeAndKey}> keys = new global::System.Collections.Generic.HashSet<{typeAndKey}>();");
+
+            // Each key is read one time
+            List<string> keyVariables = [];
+            Dictionary<string, string> variables = [];
+            foreach(KeyRef key in keyed.Select(static e => e.Key!))
+            {
+                if(!variables.ContainsKey(key.Canonical))
+                {
+                    string variable = $"k{variables.Count}";
+                    variables[key.Canonical] = variable;
+                    writer.WriteLine($"object {variable} = {KeyNames.Expression(key)};");
+                }
+            }
+
+            foreach(LookupEntry entry in keyed)
+            {
+                string service = TypeNames.CSharp(entry.ServiceType);
+                string variable = variables[entry.Key!.Canonical];
+                string elements = Elements(plan, entry.Candidates, service);
+                writer.WriteLine($"__AddKeyed(table, keys, typeof({service}), {variable}, static (c, _) => {Single(plan, entry, service)});");
+                writer.WriteLine(fallback
+                    ? $"__AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<{service}>), {variable}, static (c, key) => __MergeKeyed(c.__Fallback(), key, {elements}));"
+                    : $"__AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<{service}>), {variable}, static (c, _) => {elements});");
+            }
+
+            // AnyKey: all registrations of the type that have a key, in the ordering. One service with AnyKey throws, as in MS.DI
+            foreach(IGrouping<TypeRef, LookupEntry> group in keyed.GroupBy(static e => e.ServiceType))
+            {
+                string service = TypeNames.CSharp(group.Key);
+                string elements = Elements(plan, [.. group.SelectMany(static e => e.Candidates).OrderBy(static i => i)], service);
+                writer.WriteLine($"table.Add((typeof({service}), {DependencyInjection}.KeyedService.AnyKey), static (_, _) => throw new {InvalidOperation}({SymbolDisplay.FormatLiteral($"KeyedService.AnyKey cannot be used to resolve a single service of type '{TypeNames.Display(group.Key)}'.", quote: true)}));");
+                writer.WriteLine(fallback
+                    ? $"table.Add((typeof(global::System.Collections.Generic.IEnumerable<{service}>), {DependencyInjection}.KeyedService.AnyKey), static (c, key) => __MergeKeyed(c.__Fallback(), key, {elements}));"
+                    : $"table.Add((typeof(global::System.Collections.Generic.IEnumerable<{service}>), {DependencyInjection}.KeyedService.AnyKey), static (c, _) => {elements});");
+            }
+        }
+
+        writer.WriteLine("return global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(table);");
+        writer.Indentation--;
+        writer.WriteLine('}');
+
+        if(keyed.Length > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine($"private static void __AddKeyed(global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}> table, global::System.Collections.Generic.HashSet<{typeAndKey}> keys, global::System.Type type, object key, {keyedFunction} factory)");
+            writer.WriteLine('{');
+            writer.WriteLine($"    if(keys.TryGetValue((type, key), out {typeAndKey} existing))");
+            writer.WriteLine("    {");
+            writer.WriteLine($"        throw new {InvalidOperation}(\"Two keys of '\" + type + \"' are equal at run time: '\" + existing.Item2 + \"' and '\" + key + \"'.\");");
+            writer.WriteLine("    }");
+            writer.WriteLine();
+            writer.WriteLine("    keys.Add((type, key));");
+            writer.WriteLine("    table.Add((type, key), factory);");
+            writer.WriteLine('}');
+        }
     }
+
+    /// <summary>The expression of one service: the candidate, or an exception when more than one candidate stays.</summary>
+    private static string Single(ContainerPlan plan, LookupEntry entry, string service)
+    {
+        if(entry.Candidates.Length == 1)
+        {
+            return $"({service})c.{Get(plan.Definitions[entry.Candidates[0]].Definition)}()";
+        }
+
+        string names = string.Join(", ", entry.Candidates.Select(i => KeyNames.Definition(plan.Definitions[i].Definition)));
+        string display = entry.Key is null ? TypeNames.Display(entry.ServiceType) : $"{TypeNames.Display(entry.ServiceType)} (Key: {KeyNames.Display(entry.Key)})";
+        return $"throw new {InvalidOperation}({SymbolDisplay.FormatLiteral($"More than one registration provides '{display}': {names}.", quote: true)})";
+    }
+
+    /// <summary>The array of the candidates, in their ordering.</summary>
+    private static string Elements(ContainerPlan plan, IEnumerable<int> candidates, string service)
+        => candidates.Any()
+            ? $"new {service}[] {{ {string.Join(", ", candidates.Select(i => $"({service})c.{Get(plan.Definitions[i].Definition)}()"))} }}"
+            : $"global::System.Array.Empty<{service}>()";
 
     /// <summary>
     /// The lookup by <c>Type</c>. A type that the table does not have goes to the fallback provider when the container
@@ -593,25 +702,38 @@ internal static class ContainerEmitter
         writer.WriteLine("public object GetRequiredService(global::System.Type serviceType)");
         writer.WriteLine($"    => GetService(serviceType) ?? throw new {InvalidOperation}(\"No service for type '\" + serviceType + \"' has been registered.\");");
         writer.WriteLine();
-        writer.WriteLine("// Keyed registrations come in a later slice. Until then a key finds nothing in the container");
+        // Keys compare with Equals at run time, as in MS.DI (Container.Output.spec, "Lookup rules")
+        string keyedFunction = $"global::System.Func<{self}, object, object>";
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine("public object? GetKeyedService(global::System.Type serviceType, object? serviceKey)");
         writer.WriteLine('{');
-        writer.WriteLine("    __ThrowIfDisposed();");
-        if(fallback)
-        {
-            writer.WriteLine("    if(serviceKey is null)");
-            writer.WriteLine("    {");
-            writer.WriteLine("        return GetService(serviceType);");
-            writer.WriteLine("    }");
-            writer.WriteLine();
-            writer.WriteLine($"    return __Fallback() is {DependencyInjection}.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;");
-        }
-        else
-        {
-            writer.WriteLine("    return serviceKey is null ? GetService(serviceType) : null;");
-        }
-
+        writer.Indentation++;
+        writer.WriteLine("__ThrowIfDisposed();");
+        writer.WriteLine("if(serviceKey is null)");
+        writer.WriteLine('{');
+        writer.WriteLine("    return GetService(serviceType);");
+        writer.WriteLine('}');
+        writer.WriteLine();
+        writer.WriteLine($"if(__keyedLookup.TryGetValue((serviceType, serviceKey), out {keyedFunction}? factory))");
+        writer.WriteLine('{');
+        writer.WriteLine("    return factory(this, serviceKey);");
+        writer.WriteLine('}');
+        writer.WriteLine();
+        writer.WriteLine($"if(__collections.TryGetValue(serviceType, out {keyedFunction}? collection))");
+        writer.WriteLine('{');
+        writer.WriteLine("    return collection(this, serviceKey);");
+        writer.WriteLine('}');
+        writer.WriteLine();
+        writer.WriteLine("// One service with AnyKey: MS.DI throws too");
+        writer.WriteLine($"if(global::System.Object.ReferenceEquals(serviceKey, {DependencyInjection}.KeyedService.AnyKey) && __lookup.ContainsKey(serviceType))");
+        writer.WriteLine('{');
+        writer.WriteLine($"    throw new {InvalidOperation}(\"KeyedService.AnyKey cannot be used to resolve a single service of type '\" + serviceType + \"'.\");");
+        writer.WriteLine('}');
+        writer.WriteLine();
+        writer.WriteLine(fallback
+            ? $"return __Fallback() is {DependencyInjection}.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;"
+            : "return null;");
+        writer.Indentation--;
         writer.WriteLine('}');
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
@@ -627,14 +749,17 @@ internal static class ContainerEmitter
             writer.WriteLine();
             writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
             writer.WriteLine("public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)");
-            writer.WriteLine($"    => serviceKey is null ? IsService(serviceType) : __singletons.Fallback.GetService(typeof({DependencyInjection}.IServiceProviderIsKeyedService)) is {DependencyInjection}.IServiceProviderIsKeyedService fallback && fallback.IsKeyedService(serviceType, serviceKey);");
+            writer.WriteLine("    => serviceKey is null");
+            writer.WriteLine("        ? IsService(serviceType)");
+            writer.WriteLine($"        : __keyedLookup.ContainsKey((serviceType, serviceKey)) || __collections.ContainsKey(serviceType) || (__singletons.Fallback.GetService(typeof({DependencyInjection}.IServiceProviderIsKeyedService)) is {DependencyInjection}.IServiceProviderIsKeyedService fallback && fallback.IsKeyedService(serviceType, serviceKey));");
         }
         else
         {
             writer.WriteLine("public bool IsService(global::System.Type serviceType) => __lookup.ContainsKey(serviceType);");
             writer.WriteLine();
             writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-            writer.WriteLine("public bool IsKeyedService(global::System.Type serviceType, object? serviceKey) => serviceKey is null && IsService(serviceType);");
+            writer.WriteLine("public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)");
+            writer.WriteLine("    => serviceKey is null ? IsService(serviceType) : __keyedLookup.ContainsKey((serviceType, serviceKey)) || __collections.ContainsKey(serviceType);");
         }
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
@@ -974,6 +1099,21 @@ internal static class ContainerEmitter
         writer.WriteLine($"private static T[] __Merge<T>({ServiceProvider} fallback, T[] own)");
         writer.WriteLine('{');
         writer.WriteLine("    if(fallback.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) is not global::System.Collections.Generic.IEnumerable<T> external)");
+        writer.WriteLine("    {");
+        writer.WriteLine("        return own;");
+        writer.WriteLine("    }");
+        writer.WriteLine();
+        writer.WriteLine("    global::System.Collections.Generic.List<T> all = new global::System.Collections.Generic.List<T>(external);");
+        writer.WriteLine("    all.AddRange(own);");
+        writer.WriteLine("    return all.ToArray();");
+        writer.WriteLine('}');
+
+        // The keyed services of the fallback provider for the same key first, then those of the container
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private static T[] __MergeKeyed<T>({ServiceProvider} fallback, object key, T[] own)");
+        writer.WriteLine('{');
+        writer.WriteLine($"    if(fallback is not {DependencyInjection}.IKeyedServiceProvider keyed || keyed.GetKeyedService(typeof(global::System.Collections.Generic.IEnumerable<T>), key) is not global::System.Collections.Generic.IEnumerable<T> external)");
         writer.WriteLine("    {");
         writer.WriteLine("        return own;");
         writer.WriteLine("    }");

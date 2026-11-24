@@ -19,7 +19,8 @@ internal static class GeneratedNames
         int start = Math.Max(metadataName.LastIndexOf('.'), metadataName.LastIndexOf('+')) + 1;
         int tick = metadataName.IndexOf('`', start);
         string shortName = tick >= 0 ? metadataName[start..tick] : metadataName[start..];
-        return $"{prefix}{shortName}_{Fnv1a(type.CanonicalString):x8}";
+        string identity = definition.Key is { } key ? $"{type.CanonicalString}|{key.Canonical}" : type.CanonicalString;
+        return $"{prefix}{shortName}_{Fnv1a(identity):x8}";
     }
 
     /// <summary>The 32-bit FNV-1a hash of the UTF-16 code units of <paramref name="value"/>.</summary>

@@ -14,7 +14,7 @@ internal static class Definitions
     public static ImmutableEquatableArray<ClosedDefinition> Merge(IEnumerable<RegistrationDeclaration> declarations, CancellationToken cancellationToken)
     {
         List<ClosedDefinition> definitions = [];
-        foreach(IGrouping<NamedTypeRef, RegistrationDeclaration> group in declarations.GroupBy(static d => d.Implementation))
+        foreach(IGrouping<(NamedTypeRef, KeyRef?), RegistrationDeclaration> group in declarations.GroupBy(static d => (d.Implementation, d.Key)))
         {
             cancellationToken.ThrowIfCancellationRequested();
             RegistrationDeclaration first = group.First();
@@ -33,11 +33,12 @@ internal static class Definitions
                 .OrderBy(static t => t.SortName, StringComparer.Ordinal)
                 .ThenBy(static t => t.CanonicalString, StringComparer.Ordinal)];
 
-            definitions.Add(new ClosedDefinition(first.Implementation, first.Lifetime, [first.Implementation, .. others], first.ConstructorParameters, first.Disposal));
+            definitions.Add(new ClosedDefinition(first.Implementation, first.Key, first.Lifetime, [first.Implementation, .. others], first.ConstructorParameters, first.Disposal));
         }
 
         return definitions
             .OrderBy(static d => d.Implementation.SortName, StringComparer.Ordinal)
+            .ThenBy(static d => KeyRef.CanonicalOf(d.Key), StringComparer.Ordinal)
             .ThenBy(static d => d.Implementation.CanonicalString, StringComparer.Ordinal)
             .ToImmutableEquatableArray();
     }
@@ -47,7 +48,7 @@ internal static class Definitions
     /// <returns>The diagnostics.</returns>
     public static IEnumerable<DiagnosticInfo> CheckMerge(IEnumerable<MergeSite> sites)
     {
-        foreach(IGrouping<NamedTypeRef, MergeSite> group in sites.GroupBy(static s => s.Implementation))
+        foreach(IGrouping<(NamedTypeRef, KeyRef?), MergeSite> group in sites.GroupBy(static s => (s.Implementation, s.Key)))
         {
             Lifetime lifetime = group.First().Lifetime;
             if(group.All(s => s.Lifetime == lifetime))

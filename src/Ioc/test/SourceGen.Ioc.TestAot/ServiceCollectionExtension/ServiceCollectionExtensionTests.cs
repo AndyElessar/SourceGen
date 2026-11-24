@@ -109,5 +109,21 @@ public class ServiceCollectionExtensionTests
         await Assert.That(consumer.Level).IsEqualTo(Level.High);
     }
 
+    [Test]
+    public async Task AddTestAot_KeyedRegistrations_ResolveByKey()
+    {
+        using ServiceProvider provider = Build();
+        using IServiceScope scope = provider.CreateScope();
+
+        IStore a = provider.GetRequiredKeyedService<IStore>(new string('a', 1));
+
+        await Assert.That(provider.GetRequiredKeyedService<Store>("a")).IsSameReferenceAs(a);
+        await Assert.That(provider.GetRequiredKeyedService<IStore>(new StoreKey("backup"))).IsNotSameReferenceAs(a);
+        await Assert.That(provider.GetKeyedService<IStore>(1)).IsNull();
+        await Assert.That(provider.GetRequiredKeyedService<IStore>(1L)).IsNotSameReferenceAs(a);
+        await Assert.That(scope.ServiceProvider.GetKeyedServices<IStore>(KeyedService.AnyKey).Count()).IsEqualTo(5);
+        await Assert.That(provider.GetService<IStore>()).IsNull();
+    }
+
     private sealed class Missing : IMissing;
 }

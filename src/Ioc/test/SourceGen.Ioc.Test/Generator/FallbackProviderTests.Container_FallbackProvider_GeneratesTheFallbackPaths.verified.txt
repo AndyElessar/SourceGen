@@ -92,7 +92,6 @@
         }
     }
 
-    // The lookup table (Container.Output.spec, "Lookup by Type")
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>> __lookup =
         global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>>
@@ -117,7 +116,6 @@
         return __lookup.TryGetValue(serviceType, out global::System.Func<global::App.AppContainer, object>? factory) ? factory(this) : __Fallback().GetService(serviceType);
     }
 
-    // Keyed registrations come in a later slice. Until then a key finds nothing in the container
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public object? GetKeyedService(global::System.Type serviceType, object? serviceKey)
     {
@@ -125,6 +123,22 @@
         if(serviceKey is null)
         {
             return GetService(serviceType);
+        }
+
+        if(__keyedLookup.TryGetValue((serviceType, serviceKey), out global::System.Func<global::App.AppContainer, object, object>? factory))
+        {
+            return factory(this, serviceKey);
+        }
+
+        if(__collections.TryGetValue(serviceType, out global::System.Func<global::App.AppContainer, object, object>? collection))
+        {
+            return collection(this, serviceKey);
+        }
+
+        // One service with AnyKey: MS.DI throws too
+        if(global::System.Object.ReferenceEquals(serviceKey, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey) && __lookup.ContainsKey(serviceType))
+        {
+            throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type '" + serviceType + "'.");
         }
 
         return __Fallback() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
@@ -136,7 +150,9 @@
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)
-        => serviceKey is null ? IsService(serviceType) : __singletons.Fallback.GetService(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService)) is global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService fallback && fallback.IsKeyedService(serviceType, serviceKey);
+        => serviceKey is null
+            ? IsService(serviceType)
+            : __keyedLookup.ContainsKey((serviceType, serviceKey)) || __collections.ContainsKey(serviceType) || (__singletons.Fallback.GetService(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService)) is global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService fallback && fallback.IsKeyedService(serviceType, serviceKey));
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public T? GetService<T>() where T : class => (T?)GetService(typeof(T));

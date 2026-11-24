@@ -143,7 +143,6 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
         return instance;
     }
 
-    // The lookup table (Container.Output.spec, "Lookup by Type")
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>> __lookup =
         global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>>
@@ -166,6 +165,27 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
         });
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, global::System.Func<global::App.AppContainer, object, object>> __collections =
+        global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::App.AppContainer, object, object>>
+        {
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Formatter>), static (c, _) => global::System.Array.Empty<global::App.Formatter>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IClock>), static (c, _) => global::System.Array.Empty<global::App.IClock>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IOrderService>), static (c, _) => global::System.Array.Empty<global::App.IOrderService>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.OrderService>), static (c, _) => global::System.Array.Empty<global::App.OrderService>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.SystemClock>), static (c, _) => global::System.Array.Empty<global::App.SystemClock>() },
+        });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> __keyedLookup = __BuildKeyedLookup();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static global::System.Collections.Frozen.FrozenDictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> __BuildKeyedLookup()
+    {
+        global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> table = new global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>>();
+        return global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(table);
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public object? GetService(global::System.Type serviceType)
     {
         __ThrowIfDisposed();
@@ -176,12 +196,32 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
     public object GetRequiredService(global::System.Type serviceType)
         => GetService(serviceType) ?? throw new global::System.InvalidOperationException("No service for type '" + serviceType + "' has been registered.");
 
-    // Keyed registrations come in a later slice. Until then a key finds nothing in the container
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public object? GetKeyedService(global::System.Type serviceType, object? serviceKey)
     {
         __ThrowIfDisposed();
-        return serviceKey is null ? GetService(serviceType) : null;
+        if(serviceKey is null)
+        {
+            return GetService(serviceType);
+        }
+
+        if(__keyedLookup.TryGetValue((serviceType, serviceKey), out global::System.Func<global::App.AppContainer, object, object>? factory))
+        {
+            return factory(this, serviceKey);
+        }
+
+        if(__collections.TryGetValue(serviceType, out global::System.Func<global::App.AppContainer, object, object>? collection))
+        {
+            return collection(this, serviceKey);
+        }
+
+        // One service with AnyKey: MS.DI throws too
+        if(global::System.Object.ReferenceEquals(serviceKey, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey) && __lookup.ContainsKey(serviceType))
+        {
+            throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type '" + serviceType + "'.");
+        }
+
+        return null;
     }
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
@@ -192,7 +232,8 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
     public bool IsService(global::System.Type serviceType) => __lookup.ContainsKey(serviceType);
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
-    public bool IsKeyedService(global::System.Type serviceType, object? serviceKey) => serviceKey is null && IsService(serviceType);
+    public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)
+        => serviceKey is null ? IsService(serviceType) : __keyedLookup.ContainsKey((serviceType, serviceKey)) || __collections.ContainsKey(serviceType);
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public T? GetService<T>() where T : class => (T?)GetService(typeof(T));

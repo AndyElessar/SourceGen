@@ -44,8 +44,9 @@ internal sealed record AccessorPlan(PartialAccessor Accessor, ArgumentPlan Argum
 
 /// <summary>An item of the lookup table (Container.Output.spec, "Contents of the table").</summary>
 /// <param name="ServiceType">The service type <c>S</c>.</param>
+/// <param name="Key">The key, or <see langword="null"/> for no key.</param>
 /// <param name="Candidates">The indexes of the closed definitions that provide it, in their ordering.</param>
-internal sealed record LookupEntry(TypeRef ServiceType, ImmutableEquatableArray<int> Candidates);
+internal sealed record LookupEntry(TypeRef ServiceType, KeyRef? Key, ImmutableEquatableArray<int> Candidates);
 
 /// <summary>Everything that the code of a container needs.</summary>
 /// <param name="Container">The container class.</param>
@@ -94,7 +95,7 @@ internal static class ContainerAnalysis
         ImmutableEquatableArray<TypeRef> errorNodes,
         CancellationToken cancellationToken)
     {
-        Dictionary<TypeRef, List<int>> providers = DependencyGraph.Providers(definitions);
+        Dictionary<(TypeRef Type, string Key), List<int>> providers = DependencyGraph.Providers(definitions);
         HashSet<TypeRef> skipped = [.. errorNodes];
         List<ContainerProblem> problems = [];
         List<DefinitionPlan> plans = [];
@@ -139,8 +140,9 @@ internal static class ContainerAnalysis
         }
 
         LookupEntry[] lookup = [.. providers
-            .OrderBy(static p => p.Key.CanonicalString, StringComparer.Ordinal)
-            .Select(static p => new LookupEntry(p.Key, p.Value.ToImmutableEquatableArray()))];
+            .OrderBy(static p => p.Key.Type.CanonicalString, StringComparer.Ordinal)
+            .ThenBy(static p => p.Key.Key, StringComparer.Ordinal)
+            .Select(p => new LookupEntry(p.Key.Type, definitions[p.Value[0]].Key, p.Value.ToImmutableEquatableArray()))];
         ContainerPlan plan = new(container, plans.ToImmutableEquatableArray(), lookup.ToImmutableEquatableArray(), TopologicalOrder(plans), accessors.ToImmutableEquatableArray());
         return new(container.Type, plan, problems.ToImmutableEquatableArray());
 
@@ -155,7 +157,8 @@ internal static class ContainerAnalysis
                 return new ArgumentPlan(builtIn, -1);
             }
 
-            switch(providers.TryGetValue(type, out List<int>? candidates) ? candidates.Count : 0)
+            // Keys of dependency sites come with the next part of this slice. Until then a site asks for no key
+            switch(providers.TryGetValue((type, string.Empty), out List<int>? candidates) ? candidates.Count : 0)
             {
                 case 1:
                     return new ArgumentPlan(ArgumentKind.Resolved, candidates![0]);
@@ -184,7 +187,7 @@ internal static class ContainerAnalysis
                 default:
                     problems.Add(new ContainerProblem(
                         Descriptors.AmbiguousDependency.Id,
-                        [$"{owner} → {member}", TypeNames.Display(type), candidates!.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), string.Join(", ", candidates.Select(c => definitions[c].Implementation.SortName))]));
+                        [$"{owner} → {member}", TypeNames.Display(type), candidates!.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), string.Join(", ", candidates.Select(c => KeyNames.Definition(definitions[c])))]));
                     return null;
             }
         }
@@ -212,7 +215,7 @@ internal static class ContainerAnalysis
                 Disposal.Async => "IAsyncDisposable",
                 _ => "IDisposable, IAsyncDisposable",
             };
-            problems.Add(new ContainerProblem(Descriptors.DisposableTransient.Id, [definition.Implementation.SortName, kind]));
+            problems.Add(new ContainerProblem(Descriptors.DisposableTransient.Id, [KeyNames.Definition(definition), kind]));
         }
     }
 

@@ -31,7 +31,8 @@ internal enum Disposal
 /// A registration declaration of an implementation type (Annotations.spec, "Registration declarations"), with the
 /// dependencies of its selected constructor.
 /// </summary>
-/// <param name="Implementation">The implementation type: its identity.</param>
+/// <param name="Implementation">The implementation type: its identity, with the key.</param>
+/// <param name="Key">The key, or <see langword="null"/> for no key.</param>
 /// <param name="Lifetime">The lifetime.</param>
 /// <param name="ServiceTypes">The service types that the attribute gives. The implementation type itself is not in the list.</param>
 /// <param name="ConstructorParameters">The parameters of the selected constructor, in order.</param>
@@ -42,6 +43,7 @@ internal enum Disposal
 /// </param>
 internal sealed record RegistrationDeclaration(
     NamedTypeRef Implementation,
+    KeyRef? Key,
     Lifetime Lifetime,
     ImmutableEquatableArray<TypeRef> ServiceTypes,
     ImmutableEquatableArray<ConstructorParameter> ConstructorParameters,
@@ -50,12 +52,14 @@ internal sealed record RegistrationDeclaration(
 
 /// <summary>A closed definition after merging: the input of the analysis and of the generated code.</summary>
 /// <param name="Implementation">The implementation type.</param>
+/// <param name="Key">The key, or <see langword="null"/> for no key.</param>
 /// <param name="Lifetime">The lifetime.</param>
 /// <param name="ServiceTypes">The service types: the implementation type first, then the others by sort name.</param>
 /// <param name="ConstructorParameters">The constructor parameters, in order.</param>
 /// <param name="Disposal">The disposal kind of the implementation type.</param>
 internal sealed record ClosedDefinition(
     NamedTypeRef Implementation,
+    KeyRef? Key,
     Lifetime Lifetime,
     ImmutableEquatableArray<TypeRef> ServiceTypes,
     ImmutableEquatableArray<ConstructorParameter> ConstructorParameters,

@@ -90,17 +90,19 @@ internal static class ServiceCollectionExtensionEmitter
             writer.WriteLine($"{Services}.AddKeyed{lifetime}<{Holder}<{implementation}>>(services, {GeneratedNames.For("__k_", definition)}, static (sp, _) => {Holder}.Own({GeneratedNames.For("__Create_", definition)}(sp)));");
         }
 
+        // A service type with a key uses the keyed registration methods (ServiceCollection.Output.spec, "Registration for each lifetime")
         string source = HasHolder(definition) ? GeneratedNames.For("__Get_", definition) : GeneratedNames.For("__Create_", definition);
         foreach(TypeRef serviceType in definition.ServiceTypes)
         {
-            if(serviceType.Equals(definition.Implementation))
+            string service = TypeNames.CSharp(serviceType);
+            string cast = serviceType.Equals(definition.Implementation) ? string.Empty : $"({service})";
+            if(definition.Key is { } key)
             {
-                writer.WriteLine($"{Services}.Add{lifetime}<{implementation}>(services, static sp => {source}(sp));");
+                writer.WriteLine($"{Services}.AddKeyed{lifetime}<{service}>(services, {KeyNames.Expression(key)}, static (sp, _) => {cast}{source}(sp));");
             }
             else
             {
-                string service = TypeNames.CSharp(serviceType);
-                writer.WriteLine($"{Services}.Add{lifetime}<{service}>(services, static sp => ({service}){source}(sp));");
+                writer.WriteLine($"{Services}.Add{lifetime}<{service}>(services, static sp => {cast}{source}(sp));");
             }
         }
     }

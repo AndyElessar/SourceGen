@@ -203,6 +203,32 @@ public sealed class OptionalConsumer(IClock? clock, IMissing? missing, string la
     public int? Limit => limit;
 }
 
+/// <summary>A keyed service: one implementation type registered with several keys.</summary>
+public interface IStore;
+
+/// <summary>A key that is equal to another instance with the same name at run time (a symbol key).</summary>
+public sealed record StoreKey(string Name);
+
+public enum StoreKind
+{
+    Memory,
+    Disk,
+}
+
+public static class StoreKeys
+{
+    public const string Primary = "primary";
+
+    public static readonly StoreKey Backup = new("backup");
+}
+
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IStore)], Key = "a")]
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IStore)], Key = 1L)]
+[IocRegister(ServiceLifetime.Scoped, ServiceTypes = [typeof(IStore)], Key = StoreKind.Disk)]
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IStore)], KeyType = KeyType.Csharp, Key = nameof(StoreKeys.Primary))]
+[IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IStore)], KeyType = KeyType.Csharp, Key = nameof(StoreKeys.Backup))]
+public sealed class Store : IStore;
+
 /// <summary>A service that only the fallback provider supplies.</summary>
 public interface IExternal
 {

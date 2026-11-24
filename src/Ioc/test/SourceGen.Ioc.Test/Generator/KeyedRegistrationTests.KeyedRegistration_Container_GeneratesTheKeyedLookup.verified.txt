@@ -1,0 +1,99 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>> __lookup =
+        global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>>
+        {
+            { typeof(global::System.IServiceProvider), static c => c },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c.__singletons.Root },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService), static c => c.__singletons.Root },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService), static c => c.__singletons.Root },
+            { typeof(global::App.AppContainer), static c => c },
+            { typeof(global::App.DefaultRepo), static c => (global::App.DefaultRepo)c.__Get_DefaultRepo_5a131b07() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.DefaultRepo>), static c => new global::App.DefaultRepo[] { (global::App.DefaultRepo)c.__Get_DefaultRepo_5a131b07() } },
+            { typeof(global::App.IRepo), static c => (global::App.IRepo)c.__Get_DefaultRepo_5a131b07() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), static c => new global::App.IRepo[] { (global::App.IRepo)c.__Get_DefaultRepo_5a131b07() } },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), static c => global::System.Array.Empty<global::App.Repo>() },
+        });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, global::System.Func<global::App.AppContainer, object, object>> __collections =
+        global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::App.AppContainer, object, object>>
+        {
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.DefaultRepo>), static (c, _) => global::System.Array.Empty<global::App.DefaultRepo>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), static (c, _) => global::System.Array.Empty<global::App.IRepo>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), static (c, _) => global::System.Array.Empty<global::App.Repo>() },
+        });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> __keyedLookup = __BuildKeyedLookup();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static global::System.Collections.Frozen.FrozenDictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> __BuildKeyedLookup()
+    {
+        global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> table = new global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>>();
+        global::System.Collections.Generic.HashSet<(global::System.Type, object)> keys = new global::System.Collections.Generic.HashSet<(global::System.Type, object)>();
+        object k0 = global::App.Keys.Backup;
+        object k1 = (global::System.Int64)(1);
+        object k2 = "a";
+        object k3 = "main";
+        object k4 = (global::App.Color)(2);
+        __AddKeyed(table, keys, typeof(global::App.IRepo), k0, static (c, _) => (global::App.IRepo)c.__Get_Repo_c855a9f8());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k0, static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_c855a9f8() });
+        __AddKeyed(table, keys, typeof(global::App.IRepo), k1, static (c, _) => (global::App.IRepo)c.__Get_Repo_c4fdfc8f());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k1, static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_c4fdfc8f() });
+        __AddKeyed(table, keys, typeof(global::App.IRepo), k2, static (c, _) => (global::App.IRepo)c.__Get_Repo_f09b9d5b());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k2, static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_f09b9d5b() });
+        __AddKeyed(table, keys, typeof(global::App.IRepo), k3, static (c, _) => (global::App.IRepo)c.__Get_Repo_47fa1321());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k3, static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_47fa1321() });
+        __AddKeyed(table, keys, typeof(global::App.IRepo), k4, static (c, _) => (global::App.IRepo)c.__Get_Repo_3caa9e08());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k4, static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_3caa9e08() });
+        __AddKeyed(table, keys, typeof(global::App.Repo), k0, static (c, _) => (global::App.Repo)c.__Get_Repo_c855a9f8());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k0, static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_c855a9f8() });
+        __AddKeyed(table, keys, typeof(global::App.Repo), k1, static (c, _) => (global::App.Repo)c.__Get_Repo_c4fdfc8f());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k1, static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_c4fdfc8f() });
+        __AddKeyed(table, keys, typeof(global::App.Repo), k2, static (c, _) => (global::App.Repo)c.__Get_Repo_f09b9d5b());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k2, static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_f09b9d5b() });
+        __AddKeyed(table, keys, typeof(global::App.Repo), k3, static (c, _) => (global::App.Repo)c.__Get_Repo_47fa1321());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k3, static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_47fa1321() });
+        __AddKeyed(table, keys, typeof(global::App.Repo), k4, static (c, _) => (global::App.Repo)c.__Get_Repo_3caa9e08());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k4, static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_3caa9e08() });
+        table.Add((typeof(global::App.IRepo), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.IRepo'."));
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_c855a9f8(), (global::App.IRepo)c.__Get_Repo_c4fdfc8f(), (global::App.IRepo)c.__Get_Repo_f09b9d5b(), (global::App.IRepo)c.__Get_Repo_47fa1321(), (global::App.IRepo)c.__Get_Repo_3caa9e08() });
+        table.Add((typeof(global::App.Repo), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.Repo'."));
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_c855a9f8(), (global::App.Repo)c.__Get_Repo_c4fdfc8f(), (global::App.Repo)c.__Get_Repo_f09b9d5b(), (global::App.Repo)c.__Get_Repo_47fa1321(), (global::App.Repo)c.__Get_Repo_3caa9e08() });
+        return global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(table);
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public object? GetKeyedService(global::System.Type serviceType, object? serviceKey)
+    {
+        __ThrowIfDisposed();
+        if(serviceKey is null)
+        {
+            return GetService(serviceType);
+        }
+
+        if(__keyedLookup.TryGetValue((serviceType, serviceKey), out global::System.Func<global::App.AppContainer, object, object>? factory))
+        {
+            return factory(this, serviceKey);
+        }
+
+        if(__collections.TryGetValue(serviceType, out global::System.Func<global::App.AppContainer, object, object>? collection))
+        {
+            return collection(this, serviceKey);
+        }
+
+        // One service with AnyKey: MS.DI throws too
+        if(global::System.Object.ReferenceEquals(serviceKey, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey) && __lookup.ContainsKey(serviceType))
+        {
+            throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type '" + serviceType + "'.");
+        }
+
+        return null;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)
+        => serviceKey is null ? IsService(serviceType) : __keyedLookup.ContainsKey((serviceType, serviceKey)) || __collections.ContainsKey(serviceType);
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public T? GetKeyedService<T>(object? serviceKey) where T : class => (T?)GetKeyedService(typeof(T), serviceKey);
