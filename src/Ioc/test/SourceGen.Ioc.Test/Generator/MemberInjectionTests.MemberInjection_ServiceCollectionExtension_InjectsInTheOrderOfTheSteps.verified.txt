@@ -1,0 +1,71 @@
+﻿    private static global::App.Service __Create_Service_51557749(global::System.IServiceProvider sp)
+    {
+        global::App.Service instance = new global::App.Service(
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp))
+        {
+            Required = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp),
+            Init = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp),
+        };
+
+        try
+        {
+            instance.BaseClock = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp);
+            instance.Field = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp);
+            instance.Repo = (global::App.IRepo)global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(sp, typeof(global::App.IRepo), "main");
+            instance.Nullable = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp);
+            if(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.ILog>(sp) is { } v7) instance.Log = v7;
+            instance.Virtual = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IClock>(sp);
+            instance.InitBase(
+                global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp));
+            instance.Initialize(
+                global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp),
+                "svc",
+                global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp) ?? (global::App.IRepo)(default!));
+            instance.@event();
+        }
+        catch
+        {
+            __DisposeLost(instance);
+            throw;
+        }
+
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static void __DisposeLost(object instance)
+    {
+        try
+        {
+            if(instance is global::System.IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+            else if(instance is global::System.IAsyncDisposable asyncDisposable)
+            {
+                global::System.Threading.Tasks.ValueTask disposal = asyncDisposable.DisposeAsync();
+                if(disposal.IsCompletedSuccessfully)
+                {
+                    disposal.GetAwaiter().GetResult();
+                }
+                else
+                {
+                    _ = disposal.AsTask().ContinueWith(
+                        static task =>
+                        {
+                            foreach(global::System.Exception error in task.Exception!.InnerExceptions)
+                            {
+                                global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(error);
+                            }
+                        },
+                        global::System.Threading.CancellationToken.None,
+                        global::System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted | global::System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously,
+                        global::System.Threading.Tasks.TaskScheduler.Default);
+                }
+            }
+        }
+        catch(global::System.Exception e)
+        {
+            global::SourceGen.Ioc.IocContainerGlobalOptions.OnDisposeException?.Invoke(e);
+        }
+    }

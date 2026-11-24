@@ -18,9 +18,9 @@ internal sealed record MergeSite(NamedTypeRef Implementation, KeyRef? Key, strin
 /// Where a dependency site is written, for the definite check (Analysis.Model.spec, "Two levels of checks"). A
 /// parameter of a type from metadata has no syntax, so its site is the attribute of the declaration.
 /// </summary>
-/// <param name="Implementation">The implementation type that owns the constructor.</param>
-/// <param name="Index">The index of the constructor parameter.</param>
-/// <param name="InSource">Whether the parameter is declared in this assembly (and the span is the parameter).</param>
+/// <param name="Implementation">The implementation type that owns the dependency site.</param>
+/// <param name="Index">The index of the dependency site in <see cref="ClosedDefinition.Dependencies"/>.</param>
+/// <param name="InSource">Whether the site is declared in this assembly (and the span is the parameter or member).</param>
 /// <param name="FilePath">The path of the syntax tree.</param>
 /// <param name="Span">The span of the parameter, or of the attribute when <paramref name="InSource"/> is false.</param>
 internal sealed record ParameterSite(NamedTypeRef Implementation, int Index, bool InSource, string FilePath, TextSpan Span);
@@ -177,7 +177,7 @@ internal static class DeclarationReader
                 return;
             }
 
-            (ImmutableEquatableArray<ConstructorParameter>? parameters, bool keyErrors) = ReadParameters(constructor, syntax);
+            (ImmutableEquatableArray<Dependency>? parameters, bool keyErrors) = ReadParameters(constructor, syntax);
             if(keyErrors)
             {
                 AddError(implementationRef, key.Key, lifetime, serviceTypes);
@@ -189,29 +189,51 @@ internal static class DeclarationReader
                 return;
             }
 
-            if(key.Key is null && parameters.FirstOrDefault(static p => p is { KeyMode: SiteKeyMode.ServiceKey, Optional: OptionalMode.Required }) is { } serviceKey)
+            // An invalid member (SGIOC016, SGIOC019, an invalid key) skips the declaration. A member that a later slice
+            // supports (an asynchronous injection method) skips it without a diagnostic.
+            InjectedMembers members = InjectedMemberReader.Read(implementation, syntax, compilation, cancellationToken);
+            if(members.Unsupported)
+            {
+                return;
+            }
+
+            if(members.Errors.Count > 0)
+            {
+                diagnostics.AddRange(members.Errors);
+                AddError(implementationRef, key.Key, lifetime, serviceTypes);
+                return;
+            }
+
+            if(key.Key is null
+                && parameters.Concat(members.Members.SelectMany(static m => m.Dependencies)).FirstOrDefault(static p => p is { KeyMode: SiteKeyMode.ServiceKey, Optional: OptionalMode.Required }) is { } serviceKey)
             {
                 Report(Descriptors.ServiceKeyWithoutKey.Id, syntax, serviceKey.Name, KeyNames.Definition(implementationRef, null));
                 AddError(implementationRef, key.Key, lifetime, serviceTypes);
                 return;
             }
 
-            declarations.Add(new RegistrationDeclaration(implementationRef, key.Key, (Lifetime)lifetime, serviceTypes, parameters, DisposalOf(implementation)));
+            declarations.Add(new RegistrationDeclaration(implementationRef, key.Key, (Lifetime)lifetime, serviceTypes, parameters, members.Members.ToImmutableEquatableArray(), DisposalOf(implementation)));
             if(syntax is not null)
             {
                 sites.Add(new MergeSite(implementationRef, key.Key, KeyNames.Definition(implementationRef, key.Key), (Lifetime)lifetime, syntax.SyntaxTree.FilePath, syntax.Span));
             }
 
-            for(int i = 0; i < constructor.Parameters.Length; i++)
+            // The index of a site is its index in ClosedDefinition.Dependencies: the constructor parameters, then the members.
+            // A site of another assembly is reported at the attribute, also when a project reference gives its syntax.
+            IEnumerable<SyntaxReference?> references = constructor.Parameters.Select(static p => p.DeclaringSyntaxReferences.FirstOrDefault()).Concat(members.Sites);
+            int index = 0;
+            foreach(SyntaxReference? reference in references)
             {
-                if(constructor.Parameters[i].DeclaringSyntaxReferences is [SyntaxReference reference, ..])
+                if(reference is not null && compilation.ContainsSyntaxTree(reference.SyntaxTree))
                 {
-                    parameterSites.Add(new ParameterSite(implementationRef, i, true, reference.SyntaxTree.FilePath, reference.Span));
+                    parameterSites.Add(new ParameterSite(implementationRef, index, true, reference.SyntaxTree.FilePath, reference.Span));
                 }
                 else if(syntax is not null)
                 {
-                    parameterSites.Add(new ParameterSite(implementationRef, i, false, syntax.SyntaxTree.FilePath, syntax.Span));
+                    parameterSites.Add(new ParameterSite(implementationRef, index, false, syntax.SyntaxTree.FilePath, syntax.Span));
                 }
+
+                index++;
             }
         }
 
@@ -220,7 +242,7 @@ internal static class DeclarationReader
         /// (Diagnostics.spec, "Consequences").
         /// </summary>
         private void AddError(NamedTypeRef implementation, KeyRef? key, int lifetime, ImmutableEquatableArray<TypeRef> validServiceTypes)
-            => declarations.Add(new RegistrationDeclaration(implementation, key, (Lifetime)lifetime, validServiceTypes, [], IsError: true));
+            => declarations.Add(new RegistrationDeclaration(implementation, key, (Lifetime)lifetime, validServiceTypes, [], [], IsError: true));
 
         /// <summary>The checks of the implementation type (Annotations.spec, "Checks of the implementation type").</summary>
         private static string? ImplementationError(ITypeSymbol type)
@@ -352,37 +374,27 @@ internal static class DeclarationReader
         /// The parameters, or <see langword="null"/> when a parameter cannot take a generated argument. Whether a key of a
         /// parameter is invalid: its diagnostics are already reported.
         /// </returns>
-        private (ImmutableEquatableArray<ConstructorParameter>? Parameters, bool KeyErrors) ReadParameters(IMethodSymbol constructor, AttributeSyntax? syntax)
+        private (ImmutableEquatableArray<Dependency>? Parameters, bool KeyErrors) ReadParameters(IMethodSymbol constructor, AttributeSyntax? syntax)
         {
-            List<ConstructorParameter> parameters = [];
+            List<Dependency> parameters = [];
             bool keyErrors = false;
             foreach(IParameterSymbol parameter in constructor.Parameters)
             {
                 // A ref or out parameter gives a compile error in the generated code. The compiler reports it
                 // (Constitution, "Diagnostic policy"). A type that the model cannot represent (a pointer) is skipped.
-                if(TypeRefFactory.Create(parameter.Type, compilation) is not { } parameterRef)
+                int errors = diagnostics.Count;
+                if(InjectedMemberReader.ReadParameter(parameter, syntax, compilation, diagnostics, cancellationToken) is not { } dependency)
                 {
                     return (null, keyErrors);
                 }
 
-                SiteKey siteKey = SiteKeyReader.Read(parameter.GetAttributes(), parameter.Type, parameter.Name, syntax, compilation, cancellationToken);
-                if(siteKey.Errors.Count > 0)
+                if(diagnostics.Count > errors)
                 {
-                    diagnostics.AddRange(siteKey.Errors);
                     keyErrors = true;
                     continue;
                 }
 
-                (OptionalMode optional, string? defaultValue) = OptionalDependency.Of(parameter);
-                parameters.Add(new ConstructorParameter(
-                    parameterRef,
-                    parameter.Name,
-                    parameter.RefKind is RefKind.In or RefKind.RefReadOnlyParameter,
-                    optional,
-                    defaultValue,
-                    parameter.Type.IsValueType,
-                    siteKey.Mode,
-                    siteKey.Key));
+                parameters.Add(dependency);
             }
 
             return (parameters.ToImmutableEquatableArray(), keyErrors);

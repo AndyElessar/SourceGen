@@ -58,6 +58,13 @@ internal static class Descriptors
         "{0} must be a nameof() expression that refers to {1}",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC016: an injection method has a shape that cannot be injected.</summary>
+    public static readonly DiagnosticDescriptor InvalidInjectionMethod = Create(
+        "SGIOC016",
+        "Invalid injection method",
+        "Method '{0}' cannot be injected: {1}",
+        DiagnosticSeverity.Error);
+
     /// <summary>SGIOC017: <c>LookupMode</c> <c>InheritKey</c> or <c>NullKey</c> together with <c>Key</c>.</summary>
     public static readonly DiagnosticDescriptor LookupModeWithKey = Create(
         "SGIOC017",
@@ -180,6 +187,7 @@ internal static class Descriptors
         WrapperServiceType,
         AnyKeyRegistration,
         NameofTargetNotFound,
+        InvalidInjectionMethod,
         LookupModeWithKey,
         InjectAndFromKeyedServices,
         KeyOnConstructorOrMethod,

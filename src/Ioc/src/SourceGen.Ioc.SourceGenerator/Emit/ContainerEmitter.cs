@@ -377,48 +377,54 @@ internal static class ContainerEmitter
     private static void WriteContext(SourceWriter writer, bool singleton, string self)
         => writer.WriteLine(singleton ? $"{self} c = s.Root;" : $"{self} c = this;");
 
-    /// <summary>Writes <c>instance = new ...</c> with each argument resolved on <c>c</c>.</summary>
+    /// <summary>
+    /// Writes <c>instance = new ...</c> and the injection steps with each argument resolved on <c>c</c>. A Transient has
+    /// no failure handling: a disposable Transient is an error of the container (Container.Output.spec, "Failure during
+    /// creation").
+    /// </summary>
     private static void WriteCreation(SourceWriter writer, ContainerPlan plan, int index, bool declare)
     {
         DefinitionPlan definition = plan.Definitions[index];
-        string implementation = TypeNames.CSharp(definition.Definition.Implementation);
-        ImmutableEquatableArray<ConstructorParameter> parameters = definition.Definition.ConstructorParameters;
-        for(int i = 0; i < parameters.Length; i++)
-        {
-            if(parameters[i].ByReference)
-            {
-                writer.WriteLine($"{TypeNames.CSharp(parameters[i].Type)} arg{i} = {Argument(plan, definition, i)};");
-            }
-        }
-
-        string target = declare ? $"{implementation} instance" : "instance";
-        if(parameters.Length == 0)
-        {
-            writer.WriteLine($"{target} = new {implementation}();");
-            return;
-        }
-
-        writer.WriteLine($"{target} = new {implementation}(");
-        writer.Indentation++;
-        for(int i = 0; i < parameters.Length; i++)
-        {
-            if(parameters[i].ByReference)
-            {
-                writer.WriteLine($"in arg{i}{(i < parameters.Length - 1 ? "," : ");")}");
-            }
-            else
-            {
-                writer.WriteLine($"{Argument(plan, definition, i)}{(i < parameters.Length - 1 ? "," : ");")}");
-            }
-        }
-
-        writer.Indentation--;
+        ClosedDefinition closed = definition.Definition;
+        CreationWriter.Write(
+            writer,
+            closed,
+            declare,
+            i => Argument(plan, definition, i),
+            (i, member) => Assignment(plan, definition, i, member),
+            closed.Lifetime != Lifetime.Transient && closed.Disposal != Disposal.None);
     }
+
+    /// <summary>
+    /// The assignment of an injected field or property. A member that keeps its initializer is assigned only when a
+    /// service is found (Semantics.spec, "Dependency resolution").
+    /// </summary>
+    private static string? Assignment(ContainerPlan plan, DefinitionPlan definition, int index, string member)
+    {
+        Dependency dependency = definition.Definition.Dependencies[index];
+        ArgumentPlan argument = definition.Arguments[index];
+        if(dependency.Optional != OptionalMode.KeepInitializer || argument.Kind is not (ArgumentKind.Default or ArgumentKind.Fallback))
+        {
+            return $"instance.{member} = {Argument(plan, definition, index)};";
+        }
+
+        return argument.Kind == ArgumentKind.Fallback
+            ? KeepInitializer(FallbackGet("c.__Fallback()", dependency, argument.Key), dependency, index, member)
+            : null;
+    }
+
+    /// <summary>Assigns a service that a provider returns, and keeps the initializer when it returns <see langword="null"/>.</summary>
+    /// <param name="get">The expression that returns the service as <see cref="object"/>.</param>
+    /// <param name="dependency">The member.</param>
+    /// <param name="index">The index of the dependency, for the name of a pattern variable.</param>
+    /// <param name="member">The name of the member.</param>
+    internal static string KeepInitializer(string get, Dependency dependency, int index, string member)
+        => $"if({get} is {PatternType(dependency)} v{index}) instance.{member} = ({TypeNames.CSharp(dependency.Type)})v{index};";
 
     /// <summary>The expression of one argument, with a static cast to the parameter type.</summary>
     private static string Argument(ContainerPlan plan, DefinitionPlan definition, int index)
     {
-        ConstructorParameter parameter = definition.Definition.ConstructorParameters[index];
+        Dependency parameter = definition.Definition.Dependencies[index];
         string type = TypeNames.CSharp(parameter.Type);
         ArgumentPlan argument = definition.Arguments[index];
         return argument.Kind switch
@@ -441,7 +447,7 @@ internal static class ContainerEmitter
     /// <param name="parameter">The dependency.</param>
     /// <param name="index">The index of the dependency, for the name of a pattern variable.</param>
     /// <param name="key">The key that the dependency asks for, or <see langword="null"/>.</param>
-    internal static string FallbackArgument(string provider, ConstructorParameter parameter, int index, KeyRef? key)
+    internal static string FallbackArgument(string provider, Dependency parameter, int index, KeyRef? key)
     {
         string type = TypeNames.CSharp(parameter.Type);
         string keyed = $"{DependencyInjection}.ServiceProviderKeyedServiceExtensions";
@@ -452,7 +458,7 @@ internal static class ContainerEmitter
                 : $"({type}){keyed}.GetRequiredKeyedService({provider}, typeof({type}), {KeyNames.Expression(key)})";
         }
 
-        string get = key is null ? $"{provider}.GetService(typeof({type}))" : $"{keyed}.GetKeyedService({provider}, typeof({type}), {KeyNames.Expression(key)})";
+        string get = FallbackGet(provider, parameter, key);
         if(!parameter.IsValueType)
         {
             return parameter.Optional == OptionalMode.Nullable
@@ -460,9 +466,21 @@ internal static class ContainerEmitter
                 : $"({type}?){get} ?? ({type})({DefaultValue(parameter)})";
         }
 
-        string test = parameter.Type is NamedTypeRef { MetadataName: "System.Nullable`1", Arguments: [TypeRef underlying] } ? TypeNames.CSharp(underlying) : type;
-        return $"{get} is {test} v{index} ? ({type})v{index} : ({type})({DefaultValue(parameter)})";
+        return $"{get} is {PatternType(parameter)} v{index} ? ({type})v{index} : ({type})({DefaultValue(parameter)})";
     }
+
+    /// <summary>The expression that asks a provider for an optional dependency, as <see cref="object"/>.</summary>
+    /// <param name="provider">The expression of the provider.</param>
+    /// <param name="dependency">The dependency.</param>
+    /// <param name="key">The key that the dependency asks for, or <see langword="null"/>.</param>
+    internal static string FallbackGet(string provider, Dependency dependency, KeyRef? key)
+        => key is null
+            ? $"{provider}.GetService(typeof({TypeNames.CSharp(dependency.Type)}))"
+            : $"{DependencyInjection}.ServiceProviderKeyedServiceExtensions.GetKeyedService({provider}, typeof({TypeNames.CSharp(dependency.Type)}), {KeyNames.Expression(key)})";
+
+    /// <summary>The type that a pattern tests: a pattern cannot use <c>Nullable&lt;U&gt;</c>, so the test is on <c>U</c>.</summary>
+    internal static string PatternType(Dependency dependency)
+        => TypeNames.CSharp(dependency.Type is NamedTypeRef { MetadataName: "System.Nullable`1", Arguments: [TypeRef underlying] } ? underlying : dependency.Type);
 
     /// <summary>
     /// The argument of a <c>[ServiceKey]</c> parameter: the key expression of the closed definition, without a cast. When
@@ -474,7 +492,7 @@ internal static class ContainerEmitter
     /// The default value of a missing optional dependency, before the cast to the parameter type. A <c>null</c> of a
     /// reference type gets <c>!</c>: the parameter type has no nullable annotation in the generated code.
     /// </summary>
-    internal static string DefaultValue(ConstructorParameter parameter)
+    internal static string DefaultValue(Dependency parameter)
         => parameter.DefaultValue is { } value and not "default" ? value
             : parameter.IsValueType ? "default" : "default!";
 
@@ -517,7 +535,7 @@ internal static class ContainerEmitter
                     writer.WriteLine("return null;");
                     break;
                 case ArgumentKind.Fallback:
-                    ConstructorParameter dependency = new(member.Type, member.Name, false, member.IsOptional ? OptionalMode.Nullable : OptionalMode.Required);
+                    Dependency dependency = new(member.Type, member.Name, false, member.IsOptional ? OptionalMode.Nullable : OptionalMode.Required);
                     writer.WriteLine($"return {FallbackArgument("__Fallback()", dependency, 0, accessor.Argument.Key)};");
                     break;
                 default:
@@ -1015,10 +1033,11 @@ internal static class ContainerEmitter
     }
 
     /// <summary>
-    /// An instance that is created while the container is disposed. The resolution must not block, and its
-    /// <c>ObjectDisposedException</c> takes the place of an exception of this disposal.
+    /// Disposes an instance that nobody else disposes, without a wait: an instance that is created while the container
+    /// is disposed, or an instance whose creation fails after <c>new</c>. An exception of this disposal goes to the
+    /// callback, because another exception (<c>ObjectDisposedException</c>, the original one) is thrown.
     /// </summary>
-    private static void WriteDisposeLost(SourceWriter writer)
+    internal static void WriteDisposeLost(SourceWriter writer)
     {
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);

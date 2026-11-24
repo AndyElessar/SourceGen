@@ -103,7 +103,7 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
         InitializeContainers(context, results, declarations, definitions, definiteProblems);
     }
 
-    /// <summary>The site of each constructor parameter. A parameter declared in source wins over the attribute of a declaration.</summary>
+    /// <summary>The site of each dependency site. A site declared in source wins over the attribute of a declaration.</summary>
     private static Dictionary<(NamedTypeRef, int), ParameterSite> ParameterSites(ImmutableEquatableArray<DeclarationResult> results)
     {
         Dictionary<(NamedTypeRef, int), ParameterSite> sites = [];

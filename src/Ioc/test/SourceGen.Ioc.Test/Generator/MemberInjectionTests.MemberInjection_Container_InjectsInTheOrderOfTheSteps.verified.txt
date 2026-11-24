@@ -1,0 +1,56 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Service __Create_Service_51557749()
+    {
+        __Singletons s = __singletons;
+        global::App.Service instance;
+        lock(s.__lock_Service_51557749)
+        {
+            if(s.__f_Service_51557749 is { } existing)
+            {
+                return existing;
+            }
+
+            global::App.AppContainer c = s.Root;
+            instance = new global::App.Service(
+                (global::App.IClock)c.__Get_SystemClock_28ece501())
+            {
+                Required = (global::App.IClock)c.__Get_SystemClock_28ece501(),
+                Init = (global::App.IClock)c.__Get_SystemClock_28ece501(),
+            };
+
+            try
+            {
+                instance.BaseClock = (global::App.IClock)c.__Get_SystemClock_28ece501();
+                instance.Field = (global::App.IClock)c.__Get_SystemClock_28ece501();
+                instance.Repo = (global::App.IRepo)c.__Get_MainRepo_9268831a();
+                instance.Nullable = (global::App.IRepo)(default!);
+                instance.Virtual = (global::App.IClock)c.__Get_SystemClock_28ece501();
+                instance.InitBase(
+                    (global::App.IClock)c.__Get_SystemClock_28ece501());
+                instance.Initialize(
+                    (global::App.IClock)c.__Get_SystemClock_28ece501(),
+                    "svc",
+                    (global::App.IRepo)(default!));
+                instance.@event();
+            }
+            catch
+            {
+                __DisposeLost(instance);
+                throw;
+            }
+
+            global::System.Threading.Interlocked.Exchange(ref s.__f_Service_51557749, instance);
+        }
+
+        if(global::System.Threading.Volatile.Read(ref s.Root.__disposed) != 0)
+        {
+            if(global::System.Object.ReferenceEquals(global::System.Threading.Interlocked.CompareExchange(ref s.__f_Service_51557749, null, instance), instance))
+            {
+                __DisposeLost(instance);
+            }
+
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return instance;
+    }

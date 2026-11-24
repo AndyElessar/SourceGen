@@ -30,7 +30,7 @@ internal enum ArgumentKind
     Fallback,
 }
 
-/// <summary>The resolution result of one constructor parameter.</summary>
+/// <summary>The resolution result of one dependency site.</summary>
 /// <param name="Kind">How the argument is resolved.</param>
 /// <param name="Target">The index of the target closed definition, for <see cref="ArgumentKind.Resolved"/>.</param>
 /// <param name="Key">The key that the site asks for, after <c>InheritKey</c>. The fallback provider uses it.</param>
@@ -47,7 +47,7 @@ internal readonly record struct ErrorNode(TypeRef Type, string Key)
 
 /// <summary>The construction plan of one closed definition (Analysis.Model.spec, "Construction plan").</summary>
 /// <param name="Definition">The closed definition.</param>
-/// <param name="Arguments">The arguments, in the order of the constructor parameters.</param>
+/// <param name="Arguments">The arguments, in the order of <see cref="ClosedDefinition.Dependencies"/>.</param>
 internal sealed record DefinitionPlan(ClosedDefinition Definition, ImmutableEquatableArray<ArgumentPlan> Arguments);
 
 /// <summary>The resolution of one partial accessor.</summary>
@@ -81,7 +81,7 @@ internal sealed record ContainerPlan(
 /// For a problem that the definite check also finds, the implementation type of the dependency site. The full check
 /// does not report it again when the definite check reports it (Analysis.Model.spec, "Two levels of checks").
 /// </param>
-/// <param name="Parameter">The index of the constructor parameter of that dependency site.</param>
+/// <param name="Parameter">The index of that dependency site in <see cref="ClosedDefinition.Dependencies"/>.</param>
 internal sealed record ContainerProblem(string Id, ImmutableEquatableArray<string> Arguments, NamedTypeRef? Implementation = null, int Parameter = -1);
 
 /// <summary>The result of the analysis of one container.</summary>
@@ -120,9 +120,9 @@ internal static class ContainerAnalysis
             ClosedDefinition definition = definitions[index];
             List<ArgumentPlan> arguments = [];
             edges[index] = [];
-            for(int p = 0; p < definition.ConstructorParameters.Length; p++)
+            for(int p = 0; p < definition.Dependencies.Length; p++)
             {
-                ConstructorParameter parameter = definition.ConstructorParameters[p];
+                Dependency parameter = definition.Dependencies[p];
                 if(parameter.KeyMode == SiteKeyMode.ServiceKey)
                 {
                     // Without a key, only an optional parameter is left (SGIOC023 skips a required one)

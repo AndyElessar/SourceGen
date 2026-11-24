@@ -9,6 +9,7 @@ SGIOC004 | SourceGen.Ioc | Error | Invalid service type
 SGIOC006 | SourceGen.Ioc | Error | Wrapper type cannot be registered
 SGIOC007 | SourceGen.Ioc | Error | AnyKey cannot be used here
 SGIOC011 | SourceGen.Ioc | Error | nameof target not found
+SGIOC016 | SourceGen.Ioc | Error | Invalid injection method
 SGIOC017 | SourceGen.Ioc | Error | LookupMode conflicts with Key
 SGIOC018 | SourceGen.Ioc | Error | Conflicting key annotations
 SGIOC019 | SourceGen.Ioc | Error | Key specified on constructor or method

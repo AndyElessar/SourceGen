@@ -36,6 +36,7 @@ internal enum Disposal
 /// <param name="Lifetime">The lifetime.</param>
 /// <param name="ServiceTypes">The service types that the attribute gives. The implementation type itself is not in the list.</param>
 /// <param name="ConstructorParameters">The parameters of the selected constructor, in order.</param>
+/// <param name="Members">The injected members, in the order of the steps (Annotations.spec, "Order").</param>
 /// <param name="Disposal">The disposal kind of the implementation type.</param>
 /// <param name="IsError">
 /// Whether the declaration is invalid. It keeps only the valid service types and has no parameters. It makes the complete instance
@@ -46,7 +47,8 @@ internal sealed record RegistrationDeclaration(
     KeyRef? Key,
     Lifetime Lifetime,
     ImmutableEquatableArray<TypeRef> ServiceTypes,
-    ImmutableEquatableArray<ConstructorParameter> ConstructorParameters,
+    ImmutableEquatableArray<Dependency> ConstructorParameters,
+    ImmutableEquatableArray<InjectedMember> Members,
     Disposal Disposal = Disposal.None,
     bool IsError = false);
 
@@ -56,14 +58,45 @@ internal sealed record RegistrationDeclaration(
 /// <param name="Lifetime">The lifetime.</param>
 /// <param name="ServiceTypes">The service types: the implementation type first, then the others by sort name.</param>
 /// <param name="ConstructorParameters">The constructor parameters, in order.</param>
+/// <param name="Members">The injected members, in the order of the steps.</param>
 /// <param name="Disposal">The disposal kind of the implementation type.</param>
 internal sealed record ClosedDefinition(
     NamedTypeRef Implementation,
     KeyRef? Key,
     Lifetime Lifetime,
     ImmutableEquatableArray<TypeRef> ServiceTypes,
-    ImmutableEquatableArray<ConstructorParameter> ConstructorParameters,
-    Disposal Disposal);
+    ImmutableEquatableArray<Dependency> ConstructorParameters,
+    ImmutableEquatableArray<InjectedMember> Members,
+    Disposal Disposal)
+{
+    /// <summary>
+    /// All dependency sites: the constructor parameters, then the dependencies of the members in their order. An index
+    /// into this list identifies a dependency site of the definition.
+    /// </summary>
+    public ImmutableEquatableArray<Dependency> Dependencies { get; } = [.. ConstructorParameters, .. Members.SelectMany(static m => m.Dependencies)];
+
+    /// <summary>Whether a step after <c>new</c> can throw: an assignment or an injection method.</summary>
+    public bool HasStepsAfterNew => Members.Any(static m => m.Kind != MemberKind.Initializer);
+}
+
+/// <summary>The step of an injected member (Annotations.spec, "Order").</summary>
+internal enum MemberKind
+{
+    /// <summary>A <c>required</c> or <c>init</c> property or field: assigned in the object initializer.</summary>
+    Initializer,
+
+    /// <summary>A field or property that is assigned after construction.</summary>
+    Assignment,
+
+    /// <summary>A synchronous injection method.</summary>
+    Method,
+}
+
+/// <summary>An injected member (Annotations.spec, "Injected members").</summary>
+/// <param name="Kind">The step.</param>
+/// <param name="Name">The name of the member, as a C# identifier (a keyword has <c>@</c>).</param>
+/// <param name="Dependencies">The dependency of a field or property, or the parameters of a method.</param>
+internal sealed record InjectedMember(MemberKind Kind, string Name, ImmutableEquatableArray<Dependency> Dependencies);
 
 /// <summary>The optional mode of a dependency site (Annotations.spec, "Extraction of dependency sites").</summary>
 internal enum OptionalMode
@@ -76,6 +109,12 @@ internal enum OptionalMode
 
     /// <summary>A parameter with a default value: it gets the default value when no service is found.</summary>
     Default,
+
+    /// <summary>
+    /// An injected field or property with an initializer: it is not assigned when no service is found, so the initial
+    /// value stays.
+    /// </summary>
+    KeepInitializer,
 }
 
 /// <summary>The key specification of a dependency site (Annotations.spec, "Key specification").</summary>
@@ -94,9 +133,12 @@ internal enum SiteKeyMode
     ServiceKey,
 }
 
-/// <summary>A parameter of the selected constructor.</summary>
-/// <param name="Type">The type of the parameter.</param>
-/// <param name="Name">The name of the parameter, for the messages of diagnostics.</param>
+/// <summary>
+/// A dependency site of a closed definition: a constructor parameter, an injected field or property, or a parameter of
+/// an injection method.
+/// </summary>
+/// <param name="Type">The requested type.</param>
+/// <param name="Name">The name of the parameter or member, for the messages of diagnostics.</param>
 /// <param name="ByReference">
 /// Whether it is an <c>in</c> or <c>ref readonly</c> parameter. The generated code passes it a local variable with
 /// <c>in</c>: a value passed to a <c>ref readonly</c> parameter gives warning CS9193.
@@ -108,7 +150,7 @@ internal enum SiteKeyMode
 /// <param name="IsValueType">Whether the type is a value type: the generic <c>GetService&lt;T&gt;()</c> cannot ask for it.</param>
 /// <param name="KeyMode">The key specification.</param>
 /// <param name="Key">The key, for <see cref="SiteKeyMode.Specified"/>.</param>
-internal sealed record ConstructorParameter(
+internal sealed record Dependency(
     TypeRef Type,
     string Name,
     bool ByReference,

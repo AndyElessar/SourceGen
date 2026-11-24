@@ -4,9 +4,9 @@ using SourceGen.Ioc.Model;
 
 namespace SourceGen.Ioc.Analysis;
 
-/// <summary>An edge of the dependency graph: constructor parameter <paramref name="Parameter"/> of <paramref name="From"/> resolves to <paramref name="To"/>.</summary>
+/// <summary>An edge of the dependency graph: dependency site <paramref name="Parameter"/> of <paramref name="From"/> resolves to <paramref name="To"/>.</summary>
 /// <param name="From">The index of the closed definition that owns the dependency site.</param>
-/// <param name="Parameter">The index of the constructor parameter.</param>
+/// <param name="Parameter">The index of the dependency site in <see cref="ClosedDefinition.Dependencies"/>.</param>
 /// <param name="To">The index of the closed definition that the dependency resolves to.</param>
 internal readonly record struct GraphEdge(int From, int Parameter, int To);
 
@@ -14,7 +14,7 @@ internal readonly record struct GraphEdge(int From, int Parameter, int To);
 /// <param name="Id">The diagnostic ID.</param>
 /// <param name="Arguments">The message arguments.</param>
 /// <param name="Implementation">The implementation type that owns the dependency site.</param>
-/// <param name="Parameter">The index of the constructor parameter.</param>
+/// <param name="Parameter">The index of the dependency site in <see cref="ClosedDefinition.Dependencies"/>.</param>
 internal sealed record GraphProblem(string Id, ImmutableEquatableArray<string> Arguments, NamedTypeRef Implementation, int Parameter);
 
 /// <summary>
@@ -67,7 +67,7 @@ internal static class DependencyGraph
         for(int i = 0; i < definitions.Length; i++)
         {
             edges[i] = [];
-            ImmutableEquatableArray<ConstructorParameter> parameters = definitions[i].ConstructorParameters;
+            ImmutableEquatableArray<Dependency> parameters = definitions[i].Dependencies;
             for(int p = 0; p < parameters.Length; p++)
             {
                 if(parameters[p].KeyMode != SiteKeyMode.ServiceKey
@@ -173,7 +173,7 @@ internal static class DependencyGraph
             string id = holder.Lifetime == Lifetime.Singleton ? Descriptors.SingletonHoldsTransient.Id : Descriptors.ScopedHoldsTransient.Id;
             yield return Problem(
                 id,
-                [KeyNames.Definition(holder), KeyNames.Definition(definitions[edge.To]), TypeNames.Display(holder.ConstructorParameters[edge.Parameter].Type)],
+                [KeyNames.Definition(holder), KeyNames.Definition(definitions[edge.To]), TypeNames.Display(holder.Dependencies[edge.Parameter].Type)],
                 definitions,
                 edge);
         }

@@ -132,5 +132,45 @@ public class ServiceCollectionExtensionTests
         await Assert.That(((Store)a).Key).IsEqualTo("a");
     }
 
+    [Test]
+    public async Task AddTestAot_InjectedMembers_AssignedInTheOrderOfTheSteps()
+    {
+        ServiceCollection services = new();
+        services.AddTestAot();
+        services.AddSingleton<string>("label");
+        using ServiceProvider provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using IServiceScope scope = provider.CreateScope();
+
+        InjectedScoped service = scope.ServiceProvider.GetRequiredService<InjectedScoped>();
+
+        await Assert.That(service.Session).IsSameReferenceAs(scope.ServiceProvider.GetRequiredService<Session>());
+        await Assert.That(service.Repository).IsSameReferenceAs(provider.GetRequiredService<Repository>());
+        await Assert.That(service.BaseClock).IsSameReferenceAs(provider.GetRequiredService<IClock>());
+        await Assert.That(service.Missing).IsNull();
+        await Assert.That(service.Label).IsEqualTo("label");
+        await Assert.That(string.Join(",", service.Steps)).IsEqualTo("InitializeBase:True,Initialize:True:True:True");
+    }
+
+    [Test]
+    public async Task AddTestAot_InjectionMethodThrows_DisposesTheInstanceOneTime()
+    {
+        using ServiceProvider provider = Build();
+        Journal journal = provider.GetRequiredService<Journal>();
+        IServiceScope scope = provider.CreateScope();
+
+        Exception? thrown = Container.MemberInjectionTests.CatchInitialize(() => scope.ServiceProvider.GetService<InjectedScoped>());
+
+        // MS.DI does not wrap the exception, and the creation method disposed the instance that nobody owns
+        await Assert.That(thrown).IsTypeOf<InvalidOperationException>();
+        await Assert.That(thrown!.Message).IsEqualTo("Initialize failed.");
+        await Assert.That(string.Join(",", journal.Disposed)).IsEqualTo("InjectedScoped");
+
+        InjectedScoped service = scope.ServiceProvider.GetRequiredService<InjectedScoped>();
+        scope.Dispose();
+
+        await Assert.That(service.Steps.Count).IsEqualTo(2);
+        await Assert.That(journal.Disposed.Count(static d => d == "InjectedScoped")).IsGreaterThanOrEqualTo(2);
+    }
+
     private sealed class Missing : IMissing;
 }

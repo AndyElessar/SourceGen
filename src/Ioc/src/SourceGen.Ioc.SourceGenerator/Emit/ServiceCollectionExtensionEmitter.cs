@@ -55,6 +55,12 @@ internal static class ServiceCollectionExtensionEmitter
             }
         }
 
+        // The creation methods that dispose the instance when a step after new fails
+        if(model.Definitions.Any(static d => d.HasStepsAfterNew && d.Disposal != Disposal.None))
+        {
+            ContainerEmitter.WriteDisposeLost(writer);
+        }
+
         writer.Indentation--;
         writer.WriteLine('}');
         return writer.ToString();
@@ -111,7 +117,24 @@ internal static class ServiceCollectionExtensionEmitter
     {
         string implementation = TypeNames.CSharp(definition.Implementation);
         writer.WriteLine($"private static {implementation} {GeneratedNames.For("__Create_", definition)}(global::System.IServiceProvider sp)");
-        ImmutableEquatableArray<ConstructorParameter> parameters = definition.ConstructorParameters;
+        ImmutableEquatableArray<Dependency> parameters = definition.ConstructorParameters;
+        if(definition.Members.Length > 0)
+        {
+            writer.WriteLine('{');
+            writer.Indentation++;
+            CreationWriter.Write(
+                writer,
+                definition,
+                declare: true,
+                i => Argument(definition, definition.Dependencies[i], i),
+                (i, member) => Assignment(definition, i, member),
+                definition.Disposal != Disposal.None);
+            writer.WriteLine("return instance;");
+            writer.Indentation--;
+            writer.WriteLine('}');
+            return;
+        }
+
         if(parameters.Length == 0)
         {
             writer.Indentation++;
@@ -162,11 +185,29 @@ internal static class ServiceCollectionExtensionEmitter
         }
     }
 
+    /// <summary>
+    /// The assignment of an injected field or property. A member that keeps its initializer is assigned only when the
+    /// provider returns a service (ServiceCollection.Output.spec, "Dependency resolution").
+    /// </summary>
+    private static string Assignment(ClosedDefinition owner, int index, string member)
+    {
+        Dependency dependency = owner.Dependencies[index];
+        if(dependency.Optional != OptionalMode.KeepInitializer)
+        {
+            return $"instance.{member} = {Argument(owner, dependency, index)};";
+        }
+
+        KeyRef? key = dependency.KeyIn(owner);
+        return key is null && !dependency.IsValueType
+            ? $"if({Provider}.GetService<{TypeNames.CSharp(dependency.Type)}>(sp) is {{ }} v{index}) instance.{member} = v{index};"
+            : ContainerEmitter.KeepInitializer(ContainerEmitter.FallbackGet("sp", dependency, key), dependency, index, member);
+    }
+
     /// <summary>The expression that resolves the argument of <paramref name="parameter"/> (ServiceCollection.Output.spec, "Dependency resolution").</summary>
     /// <param name="owner">The closed definition that owns the parameter, for <c>InheritKey</c> and <c>[ServiceKey]</c>.</param>
     /// <param name="parameter">The parameter.</param>
     /// <param name="index">The index of the parameter, for the name of a pattern variable.</param>
-    private static string Argument(ClosedDefinition owner, ConstructorParameter parameter, int index)
+    private static string Argument(ClosedDefinition owner, Dependency parameter, int index)
     {
         string type = TypeNames.CSharp(parameter.Type);
         if(parameter.KeyMode == SiteKeyMode.ServiceKey)

@@ -1,0 +1,32 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Service __Create_Service_b45cbd09()
+    {
+        if(__isRoot)
+        {
+            throw new global::System.InvalidOperationException("Cannot resolve scoped service 'App.Service' from the root container.");
+        }
+
+        global::App.Service instance;
+        lock(__scopedLock)
+        {
+            if(__f_Service_b45cbd09 is { } existing)
+            {
+                return existing;
+            }
+
+            global::App.AppContainer c = this;
+            instance = new global::App.Service();
+            if(c.__Fallback().GetService(typeof(global::App.ILog)) is global::App.ILog v0) instance.Log = (global::App.ILog)v0;
+            if(c.__Fallback().GetService(typeof(global::System.Int32)) is global::System.Int32 v1) instance.Retries = (global::System.Int32)v1;
+            if(global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetKeyedService(c.__Fallback(), typeof(global::App.ILog), "a") is global::App.ILog v2) instance.Keyed = (global::App.ILog)v2;
+            instance.Clock = (global::App.IClock)global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(c.__Fallback(), typeof(global::App.IClock));
+            global::System.Threading.Interlocked.Exchange(ref __f_Service_b45cbd09, instance);
+        }
+
+        if(global::System.Threading.Volatile.Read(ref __disposed) != 0)
+        {
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return instance;
+    }
