@@ -1,7 +1,7 @@
 namespace SourceGen.Ioc.Test.Generator;
 
-/// <summary>The <c>Add{Name}</c> method (ServiceCollection.Output.spec): conditions, name, namespace, and registrations.</summary>
-public class AddMethodTests
+/// <summary>The service collection extension (ServiceCollection.Output.spec): conditions, name, namespace, and registrations.</summary>
+public class ServiceCollectionExtensionTests
 {
     private const string Services = """
         using Microsoft.Extensions.DependencyInjection;
@@ -28,7 +28,7 @@ public class AddMethodTests
     private static GeneratorRunOptions RootNamespace(string value) => new() { GlobalOptions = new Dictionary<string, string> { ["build_property.RootNamespace"] = value } };
 
     [Test]
-    public async Task AddMethod_NoAttribute_GeneratesNothing()
+    public async Task ServiceCollectionExtension_NoAttribute_GeneratesNothing()
     {
         GeneratorTestResult result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(Services);
 
@@ -37,7 +37,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_NoRegistration_GeneratesOnlyTheGuard()
+    public async Task ServiceCollectionExtension_NoRegistration_GeneratesOnlyTheGuard()
     {
         GeneratorTestResult result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]",
@@ -48,7 +48,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_ThreeLifetimes_RegistersHoldersAndServiceTypes()
+    public async Task ServiceCollectionExtension_ThreeLifetimes_RegistersHoldersAndServiceTypes()
     {
         GeneratorTestResult result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             [Services, "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]"],
@@ -60,7 +60,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_RegisterForOnAssembly_RegistersTheType()
+    public async Task ServiceCollectionExtension_RegisterForOnAssembly_RegistersTheType()
     {
         GeneratorTestResult result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             """
@@ -84,7 +84,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_TwoAttributesOnOneType_MergesServiceTypes()
+    public async Task ServiceCollectionExtension_TwoAttributesOnOneType_MergesServiceTypes()
     {
         GeneratorTestResult result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             """
@@ -117,7 +117,7 @@ public class AddMethodTests
     [Arguments("My.App-2", null, "MyApp2")]
     [Arguments(null, "Contoso.Shop", "ContosoShop")]
     [Arguments("_x", null, "_x")]
-    public async Task AddMethod_Name_RemovesNonIdentifierCharacters(string? name, string? assemblyName, string expected)
+    public async Task ServiceCollectionExtension_Name_RemovesNonIdentifierCharacters(string? name, string? assemblyName, string expected)
     {
         string attribute = name is null ? "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions]" : $"[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"{name}\")]";
         GeneratorRunOptions options = RootNamespace("Root") with { AssemblyName = assemblyName ?? "TestAssembly" };
@@ -134,7 +134,7 @@ public class AddMethodTests
     [Arguments("123", "the name cannot start an identifier")]
     [Arguments("...", "no identifier characters remain")]
     [Arguments("", "no identifier characters remain")]
-    public async Task AddMethod_InvalidName_ReportsSGIOC108AndGeneratesNothing(string name, string reason)
+    public async Task ServiceCollectionExtension_InvalidName_ReportsSGIOC108AndGeneratesNothing(string name, string reason)
     {
         (IReadOnlyList<string> sources, IReadOnlyList<ExpectedDiagnostic> expected) = DiagnosticMarkup.Parse(
             $"[assembly: {{|SGIOC108:SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"{name}\")|}}]");
@@ -148,7 +148,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_InvalidAssemblyName_ReportsSGIOC108WithAssemblyName()
+    public async Task ServiceCollectionExtension_InvalidAssemblyName_ReportsSGIOC108WithAssemblyName()
     {
         (IReadOnlyList<string> sources, IReadOnlyList<ExpectedDiagnostic> expected) = DiagnosticMarkup.Parse(
             "[assembly: {|SGIOC108:SourceGen.Ioc.IocServiceCollectionExtensions|}]");
@@ -160,7 +160,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_Namespace_RootNamespaceOrAssemblyName()
+    public async Task ServiceCollectionExtension_Namespace_RootNamespaceOrAssemblyName()
     {
         const string Attribute = "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]";
 
@@ -173,13 +173,13 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_SourcesInAnyOrder_GeneratesSameOutput()
+    public async Task ServiceCollectionExtension_SourcesInAnyOrder_GeneratesSameOutput()
         => await SourceGeneratorTestHelper.VerifyDeterministicAsync<IocSourceGenerator>(
             [Services, "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]", "namespace App; [SourceGen.Ioc.IocRegister(Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton)] internal sealed class Another;"],
             RootNamespace("App"));
 
     [Test]
-    public async Task AddMethod_UnrelatedEdit_DoesNotRunDeclarationsAgain()
+    public async Task ServiceCollectionExtension_UnrelatedEdit_DoesNotRunDeclarationsAgain()
     {
         GeneratorTestResult first = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
             [Services, "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]", "namespace App; public class Unrelated;"],
@@ -212,7 +212,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_PositionalRecord_UsesPrimaryConstructorNotCopyConstructor()
+    public async Task ServiceCollectionExtension_PositionalRecord_UsesPrimaryConstructorNotCopyConstructor()
     {
         string source = await GenerateAsync("""
             [IocRegister(ServiceLifetime.Singleton)] public sealed record Foo(IBar Bar);
@@ -226,7 +226,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_JaggedArrayParameter_KeepsRankOrder()
+    public async Task ServiceCollectionExtension_JaggedArrayParameter_KeepsRankOrder()
     {
         string source = await GenerateAsync("""
             [IocRegister(ServiceLifetime.Transient)]
@@ -241,7 +241,7 @@ public class AddMethodTests
     [Arguments("[IocInject] internal Marked(IBar bar) { } public Marked() { }", "GetRequiredService<global::App.IBar>")]
     [Arguments("[ActivatorUtilitiesConstructor] public Marked(IBar bar) { } public Marked() { }", "GetRequiredService<global::App.IBar>")]
     [Arguments("public Marked(IBar bar) { }", "GetRequiredService<global::App.IBar>")]
-    public async Task AddMethod_ConstructorSelection_UsesMarkedOrSinglePublic(string constructors, string expected)
+    public async Task ServiceCollectionExtension_ConstructorSelection_UsesMarkedOrSinglePublic(string constructors, string expected)
     {
         string source = await GenerateAsync($$"""
             [IocRegister(ServiceLifetime.Transient)]
@@ -256,7 +256,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_PrimaryConstructorAndOtherPublicConstructor_UsesPrimary()
+    public async Task ServiceCollectionExtension_PrimaryConstructorAndOtherPublicConstructor_UsesPrimary()
     {
         string source = await GenerateAsync("""
             [IocRegister(ServiceLifetime.Transient)]
@@ -273,7 +273,7 @@ public class AddMethodTests
     [Arguments("[IocInject] public Bad(IBar bar) { } [IocInject] public Bad() { }")]
     [Arguments("public Bad(IBar bar) { } public Bad() { }")]
     [Arguments("private Bad() { }")]
-    public async Task AddMethod_NoSingleConstructor_IsNotRegistered(string constructors)
+    public async Task ServiceCollectionExtension_NoSingleConstructor_IsNotRegistered(string constructors)
     {
         string source = await GenerateAsync($$"""
             [IocRegister(ServiceLifetime.Transient)]
@@ -289,7 +289,7 @@ public class AddMethodTests
     [Test]
     [Arguments("public Bad(ref int value) { }", "CS1620")]
     [Arguments("public Bad(out int value) { value = 0; }", "CS1620")]
-    public async Task AddMethod_RefOrOutConstructorParameter_CompilerReportsTheError(string constructor, string error)
+    public async Task ServiceCollectionExtension_RefOrOutConstructorParameter_CompilerReportsTheError(string constructor, string error)
     {
         // An error that the C# compiler reports is not a generator diagnostic (Constitution, "Diagnostic policy")
         GeneratorTestResult result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(
@@ -303,7 +303,7 @@ public class AddMethodTests
     [Test]
     [Arguments("in")]
     [Arguments("ref readonly")]
-    public async Task AddMethod_ReferenceParameter_PassesALocalWithIn(string modifier)
+    public async Task ServiceCollectionExtension_ReferenceParameter_PassesALocalWithIn(string modifier)
     {
         // GenerateAsync fails on any warning in the generated file, such as CS9193 for a value passed to ref readonly
         string source = await GenerateAsync($$"""
@@ -320,7 +320,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_RegisterForTypeOfOtherAssembly_DoesNotUsePrimaryConstructor()
+    public async Task ServiceCollectionExtension_RegisterForTypeOfOtherAssembly_DoesNotUsePrimaryConstructor()
     {
         GeneratorRunOptions libraryOptions = new() { AssemblyName = "Lib" };
         ReferencedAssembly library = SourceGeneratorTestHelper.CompileReference<IocSourceGenerator>(
@@ -352,7 +352,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_RegisterAndRegisterForOnSameType_MergesIntoOneDefinition()
+    public async Task ServiceCollectionExtension_RegisterAndRegisterForOnSameType_MergesIntoOneDefinition()
     {
         string source = await GenerateAsync(
             """
@@ -366,7 +366,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_DifferentLifetimesOnSameType_SkipsTheDefinition()
+    public async Task ServiceCollectionExtension_DifferentLifetimesOnSameType_SkipsTheDefinition()
     {
         string source = await GenerateAsync("""
             [IocRegister(ServiceLifetime.Scoped)]
@@ -378,7 +378,7 @@ public class AddMethodTests
     }
 
     [Test]
-    public async Task AddMethod_Ordering_FollowsSortNameNotDeclarationOrder()
+    public async Task ServiceCollectionExtension_Ordering_FollowsSortNameNotDeclarationOrder()
     {
         string source = await GenerateAsync("""
             [IocRegister(ServiceLifetime.Transient)] public sealed class Zeta;

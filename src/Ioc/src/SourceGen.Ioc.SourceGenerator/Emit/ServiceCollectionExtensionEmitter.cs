@@ -2,8 +2,8 @@ using SourceGen.Ioc.Model;
 
 namespace SourceGen.Ioc.Emit;
 
-/// <summary>Generates the <c>Add{Name}</c> method (ServiceCollection.Output.spec).</summary>
-internal static class AddMethodEmitter
+/// <summary>Generates the service collection extension (ServiceCollection.Output.spec).</summary>
+internal static class ServiceCollectionExtensionEmitter
 {
     private const string Services = "global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions";
     private const string Provider = "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions";
@@ -13,14 +13,14 @@ internal static class AddMethodEmitter
     /// <summary>Gets the hint name of the generated file.</summary>
     /// <param name="settings">The settings.</param>
     /// <returns>The hint name.</returns>
-    public static string HintName(AddMethodSettings settings) => $"{settings.Name}ServiceCollectionExtensions.g.cs";
+    public static string HintName(ServiceCollectionExtensionSettings settings) => $"{settings.Name}ServiceCollectionExtensions.g.cs";
 
     /// <summary>Generates the source of the class that contains the method.</summary>
     /// <param name="model">The model.</param>
     /// <returns>The source.</returns>
-    public static string Generate(AddMethodModel model)
+    public static string Generate(ServiceCollectionExtensionModel model)
     {
-        AddMethodSettings settings = model.Settings;
+        ServiceCollectionExtensionSettings settings = model.Settings;
         using SourceWriter writer = new();
         GeneratedFile.WriteHeader(writer);
         writer.WriteLine();
@@ -62,9 +62,9 @@ internal static class AddMethodEmitter
 
     private static bool HasHolder(ClosedDefinition definition) => definition.Lifetime != Lifetime.Transient;
 
-    private static void WriteMethod(SourceWriter writer, AddMethodModel model)
+    private static void WriteMethod(SourceWriter writer, ServiceCollectionExtensionModel model)
     {
-        AddMethodSettings settings = model.Settings;
+        ServiceCollectionExtensionSettings settings = model.Settings;
         writer.WriteLine($"public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection Add{settings.Name}(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.ReadOnlySpan<string> tags)");
         writer.WriteLine('{');
         writer.Indentation++;

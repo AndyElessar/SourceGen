@@ -7,7 +7,7 @@ using SourceGen.Ioc.Parse;
 namespace SourceGen.Ioc;
 
 /// <summary>
-/// Generates the IoC container, the module output, and the <c>Add{Name}</c> method.
+/// Generates the IoC container, the module output, and the service collection extension.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class IocSourceGenerator : IIncrementalGenerator
@@ -53,18 +53,18 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                 DiagnosticReporter.Report(spc, input.Right, diagnostics);
             });
 
-        IncrementalValueProvider<(AddMethodSettings? Settings, DiagnosticInfo? Diagnostic)> settings = context.SyntaxProvider
+        IncrementalValueProvider<(ServiceCollectionExtensionSettings? Settings, DiagnosticInfo? Diagnostic)> settings = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                AddMethodReader.Attribute,
+                ServiceCollectionExtensionReader.Attribute,
                 static (node, _) => node is CompilationUnitSyntax,
-                static (ctx, _) => AddMethodReader.ReadAttribute(ctx))
+                static (ctx, _) => ServiceCollectionExtensionReader.ReadAttribute(ctx))
             .Collect()
             .Combine(context.CompilationProvider.Select(static (c, _) => c.AssemblyName ?? string.Empty))
             .Combine(context.AnalyzerConfigOptionsProvider.Select(static (o, _) =>
                 o.GlobalOptions.TryGetValue("build_property.RootNamespace", out string? value) ? value : null))
             .Select(static (input, _) => input.Left.Left.IsEmpty
                 ? (null, null)
-                : AddMethodReader.Decide(input.Left.Left[0], input.Left.Right, input.Right));
+                : ServiceCollectionExtensionReader.Decide(input.Left.Left[0], input.Left.Right, input.Right));
 
         context.RegisterSourceOutput(
             settings.Combine(context.CompilationProvider),
@@ -80,10 +80,10 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
             settings.Select(static (s, _) => s.Settings).Combine(definitions),
             static (spc, input) =>
             {
-                if(input.Left is { } addSettings)
+                if(input.Left is { } extensionSettings)
                 {
-                    AddMethodModel model = new(addSettings, input.Right);
-                    spc.AddSource(AddMethodEmitter.HintName(addSettings), AddMethodEmitter.Generate(model));
+                    ServiceCollectionExtensionModel model = new(extensionSettings, input.Right);
+                    spc.AddSource(ServiceCollectionExtensionEmitter.HintName(extensionSettings), ServiceCollectionExtensionEmitter.Generate(model));
                 }
             });
 

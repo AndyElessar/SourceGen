@@ -72,8 +72,8 @@ internal static class Descriptors
         "'{0}' requires '{1}', which is not registered",
         DiagnosticSeverity.Error);
 
-    /// <summary>SGIOC108: the <c>Add{Name}</c> method has no valid name.</summary>
-    public static readonly DiagnosticDescriptor InvalidAddMethodName = Create(
+    /// <summary>SGIOC108: the service collection extension has no valid name.</summary>
+    public static readonly DiagnosticDescriptor InvalidServiceCollectionExtensionName = Create(
         "SGIOC108",
         "Invalid Add method name",
         "'{0}' does not give a valid name for the Add method: {1}",
@@ -89,7 +89,7 @@ internal static class Descriptors
         WrapperServiceType,
         AttributeOnPlainClass,
         UnsupportedOutputClass,
-        InvalidAddMethodName,
+        InvalidServiceCollectionExtensionName,
         AmbiguousDependency,
         MissingDependency,
     }.ToDictionary(static d => d.Id);

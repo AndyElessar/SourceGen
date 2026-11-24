@@ -256,7 +256,7 @@ public class ContainerTests
     }
 
     [Test]
-    public async Task Container_AndAddMethod_BothGenerated()
+    public async Task Container_AndServiceCollectionExtension_BothGenerated()
     {
         GeneratorTestResult result = await RunAsync(Services, "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]");
 

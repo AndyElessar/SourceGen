@@ -70,13 +70,13 @@ internal sealed record ClosedDefinition(
 /// </param>
 internal sealed record ConstructorParameter(TypeRef Type, string Name, bool ByReference);
 
-/// <summary>The settings of the <c>Add{Name}</c> method, read from <c>IocServiceCollectionExtensionsAttribute</c>.</summary>
+/// <summary>The settings of the service collection extension, read from <c>IocServiceCollectionExtensionsAttribute</c>.</summary>
 /// <param name="Name">The <c>{Name}</c> part, already reduced to identifier characters.</param>
 /// <param name="Namespace">The namespace of the generated class.</param>
 /// <param name="AssemblyName">The name of this assembly.</param>
-internal sealed record AddMethodSettings(string Name, string Namespace, string AssemblyName);
+internal sealed record ServiceCollectionExtensionSettings(string Name, string Namespace, string AssemblyName);
 
-/// <summary>Everything that the code of the <c>Add{Name}</c> method needs.</summary>
+/// <summary>Everything that the code of the service collection extension needs.</summary>
 /// <param name="Settings">The settings.</param>
 /// <param name="Definitions">The closed definitions in their ordering.</param>
-internal sealed record AddMethodModel(AddMethodSettings Settings, ImmutableEquatableArray<ClosedDefinition> Definitions);
+internal sealed record ServiceCollectionExtensionModel(ServiceCollectionExtensionSettings Settings, ImmutableEquatableArray<ClosedDefinition> Definitions);

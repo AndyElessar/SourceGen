@@ -3,14 +3,14 @@ using SourceGen.Ioc.Model;
 
 namespace SourceGen.Ioc.Parse;
 
-/// <summary>The attribute that opts in to <c>Add{Name}</c>, as it is written.</summary>
+/// <summary>The attribute that opts in to the service collection extension, as it is written.</summary>
 /// <param name="Name">The <c>Name</c> property, or <see langword="null"/> when it is not set.</param>
 /// <param name="FilePath">The path of the syntax tree of the attribute.</param>
 /// <param name="Span">The span of the attribute.</param>
-internal sealed record AddMethodAttribute(string? Name, string FilePath, Microsoft.CodeAnalysis.Text.TextSpan Span);
+internal sealed record ServiceCollectionExtensionDeclaration(string? Name, string FilePath, Microsoft.CodeAnalysis.Text.TextSpan Span);
 
-/// <summary>Reads the settings of <c>Add{Name}</c> (ServiceCollection.Output.spec, "Conditions for generation" and "Method").</summary>
-internal static class AddMethodReader
+/// <summary>Reads the settings of the service collection extension (ServiceCollection.Output.spec, "Conditions for generation" and "Method").</summary>
+internal static class ServiceCollectionExtensionReader
 {
     /// <summary>The metadata name of <c>IocServiceCollectionExtensionsAttribute</c>.</summary>
     public const string Attribute = "SourceGen.Ioc.IocServiceCollectionExtensionsAttribute";
@@ -18,7 +18,7 @@ internal static class AddMethodReader
     /// <summary>Reads the attribute.</summary>
     /// <param name="context">The context of the attribute.</param>
     /// <returns>The attribute model.</returns>
-    public static AddMethodAttribute ReadAttribute(GeneratorAttributeSyntaxContext context)
+    public static ServiceCollectionExtensionDeclaration ReadAttribute(GeneratorAttributeSyntaxContext context)
     {
         AttributeData attribute = context.Attributes[0];
         string? name = attribute.NamedArguments.FirstOrDefault(static a => a.Key == "Name").Value.Value as string;
@@ -27,13 +27,13 @@ internal static class AddMethodReader
     }
 
     /// <summary>Decides the settings, or the diagnostic when the name is not valid.</summary>
-    /// <param name="attribute">The attribute.</param>
+    /// <param name="declaration">The attribute as it is written.</param>
     /// <param name="assemblyName">The name of this assembly.</param>
     /// <param name="rootNamespace">The MSBuild property <c>RootNamespace</c>, or <see langword="null"/> when it is not set.</param>
     /// <returns>The settings, or <see langword="null"/> and a diagnostic.</returns>
-    public static (AddMethodSettings? Settings, DiagnosticInfo? Diagnostic) Decide(AddMethodAttribute attribute, string assemblyName, string? rootNamespace)
+    public static (ServiceCollectionExtensionSettings? Settings, DiagnosticInfo? Diagnostic) Decide(ServiceCollectionExtensionDeclaration declaration, string assemblyName, string? rootNamespace)
     {
-        string source = attribute.Name ?? assemblyName;
+        string source = declaration.Name ?? assemblyName;
         StringBuilder name = new(source.Length);
         foreach(char c in source)
         {
@@ -48,10 +48,10 @@ internal static class AddMethodReader
             : null;
         if(reason is not null)
         {
-            return (null, new DiagnosticInfo(Descriptors.InvalidAddMethodName.Id, [source, reason], attribute.FilePath, attribute.Span));
+            return (null, new DiagnosticInfo(Descriptors.InvalidServiceCollectionExtensionName.Id, [source, reason], declaration.FilePath, declaration.Span));
         }
 
         string ns = string.IsNullOrEmpty(rootNamespace) ? assemblyName : rootNamespace!;
-        return (new AddMethodSettings(name.ToString(), ns, assemblyName), null);
+        return (new ServiceCollectionExtensionSettings(name.ToString(), ns, assemblyName), null);
     }
 }
