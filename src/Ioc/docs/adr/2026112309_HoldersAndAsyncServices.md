@@ -64,7 +64,7 @@ Decorator chains on MS.DI:
 - Without the rule of decision 7, `Dispose` of the Transient implementation instance is never called.
 - Keyed definitions behave the same way.
 - Holders do not appear in the result of `GetServices<S>()` or `GetKeyedServices<S>(KeyedService.AnyKey)`.
-- A Singleton or Scoped instance with several service types is disposed more than once: once by its holder and once for each service type registration that returns it. This is documented difference 21.
+- A Singleton or Scoped instance with several service types is disposed more than once: once by its holder and once for each service type registration that returns it. The constitution lists this as a documented difference.
 
 Asynchronous services on MS.DI (160 checks):
 

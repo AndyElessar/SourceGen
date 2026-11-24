@@ -528,7 +528,7 @@ Each dependency site gives one dependency:
 | --- | --- |
 | Requested type | The type of the parameter, field, or property. For a partial accessor, the return type. |
 | Key specification | See the table below |
-| Optional mode | Required / has a default value (the default constant is recorded) / nullable / keep the initializer. The rules that decide the mode are in [Dependency resolution](Semantics.spec.md#dependency-resolution). |
+| Optional mode | Required / has a default value (the default constant is recorded) / nullable (only a partial accessor) / keep the initializer. The rules that decide the mode are in [Dependency resolution](Semantics.spec.md#dependency-resolution). |
 | Position | Constructor parameter / factory parameter / parameter of an injection method / injected field or property / partial accessor |
 | Is a constructor parameter | Used to map `Func<..., T>` |
 
@@ -549,7 +549,7 @@ The generator does not resolve `InheritKey` during extraction. It keeps `Inherit
 | The same position has two of `[IocInject]`, `[FromKeyedServices]`, and `[ServiceKey]` | `SGIOC018` |
 | The specified key is `KeyedService.AnyKey`, and the requested type is not a collection or a dictionary (see [Grammar of wrapper types](Analysis.Model.spec.md#grammar-of-wrapper-types)) | `SGIOC007`: `AnyKey` cannot resolve one service. MS.DI throws for this request at run time. |
 | `[IocInject]` on a constructor or on an injection method sets `Key` or `LookupMode` | `SGIOC019` |
-| The instance definition that owns a `[ServiceKey]` parameter has no key, and the parameter is required | `SGIOC023`. When the parameter is nullable or has a default value, it gets `null` or the default value. |
+| The instance definition that owns a `[ServiceKey]` parameter has no key, and the parameter is required | `SGIOC023`. When the parameter has a default value, it gets the default value. |
 | The type comes from metadata (it is not in the current compilation), and its `[IocInject]` uses `KeyType.Csharp` | `SGIOC011`: metadata keeps only the string, so the generator cannot know the symbol. Register with a factory instead. |
 
 The generator does not check that the type of a `[ServiceKey]` parameter is compatible with the key. The generated code passes the key expression directly, and the compiler reports the error.
@@ -561,7 +561,7 @@ A partial member of a container class with one of these shapes is a partial acce
 - A partial method without an implementation part that is an instance method, is not generic, has no parameters, and has a return type other than `void`.
 - A partial property without an implementation part that is an instance property and has only `get`.
 
-`[IocInject]` on the member specifies the key. `InheritKey` has no meaning here and counts as no key. When the key specification of the member is not valid, the generator reports the diagnostic and does not implement the member. The compiler then also reports the missing implementation. A return type that is a reference type annotated as nullable means that the dependency is optional. A nullable value type (`int?`) is required, as on a parameter.
+`[IocInject]` on the member specifies the key. `InheritKey` has no meaning here and counts as no key. When the key specification of the member is not valid, the generator reports the diagnostic and does not implement the member. The compiler then also reports the missing implementation. A return type that is a reference type annotated as nullable means that the dependency is optional. A partial accessor is the only dependency site where a nullable annotation has this effect. A nullable value type (`int?`) is required.
 
 A partial member that does not have one of these shapes is not a partial accessor. The generator does not implement it, and the compiler reports the missing implementation.
 

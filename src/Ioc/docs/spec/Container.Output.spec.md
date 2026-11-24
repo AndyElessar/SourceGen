@@ -152,7 +152,7 @@ Two keys can have different compile-time identities and be equal at run time. Wh
 
 ### Unknown `IEnumerable<T>`
 
-A request by `Type` can ask for an `IEnumerable<T>` that the container does not know at all. This means that `T` has no registration and that no demand for it exists at compile time. Without a fallback provider, the result is `null`, so `sp.GetServices<T>()` throws `InvalidOperationException`. MS.DI returns an empty collection. This is a documented difference (number 24 in [section 8 of the constitution](../Constitution.md#8-documented-differences-from-msdi)).
+A request by `Type` can ask for an `IEnumerable<T>` that the container does not know at all. This means that `T` has no registration and that no demand for it exists at compile time. Without a fallback provider, the result is `null`, so `sp.GetServices<T>()` throws `InvalidOperationException`. MS.DI returns an empty collection. This is a [documented difference](../Constitution.md#8-documented-differences-from-msdi).
 
 - A `GetServices<T>()` call that is visible at compile time is a demand (see "Resolve calls" in [Analysis model](Analysis.Model.spec.md#resolve-calls)). The generator generates a resolver for an empty collection, so this limit does not apply.
 - The strongly typed `GetServices<T>()` and `GetKeyedServices<T>(key)` of the container are not affected either. `T` is known at compile time, and the methods return an empty collection when they find nothing.

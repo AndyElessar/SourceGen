@@ -395,7 +395,6 @@ Behavior in the entry:
 1. The entry creates the instance and injects members. It follows [Constructor selection](Annotations.spec.md#constructor-selection) and the [Order](Annotations.spec.md#order) of injected members.
 2. When an optional dependency is not supplied (the flag pattern):
    - A parameter with a default value: the entry uses the copied default literal.
-   - A nullable dependency: the entry uses `null`.
    - A field or property that keeps its initializer: the entry does not assign it.
 3. A `[ServiceKey]` parameter: the entry supplies the key of this instance definition.
 4. Asynchronous: after synchronous injection is complete, the entry awaits the asynchronous injection methods one by one. When the factory returns `Task<T>`, the entry awaits it.

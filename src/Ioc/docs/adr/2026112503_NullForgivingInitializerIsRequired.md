@@ -5,6 +5,8 @@ date: 2026-11-25
 
 # An initializer that only suppresses the nullable warning does not make a member optional
 
+> Partly replaced by [ADR 2026112504](2026112504_NullableReferenceIsNotOptional.md): a nullable reference type no longer makes a parameter or an injected member optional. The text below is kept as it was.
+
 ## Context and problem statement
 
 Item 7 of section 4.1 of the [constitution](../Constitution.md) makes an injected field or property optional when it has an initializer and can be assigned after construction. The initial value stays when no service is found. [ADR 2026112401](2026112401_ImplicitRulesInConstitution.md) added this rule. It treats an initializer as a default value that the user writes.

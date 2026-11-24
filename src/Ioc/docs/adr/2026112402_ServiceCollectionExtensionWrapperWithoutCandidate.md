@@ -27,7 +27,7 @@ When the core service `S` of a dependency site has no candidate without tags in 
 - Good: a dependency site gets a wrapper of a framework service, the same as in the container.
 - Good: no registration is added, so a collection of wrappers does not get an extra element, and no registration of the user is hidden.
 - Good: a missing `S` fails when the wrapper is called, the same as in the container with a fallback provider.
-- Bad: a resolve call in code, for example `sp.GetService<Func<ILogger>>()`, is not a dependency site. It still gets `null`, while the container returns a wrapper for a resolve call that it sees at compile time. This is documented difference 25 of the constitution. To remove it, the method would have to register the wrapper, which the first two rejected options below describe.
+- Bad: a resolve call in code, for example `sp.GetService<Func<ILogger>>()`, is not a dependency site. It still gets `null`, while the container returns a wrapper for a resolve call that it sees at compile time. The constitution lists this as a documented difference. To remove it, the method would have to register the wrapper, which the first two rejected options below describe.
 
 ## Rejected options
 

@@ -16,7 +16,7 @@ The generator supports the query (see [Lookup rules](../spec/Container.Output.sp
 
 ## Decision outcome
 
-A registration with `KeyedService.AnyKey` as its key is an error (`SGIOC007`) in both outputs. A dependency site can use `AnyKey` only to ask for a collection or a dictionary. The constitution lists this as difference 14.
+A registration with `KeyedService.AnyKey` as its key is an error (`SGIOC007`) in both outputs. A dependency site can use `AnyKey` only to ask for a collection or a dictionary. The constitution lists this as a documented difference.
 
 A user who needs a catch-all registers it in the `IServiceCollection` of the fallback provider. The container sends a keyed request that it does not have to the fallback provider. A dependency site with a key that the container does not have is resolved from the fallback provider too, with `SGIOC501`.
 

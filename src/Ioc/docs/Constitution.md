@@ -70,7 +70,7 @@ The generator decides a result from types alone only in the cases below. The dep
 4. A decorator applies only to the service types for which it has an inner parameter.
 5. A concrete registration suppresses a derived registration with the same implementation type and key.
 6. When a dependency site asks for one service, a concrete registration wins over a derived registration.
-7. A parameter with a default value, a reference type annotated as nullable, or a field or property that has `[IocInject]`, has an initializer, and can be assigned after construction is an optional dependency. An initializer counts only for a member that is declared in the current compilation. An initializer that only suppresses the nullable warning (`null!`, `default!`, `default(T)!`) does not count.
+7. A parameter with a default value, or a field or property that has `[IocInject]`, has an initializer, and can be assigned after construction, is an optional dependency. An initializer counts only for a member that is declared in the current compilation. An initializer that only suppresses the nullable warning (`null!`, `default!`, `default(T)!`) does not count. A nullable annotation does not make a parameter or a member optional. The only exception is a partial accessor whose return type is a reference type annotated as nullable: it is an optional dependency.
 8. When a dependency site asks for `Task<T>` and the service is synchronous, the generator wraps the service in a completed task.
 9. When a dependency site asks for keyed services by key type (`KeyValuePair<TKey, T>`, a collection of them, or a dictionary), a registration matches only when its key type is exactly `TKey`. When `TKey` is `object`, all keyed registrations match.
 
@@ -198,19 +198,18 @@ Diagnostic reporting MUST NOT break incremental caching.
 | 10 | Open generics support only the closed types found at compile time. | Both |
 | 11 | An asynchronous service cannot be resolved synchronously. | Both |
 | 12 | The constructor must be unambiguous. The generator does not choose the longest constructor that it can satisfy. | Both |
-| 13 | A reference type annotated as nullable is an optional dependency. It gets `null` when no service is found. | Both |
-| 14 | A registration cannot use `KeyedService.AnyKey` as its key (`SGIOC007`). MS.DI uses such a registration as a catch-all for keys without an exact registration. Register a catch-all in the fallback provider instead. See [ADR 2026112502](adr/2026112502_NoAnyKeyRegistration.md). | Both |
-| 15 | Wrapper types cannot be registered as service types. | Both |
-| 16 | Only reference types can be registered as service types. | Both |
-| 17 | A dependency site that the generator sees at compile time matches keys by their compile-time identity. A lookup at run time by `Type` and key uses `Equals`, as MS.DI does. MS.DI uses `Equals` in both cases, so two keys with different identities that are equal at run time match in the service collection extension and do not match at a compile-time dependency site of the container. | Container |
-| 18 | Ambiguity, missing dependencies, and disposable transient services are not checked at compile time. MS.DI handles them at run time. | Service collection extension |
-| 19 | `Task<T>` is not registered as a service. An asynchronous service cannot be resolved with `GetService<Task<T>>()`. | Service collection extension |
-| 20 | When a service type has asynchronous candidates, `GetServices<T>()` returns only the synchronous candidates. The container throws. | Service collection extension |
-| 21 | MS.DI calls `Dispose` on the same Singleton or Scoped object more than once: once through its holder and once for each service type registration that returns it. The container disposes it once. | Service collection extension |
-| 22 | When the return type of a transient factory does not show at compile time whether the object is disposable, the object is not disposed. MS.DI tracks and disposes it. | Container |
-| 23 | When a service throws during disposal, the container continues to dispose the other services and throws at the end. MS.DI stops, and the other services are not disposed. | Container |
-| 24 | Without a fallback provider, a request by `Type` for an `IEnumerable<T>` that the container does not know returns `null`, so `sp.GetServices<T>()` throws. MS.DI returns an empty collection. Calls that are visible at compile time and the strongly typed `GetServices<T>()` of the container are not affected. | Container |
-| 25 | A resolve call in code asks for `Lazy<T>` or `Func<T>`, and `T` has no registration in the assembly view (for example a service of the framework). The container creates the wrapper and resolves `T` inside it. The service collection extension registers no wrapper, so the call gets `null`. A dependency site is not affected: it creates the wrapper itself. | Service collection extension |
+| 13 | A registration cannot use `KeyedService.AnyKey` as its key (`SGIOC007`). MS.DI uses such a registration as a catch-all for keys without an exact registration. Register a catch-all in the fallback provider instead. See [ADR 2026112502](adr/2026112502_NoAnyKeyRegistration.md). | Both |
+| 14 | Wrapper types cannot be registered as service types. | Both |
+| 15 | Only reference types can be registered as service types. | Both |
+| 16 | A dependency site that the generator sees at compile time matches keys by their compile-time identity. A lookup at run time by `Type` and key uses `Equals`, as MS.DI does. MS.DI uses `Equals` in both cases, so two keys with different identities that are equal at run time match in the service collection extension and do not match at a compile-time dependency site of the container. | Container |
+| 17 | Ambiguity, missing dependencies, and disposable transient services are not checked at compile time. MS.DI handles them at run time. | Service collection extension |
+| 18 | `Task<T>` is not registered as a service. An asynchronous service cannot be resolved with `GetService<Task<T>>()`. | Service collection extension |
+| 19 | When a service type has asynchronous candidates, `GetServices<T>()` returns only the synchronous candidates. The container throws. | Service collection extension |
+| 20 | MS.DI calls `Dispose` on the same Singleton or Scoped object more than once: once through its holder and once for each service type registration that returns it. The container disposes it once. | Service collection extension |
+| 21 | When the return type of a transient factory does not show at compile time whether the object is disposable, the object is not disposed. MS.DI tracks and disposes it. | Container |
+| 22 | When a service throws during disposal, the container continues to dispose the other services and throws at the end. MS.DI stops, and the other services are not disposed. | Container |
+| 23 | Without a fallback provider, a request by `Type` for an `IEnumerable<T>` that the container does not know returns `null`, so `sp.GetServices<T>()` throws. MS.DI returns an empty collection. Calls that are visible at compile time and the strongly typed `GetServices<T>()` of the container are not affected. | Container |
+| 24 | A resolve call in code asks for `Lazy<T>` or `Func<T>`, and `T` has no registration in the assembly view (for example a service of the framework). The container creates the wrapper and resolves `T` inside it. The service collection extension registers no wrapper, so the call gets `null`. A dependency site is not affected: it creates the wrapper itself. | Service collection extension |
 
 ## 9. Testing and benchmarks
 

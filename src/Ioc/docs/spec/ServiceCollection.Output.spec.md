@@ -212,7 +212,7 @@ MS.DI disposes the objects that it tracks in the reverse order of their creation
 
 ### Number of disposals
 
-MS.DI tracks each object that a factory delegate returns. Thus the same Singleton or Scoped instance is disposed more than one time: one time by the holder of the instance, and one time by each service type registration that returns it. For Transient, each service type creates its own instance, and each object is disposed only one time. This is [documented difference 21](../Constitution.md#8-documented-differences-from-msdi) of the constitution. By .NET convention, `Dispose` MUST be safe to call more than one time.
+MS.DI tracks each object that a factory delegate returns. Thus the same Singleton or Scoped instance is disposed more than one time: one time by the holder of the instance, and one time by each service type registration that returns it. For Transient, each service type creates its own instance, and each object is disposed only one time. This is a [documented difference](../Constitution.md#8-documented-differences-from-msdi) of the constitution. By .NET convention, `Dispose` MUST be safe to call more than one time.
 
 ## Asynchronous closed definitions
 
@@ -244,7 +244,7 @@ public sealed class IocTask<T>(Task<T> task)
   - The private key is a `private static readonly object` field in the generated class of the service collection extension. There is one for each closed definition, the same as for the [holder](#holder). Code outside the class cannot get this object, so it cannot collide with another registration.
   - The key of the closed definition is the key that the user gives on the registration attribute. When no key is given, the registration is not keyed.
 - When a dependency site asks for `Task<S>`, the generated code resolves `IocTask<S>` from `sp` and reads `Task`. When there is more than one candidate, MS.DI takes the last registration. `IEnumerable<Task<S>>` gets all of them from `sp.GetServices<IocTask<S>>()`.
-- The `S` of an asynchronous service has no registration itself. `sp.GetService<S>()` is `null`, and `sp.GetServices<S>()` has only the synchronous candidates ([documented differences 19 and 20](../Constitution.md#8-documented-differences-from-msdi)).
+- The `S` of an asynchronous service has no registration itself. `sp.GetService<S>()` is `null`, and `sp.GetServices<S>()` has only the synchronous candidates (both are [documented differences](../Constitution.md#8-documented-differences-from-msdi)).
 
 ### Disposal of `OwnTask`
 
@@ -322,7 +322,7 @@ The method registers these only for the [demands](Analysis.Model.spec.md#sources
 - With NativeAOT, MS.DI refuses to collect a collection whose element is a value type, such as `IEnumerable<KeyValuePair<TKey, T>>`. It throws `InvalidOperationException` at run time, with no warning at publish. A registration of the complete collection as one service works (tested, see the ADRs).
 - A keyed wrapper type is registered with the key of the closed definition.
 - For an inaccessible wrapper type, the method gets the `Type` from the type entry of the module and creates the object with the [wrapper entry](Module.Output.spec.md#type-entry-and-wrapper-entry) (Module output, section "Type entry and wrapper entry").
-- Closed generics: the method registers only the derived registrations that the closing process makes. It does not register the open generic itself ([documented difference 10](../Constitution.md#8-documented-differences-from-msdi)).
+- Closed generics: the method registers only the derived registrations that the closing process makes. It does not register the open generic itself (a [documented difference](../Constitution.md#8-documented-differences-from-msdi)).
 
 ## Dependency resolution
 
@@ -331,8 +331,8 @@ The generator generates each argument in a creation method from the shape of the
 | Dependency | Generated expression |
 | --- | --- |
 | A required single service, a registered wrapper type | `sp.GetRequiredService<X>()` or `sp.GetRequiredKeyedService<X>(key)` |
-| Optional, can be null | `sp.GetService<X>()` |
 | Optional, has a default value | `sp.GetService<X>() ?? default value` |
+| Optional, reference type with the default value `null` | `sp.GetService<X>()!`. The parameter type can be non-nullable (`IRepo repo = null!`) |
 | Optional, keeps the initializer | `if (sp.GetService<X>() is { } value) instance.Member = value;` |
 | Optional, `X` is a value type (`KeyValuePair<TKey, T>`) | `sp.GetService(typeof(X)) is X value ? value : default value`. The generated code MUST NOT use the generic `GetService<X>()`: when there is no registration, it throws `NullReferenceException` for a value type (tested, see the ADRs). It also MUST NOT use `GetService<X?>()`, which is a different service type. When `X` is `Nullable<U>`, the pattern tests `U`, because a pattern cannot use a nullable value type |
 | `Func<S>`, `Lazy<S>`, `Func<Task<S>>`, `Lazy<Task<S>>`, and `S` has no candidate without tags in the assembly view | `sp.GetService<W>() ?? {wrapper}`, or the keyed version. `W` is the requested wrapper type. When a registration of `W` exists (a candidate with tags that the tags select, or a registration of the user), it is used. Otherwise the dependency site creates the wrapper, and the wrapper resolves `S` from `sp` with `GetRequiredService` when it is called. For `Task<S>`, the wrapper uses `Task.FromResult` |
@@ -343,7 +343,7 @@ The generator generates each argument in a creation method from the shape of the
 | `InheritKey` | Already replaced with the key of the closed definition that it belongs to |
 | Inaccessible type | `sp.GetRequiredService(type entry())`, passed as `object` |
 
-Thus MS.DI handles ambiguity and missing dependencies at run time, by its own settings ([documented difference 18](../Constitution.md#8-documented-differences-from-msdi)). The same applies to a captive dependency that is not on a definite edge. The definite check still reports the errors that it can decide at compile time, and for an ambiguity the generator gives a warning for a [definite ambiguity](#definite-ambiguity).
+Thus MS.DI handles ambiguity and missing dependencies at run time, by its own settings (a [documented difference](../Constitution.md#8-documented-differences-from-msdi)). The same applies to a captive dependency that is not on a definite edge. The definite check still reports the errors that it can decide at compile time, and for an ambiguity the generator gives a warning for a [definite ambiguity](#definite-ambiguity).
 
 ## Checks
 

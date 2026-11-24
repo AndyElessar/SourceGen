@@ -5,6 +5,8 @@ date: 2026-11-24
 
 # A nullable value type and `[Optional]` do not make a dependency optional
 
+> Partly replaced by [ADR 2026112504](2026112504_NullableReferenceIsNotOptional.md): a nullable reference type no longer makes a parameter or an injected member optional. The text below is kept as it was.
+
 ## Context and problem statement
 
 Item 7 of [section 4.1 of the constitution](../Constitution.md#41-explicitness) makes a reference type annotated as nullable an optional dependency. It did not say how two other cases behave:
@@ -25,7 +27,7 @@ A nullable reference type (`IRepo?`) is an annotation only. At run time it is th
 ### Consequences
 
 - Good: one rule for parameters and partial accessors. A `?` makes a dependency optional only when it does not change the type.
-- Good: for a parameter, the only difference from MS.DI stays the one of a nullable reference type ([documented difference 13](../Constitution.md#8-documented-differences-from-msdi)).
+- Good: for a parameter, the only difference from MS.DI stays the one of a nullable reference type (a documented difference of the constitution).
 - Good: a missing `int?` gives `SGIOC402` without a fallback provider, and not a silent `null`.
 - Bad: a user who wants an optional value type writes a default value (`int? limit = null`). A partial accessor has no default value, so it cannot ask for an optional value type.
 
