@@ -162,7 +162,7 @@ A request by `Type` can ask for an `IEnumerable<T>` that the container does not 
 
 ### `IsService` and `IsKeyedService`
 
-When the lookup table has the `(type, key)`, the result is `true`. An ambiguous `(type, key)` counts too. Otherwise, when a fallback provider exists and implements the related interface, the container asks it. Otherwise the result is `false`. For an asynchronous service `S` itself the result is `false`, and for `Task<S>` it is `true`. For an unknown `IEnumerable<T>` the result is `false`.
+When the lookup table has the `(type, key)`, the result is `true`. An ambiguous `(type, key)` counts too. Otherwise, when a fallback provider exists and supplies the related interface as a service (`GetService(typeof(IServiceProviderIsService))` or `GetService(typeof(IServiceProviderIsKeyedService))`), the container asks it. Otherwise the result is `false`. MS.DI supplies these interfaces as services, and its provider does not implement them (see [ADR 2026112501](../adr/2026112501_FallbackInterfacesAsServices.md)). For an asynchronous service `S` itself the result is `false`, and for `Task<S>` it is `true`. Without a fallback provider, the result for an unknown `IEnumerable<T>` is `false`. With one, the fallback provider decides.
 
 ## Wrapper types
 
@@ -210,7 +210,7 @@ The subsections below give the details.
 
 - The scope creates the fallback scope with the `IServiceScopeFactory` of the fallback provider, the first time that the scope needs the fallback provider. A scope that never uses the fallback provider does not create one.
 - When the fallback provider does not supply `IServiceScopeFactory`, all scopes use the fallback provider itself.
-- Concurrent first uses leave only one fallback scope. The container disposes each extra fallback scope immediately.
+- Concurrent first uses leave only one fallback scope. The container disposes each extra fallback scope immediately. An exception of this disposal goes to the [dispose-exception callback](#dispose-exception-callback).
 - The container scope that creates a fallback scope disposes it. See [Disposal of the fallback scope and the fallback provider](#disposal-of-the-fallback-scope-and-the-fallback-provider).
 - A scope resolves from the fallback scope and not from the root of the fallback provider. Thus a Transient `IDisposable` of the fallback provider is disposed with the scope. Otherwise the root of the fallback provider holds it until the program ends.
 
@@ -363,6 +363,8 @@ The container always aggregates and throws each exception that its `Dispose` and
 | Container | The creation of a fallback scope is concurrent with the disposal of the scope, and the disposal by the creating side throws (see [Disposal of the fallback scope and the fallback provider](#disposal-of-the-fallback-scope-and-the-fallback-provider)). |
 | Container | The creation of an instance is concurrent with the disposal of the container, the creating side gets the right to dispose the instance, and that disposal throws (see [After disposal, and concurrency](#after-disposal-and-concurrency)). |
 | Container | With `CompareExchange`, the disposal of a losing instance throws (see [Thread safety](#thread-safety)). |
+| Container | Concurrent first uses create more than one fallback scope, and the disposal of an extra one throws (see [Which provider resolves](#which-provider-resolves)). |
+| Container | The constructor of the root throws in `ServiceProviderFactory.CreateServiceProvider`, and the disposal of the provider that it created throws (see [Integration with IServiceCollection](#integration-with-iservicecollection)). |
 | Both | Creation fails, and the disposal of the objects that are already created throws. The original exception is thrown as usual. |
 | Service collection extension | During synchronous `Dispose`, the task of an asynchronous service is not yet complete. The continuation of the holder disposes the result later, and that disposal throws (see "Disposal of `OwnTask`" in [Service collection extension output](ServiceCollection.Output.spec.md#disposal-of-owntask)). The holder always throws its other exceptions. |
 
@@ -432,6 +434,7 @@ public sealed class ServiceProviderFactory : IServiceProviderFactory<IServiceCol
 
 - `CreateServiceProvider` builds the MS.DI provider from `containerBuilder`. It creates the root with that provider as the fallback provider.
 - The factory is an independent nested class. The container does not implement it. Thus nobody has to create a container instance only to get the factory.
+- When the constructor of the root throws, for example during eager resolution, `CreateServiceProvider` disposes the provider that it created and throws the original exception again.
 - The root that `CreateServiceProvider` returns disposes the provider that `CreateServiceProvider` created, as the last step of its disposal. The host disposes only the container that the factory returns. If the container does not dispose the provider, nobody does. The container never disposes a provider that the user passes to the constructor. See [Disposal of the fallback scope and the fallback provider](#disposal-of-the-fallback-scope-and-the-fallback-provider).
 
 ## Imported instance definitions
