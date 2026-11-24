@@ -11,7 +11,7 @@ SourceGen.Ioc is a source generator. It has two outputs for dependency injection
 
 The container implements the interfaces of `Microsoft.Extensions.DependencyInjection.Abstractions`. The lowest supported version is 10.0, because the design uses `ServiceKeyLookupMode`.
 
-The container and the `IServiceProvider` that MS.DI builds from the registration code must behave the same way where possible. MS.DI is the reference. Each difference must be recorded in [section 8](#8-documented-differences-from-msdi).
+The container and the `IServiceProvider` that MS.DI builds from the registration code must behave the same way where possible. MS.DI is the reference. Each difference must be recorded in [Documented differences from MS.DI](#8-documented-differences-from-msdi).
 
 ## 2. Precedence and amendment
 
@@ -52,7 +52,7 @@ Rules:
 | Fallback provider | The `IServiceProvider` that a container asks when it has no registration for a request. |
 | Suppression | The rule that a concrete registration removes a derived registration with the same implementation type and key. |
 | Definite edge | A dependency edge whose target cannot change when tags change or when an importer adds registrations. |
-| Documented difference | A behavior that differs from MS.DI on purpose and is listed in section 8. |
+| Documented difference | A behavior that differs from MS.DI on purpose and is listed in [Documented differences from MS.DI](#8-documented-differences-from-msdi). |
 
 Terms that belong to one output only, such as the kinds of entries or the holder types, are defined in the specifications.
 

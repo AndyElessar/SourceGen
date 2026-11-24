@@ -9,7 +9,7 @@ date: 2026-11-25
 
 ## Context and problem statement
 
-Item 7 of section 4.1 of the [constitution](../Constitution.md) makes an injected field or property optional when it has an initializer and can be assigned after construction. The initial value stays when no service is found. [ADR 2026112401](2026112401_ImplicitRulesInConstitution.md) added this rule. It treats an initializer as a default value that the user writes.
+The list of implicit rules in the [constitution](../Constitution.md#41-explicitness) makes an injected field or property optional when it has an initializer and can be assigned after construction. The initial value stays when no service is found. [ADR 2026112401](2026112401_ImplicitRulesInConstitution.md) added this rule. It treats an initializer as a default value that the user writes.
 
 With nullable reference types, a non-nullable field or property without an initializer causes warning CS8618. Users often write `= null!` to suppress this warning on a member that the container sets:
 
@@ -17,21 +17,21 @@ With nullable reference types, a non-nullable field or property without an initi
 [IocInject] public IClock Clock { get; set; } = null!;
 ```
 
-Here `null!` is not a default value. It tells the compiler that the member gets its value later. With the rule of item 7, this member is optional. When no service provides `IClock`, the generator reports nothing, and `Clock` stays `null`. The first use of `Clock` throws `NullReferenceException` at run time.
+Here `null!` is not a default value. It tells the compiler that the member gets its value later. With this rule, this member is optional. When no service provides `IClock`, the generator reports nothing, and `Clock` stays `null`. The first use of `Clock` throws `NullReferenceException` at run time.
 
 ## Decision outcome
 
-An initializer counts for item 7 only when it gives a real default value. An initializer whose expression is the null-forgiving operator (`!`) applied to `null`, `default`, or `default(T)` does not count. Parentheses around the expression do not change this. A member with such an initializer is a required dependency, the same as a member without an initializer.
+An initializer counts for this rule only when it gives a real default value. An initializer whose expression is the null-forgiving operator (`!`) applied to `null`, `default`, or `default(T)` does not count. Parentheses around the expression do not change this. A member with such an initializer is a required dependency, the same as a member without an initializer.
 
 The generator decides this from the syntax of the initializer. The rule needs no semantic analysis.
 
-The same change also states the scope of item 7 more exactly. An initializer counts only for a member that is declared in the current compilation. The test is the assembly of the member, not the assembly of the implementation type. A base class from a referenced assembly has no initializer in metadata. In the IDE, a project reference gives its syntax, so a test on the type would give a different result in the IDE and on the command line.
+The same change also states the scope of the rule more exactly. An initializer counts only for a member that is declared in the current compilation. The test is the assembly of the member, not the assembly of the implementation type. A base class from a referenced assembly has no initializer in metadata. In the IDE, a project reference gives its syntax, so a test on the type would give a different result in the IDE and on the command line.
 
 ### Consequences
 
 - Good: a missing dependency of a member with `= null!` reports `SGIOC402` without a fallback provider, and `SGIOC501` with one. It does not fail later at run time.
 - Good: the rule follows the intent of the user. `!` says "the value comes later", and a real initializer says "use this value when nothing else comes".
-- Bad: the rule is one more exception in the list of implicit rules. A user who wants `null` as the default value writes the member as nullable (`IClock?`), which makes it optional by item 7 too.
+- Bad: the rule is one more exception in the list of implicit rules. A user who wants `null` as the default value writes the member as nullable (`IClock?`), which makes it optional by the same list of rules.
 
 ## Rejected options
 

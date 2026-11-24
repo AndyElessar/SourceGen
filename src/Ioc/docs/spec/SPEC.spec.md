@@ -56,7 +56,7 @@ The types below are public, because generated code must use them across assembli
 
 Questions for which there was not enough basis to decide at the time of writing:
 
-1. **The output form of the dependency graph information.** The constitution requires that the information that the generator emits is enough to rebuild the dependency graph (see [Principles](../Constitution.md#4-principles), section 4.7). The module info already covers modules. These specifications do not define the form in which the dependency graph of a container is emitted (the resolution result of each edge, the candidates that constraints excluded and the reasons, the real composition of each decorator chain). This will be decided together with the specification of the tool that shows the graph.
+1. **The output form of the dependency graph information.** The constitution requires that the information that the generator emits is enough to rebuild the dependency graph (see [A dependency graph that people can read](../Constitution.md#47-a-dependency-graph-that-people-can-read)). The module info already covers modules. These specifications do not define the form in which the dependency graph of a container is emitted (the resolution result of each edge, the candidates that constraints excluded and the reasons, the real composition of each decorator chain). This will be decided together with the specification of the tool that shows the graph.
 
 ## Not covered by these specifications
 
@@ -64,4 +64,4 @@ Questions for which there was not enough basis to decide at the time of writing:
 - The benchmark specification: the list of items to verify one by one, and the pass criteria.
 - The naming rules for generated members: only the requirements are specified (deterministic, no collisions), not the exact names.
 - The structure of the generator project itself (the division into files, the use of `SourceWriter`).
-- The features that the constitution lists as deferred (see [Scope](../Constitution.md#5-scope), section 5.3): the activators of MVC and Blazor, feature switches, the tool that shows the dependency graph, the generic visitor, service lookup by a generated `switch`, and the compile-time check for a call to a service collection extension that another one already covers.
+- The features that the constitution lists as deferred (see [Deferred features](../Constitution.md#53-deferred-features)): the activators of MVC and Blazor, feature switches, the tool that shows the dependency graph, the generic visitor, service lookup by a generated `switch`, and the compile-time check for a call to a service collection extension that another one already covers.

@@ -6,7 +6,7 @@ namespace SourceGen.Ioc.Test.Helpers;
 
 /// <summary>
 /// Cuts the parts under test out of a large generated file, so that a focused snapshot shows only them
-/// (constitution, section 9.1).
+/// (constitution, "Tests").
 /// </summary>
 public static class SnapshotHelper
 {

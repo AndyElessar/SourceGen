@@ -156,7 +156,7 @@ public partial class MemberInjectionTests
     [Test]
     public async Task MemberInjection_TypeFromMetadata_InitializerIsNotKept()
     {
-        // An initializer counts only for a type whose source is in the current compilation (Constitution 4.1, item 7)
+        // An initializer counts only for a member declared in the current compilation (Constitution, "Explicitness")
         ReferencedAssembly library = SourceGeneratorTestHelper.CompileReference<IocSourceGenerator>(
             """
             namespace Lib;

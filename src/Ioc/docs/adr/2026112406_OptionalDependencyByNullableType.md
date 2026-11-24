@@ -9,12 +9,12 @@ date: 2026-11-24
 
 ## Context and problem statement
 
-Item 7 of [section 4.1 of the constitution](../Constitution.md#41-explicitness) makes a reference type annotated as nullable an optional dependency. It did not say how two other cases behave:
+The list of implicit rules in the [constitution](../Constitution.md#41-explicitness) makes a reference type annotated as nullable an optional dependency. It did not say how two other cases behave:
 
 - A nullable value type (`int?`, `KeyValuePair<string, IRepo>?`) without a default value. This applies to a parameter and to the return type of a partial accessor.
 - A parameter that has `[Optional]` and no default value (`[Optional] IRepo repo`).
 
-MS.DI is the reference (see [section 1](../Constitution.md#1-purpose)). MS.DI looks only at the default value of a parameter. It does not look at a nullable annotation or at `[Optional]` (see [Evidence](#evidence)).
+MS.DI is the reference (see [Purpose](../Constitution.md#1-purpose)). MS.DI looks only at the default value of a parameter. It does not look at a nullable annotation or at `[Optional]` (see [Evidence](#evidence)).
 
 A nullable reference type (`IRepo?`) is an annotation only. At run time it is the same type as `IRepo`, so the service to look up does not change. A nullable value type (`int?`) is a different type, `Nullable<int>`. MS.DI also treats it as a different service type: `GetService(typeof(int?))` looks for a registration of `Nullable<int>` and not of `int`.
 
@@ -22,7 +22,7 @@ A nullable reference type (`IRepo?`) is an annotation only. At run time it is th
 
 - A nullable value type is a required dependency, on a parameter and on the return type of a partial accessor. Only a nullable reference type makes a dependency optional by its type.
 - A parameter that has `[Optional]` and no default value is a required dependency.
-- The constitution does not change. Item 7 already lists only a reference type annotated as nullable.
+- The constitution does not change. Its list of implicit rules already names only a reference type annotated as nullable.
 
 ### Consequences
 
@@ -34,7 +34,7 @@ A nullable reference type (`IRepo?`) is an annotation only. At run time it is th
 ## Rejected options
 
 - **The nullable return type of a partial accessor is optional, also for a value type.** The user of a partial accessor writes `T?` to say that the service can be absent. But an optional `int?` can work in two ways only, and both are wrong:
-  - The generator looks up `int` and converts the result to `int?`. This is an implicit conversion of types, which section 4.1 of the constitution forbids.
+  - The generator looks up `int` and converts the result to `int?`. This is an implicit conversion of types, which the [constitution](../Constitution.md#41-explicitness) forbids.
   - The generator looks up `Nullable<int>` and uses `null` when it finds nothing. A container registers only reference types, so the result is almost always `null`. For `KeyValuePair<TKey, T>?` the generated `KeyValuePair<TKey, T>` never matches. The user expects an injection and silently gets `null`.
 - **A nullable value type is optional on a parameter too.** It has the same problem, and it adds a new difference from MS.DI. The same class would then behave differently in the container and in the service collection extension.
 - **`[Optional]` without a default value counts as the default value `default`.** MS.DI does not do this, so it would be a new documented difference. A user who wants an optional parameter can write a default value.

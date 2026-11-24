@@ -7,7 +7,7 @@ date: 2026-11-25
 
 ## Context and problem statement
 
-Item 7 of section 4.1 of the [constitution](../Constitution.md) made a reference type annotated as nullable an optional dependency. A parameter `IRepo? repo` and an injected property `IRepo? Repo { get; set; }` got `null` when no service was found. MS.DI looks only at the default value of a parameter, so the constitution listed this rule as a documented difference from MS.DI.
+The list of implicit rules in the [constitution](../Constitution.md#41-explicitness) made a reference type annotated as nullable an optional dependency. A parameter `IRepo? repo` and an injected property `IRepo? Repo { get; set; }` got `null` when no service was found. MS.DI looks only at the default value of a parameter, so the constitution listed this rule as a documented difference from MS.DI.
 
 The rule made the decision depend on the type, and it needed several exceptions:
 
@@ -24,15 +24,15 @@ ASP.NET Core Blazor injects properties with `[Inject]` in `DefaultComponentPrope
 A dependency is optional only when the user writes the default value:
 
 - A parameter is optional when it has a default value (`IRepo? repo = null`).
-- An injected field or property is optional when it has an initializer that counts by item 7 (`IRepo? Repo { get; set; } = null;`).
+- An injected field or property is optional when it has an initializer that counts by that list (`IRepo? Repo { get; set; } = null;`).
 
 A nullable annotation alone does not make a parameter or an injected member optional. This applies to reference types and value types in the same way.
 
 The partial accessor is the only exception. A partial accessor whose return type is a reference type annotated as nullable is optional. A partial accessor has no place for a default value. It belongs to the container class, and MS.DI has no partial accessor, so it does not cause a difference from MS.DI. The `?` on its return type has the same role as the choice between `GetService` and `GetRequiredService`. A nullable value type stays required, as ADR 2026112406 states.
 
-The difference "A reference type annotated as nullable is an optional dependency" is removed from section 8 of the constitution. The other differences get new numbers.
+The difference "A reference type annotated as nullable is an optional dependency" is removed from the [documented differences](../Constitution.md#8-documented-differences-from-msdi) of the constitution. The other differences get new numbers.
 
-The specifications and the code no longer refer to a documented difference by its number. They describe the difference in words and link to section 8. Only the constitution uses the numbers.
+The specifications, the ADRs and the code no longer refer to a documented difference, an item of a list, or a section of another document by its number. They describe it in words and link to the section by its title. The constitution also refers to its own sections by title. Only the constitution numbers its differences, its implicit rules and its sections. The `sourcegen-spec-writing` skill states this rule.
 
 This decision replaces one consequence of ADR 2026112503. That ADR said that a user who wants `null` as the default value writes the member as nullable. The user now writes the initializer `= null`.
 

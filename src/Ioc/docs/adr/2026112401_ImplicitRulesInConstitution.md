@@ -7,7 +7,7 @@ date: 2026-11-24
 
 ## Context and problem statement
 
-Section 4.1 of the [constitution](../Constitution.md) lists the only cases in which the generator decides a result from types alone. Everything else needs an explicit setting.
+The section "Explicitness" of the [constitution](../Constitution.md#41-explicitness) lists the only cases in which the generator decides a result from types alone. Everything else needs an explicit setting.
 
 The specifications had two rules that were not in that list:
 
@@ -18,11 +18,11 @@ Thus the specifications contradicted the constitution.
 
 ## Decision outcome
 
-Both rules are added to the list in section 4.1:
+Both rules are added to the list in that section:
 
-- Item 7 now includes a field or property that has `[IocInject]`, has an initializer, and can be assigned after construction. The initializer counts only for a type whose source is in the current compilation, because metadata does not keep the initializer.
+- The item about optional dependencies now includes a field or property that has `[IocInject]`, has an initializer, and can be assigned after construction. The initializer counts only for a type whose source is in the current compilation, because metadata does not keep the initializer.
 - The rule does not cover an `init` or `required` property, because an object initializer cannot assign it conditionally. It also does not cover a member that `IocInjectMemberAttribute` specifies. These stay required dependencies, as the specifications state.
-- Item 9 is new. It states the match by key type and the `object` case.
+- A new item states the match by key type and the `object` case.
 
 ### Consequences
 
