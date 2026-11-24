@@ -1,0 +1,26 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer __Get_Consumer_fd0ac76a()
+    {
+        global::App.AppContainer c = this;
+        global::App.Options arg17 = (global::App.Options)(default);
+        global::App.Consumer instance = new global::App.Consumer(
+            (global::App.IClock)c.__Get_SystemClock_28ece501(),
+            (global::App.IRepo)(default!),
+            (global::App.IRepo)(default!),
+            (global::App.IRepo)(default!),
+            (global::System.Int32)(3),
+            (global::System.Int64)(-1L),
+            (global::System.UInt32)(7U),
+            (global::App.Mode)(1),
+            (global::System.Nullable<global::App.Mode>)(default),
+            (global::System.String)("a\"b"),
+            (global::System.Char)('\n'),
+            (global::System.Boolean)(true),
+            (global::System.Double)(global::System.Double.NaN),
+            (global::System.Single)(0.100000001F),
+            (global::System.Decimal)(1.5M),
+            (global::System.Nullable<global::System.Int32>)(default),
+            (global::System.Int16)(-2),
+            in arg17);
+        return instance;
+    }

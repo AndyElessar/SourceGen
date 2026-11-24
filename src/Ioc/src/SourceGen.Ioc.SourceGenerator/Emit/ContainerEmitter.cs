@@ -382,15 +382,25 @@ internal static class ContainerEmitter
     /// <summary>The expression of one argument, with a static cast to the parameter type.</summary>
     private static string Argument(ContainerPlan plan, DefinitionPlan definition, int index)
     {
-        string type = TypeNames.CSharp(definition.Definition.ConstructorParameters[index].Type);
+        ConstructorParameter parameter = definition.Definition.ConstructorParameters[index];
+        string type = TypeNames.CSharp(parameter.Type);
         ArgumentPlan argument = definition.Arguments[index];
         return argument.Kind switch
         {
             ArgumentKind.Self => $"({type})c",
             ArgumentKind.Root => $"({type})c.__singletons.Root",
+            ArgumentKind.Default => $"({type})({DefaultValue(parameter)})",
             _ => $"({type})c.{Get(plan.Definitions[argument.Target].Definition)}()",
         };
     }
+
+    /// <summary>
+    /// The default value of a missing optional dependency, before the cast to the parameter type. A <c>null</c> of a
+    /// reference type gets <c>!</c>: the parameter type has no nullable annotation in the generated code.
+    /// </summary>
+    internal static string DefaultValue(ConstructorParameter parameter)
+        => parameter.DefaultValue is { } value and not "default" ? value
+            : parameter.IsValueType ? "default" : "default!";
 
     /// <summary>
     /// The implementation parts of the partial accessors. Each one calls the internal resolver directly, without the
@@ -426,6 +436,9 @@ internal static class ContainerEmitter
                     break;
                 case ArgumentKind.Root:
                     writer.WriteLine($"return ({member.ReturnType})__singletons.Root;");
+                    break;
+                case ArgumentKind.Default:
+                    writer.WriteLine("return null;");
                     break;
                 default:
                     writer.WriteLine($"return ({member.ReturnType}){Get(plan.Definitions[accessor.Argument.Target].Definition)}();");

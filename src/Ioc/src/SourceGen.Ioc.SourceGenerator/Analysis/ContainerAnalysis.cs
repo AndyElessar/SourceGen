@@ -16,6 +16,9 @@ internal enum ArgumentKind
 
     /// <summary>The root: <c>IServiceScopeFactory</c>, <c>IServiceProviderIsService</c>, <c>IServiceProviderIsKeyedService</c>.</summary>
     Root,
+
+    /// <summary>A missing optional dependency: the default value, or <see langword="null"/>.</summary>
+    Default,
 }
 
 /// <summary>The resolution result of one constructor parameter.</summary>
@@ -100,7 +103,7 @@ internal static class ContainerAnalysis
             for(int p = 0; p < definition.ConstructorParameters.Length; p++)
             {
                 ConstructorParameter parameter = definition.ConstructorParameters[p];
-                if(Resolve(parameter.Type, definition.Implementation.SortName, parameter.Name) is { } argument)
+                if(Resolve(parameter.Type, parameter.Optional != OptionalMode.Required, definition.Implementation.SortName, parameter.Name) is { } argument)
                 {
                     arguments.Add(argument);
                     if(argument.Kind == ArgumentKind.Resolved)
@@ -117,7 +120,7 @@ internal static class ContainerAnalysis
         List<AccessorPlan> accessors = [];
         foreach(PartialAccessor accessor in container.Accessors)
         {
-            if(Resolve(accessor.Type, container.Type.SortName, accessor.Name) is { } argument)
+            if(Resolve(accessor.Type, accessor.IsOptional, container.Type.SortName, accessor.Name) is { } argument)
             {
                 accessors.Add(new AccessorPlan(accessor, argument));
             }
@@ -137,7 +140,8 @@ internal static class ContainerAnalysis
 
         // A single dependency (Analysis.Model.spec, "Single service"). A problem is recorded, and the result is null.
         // The dependency site in a message is "{owner} → {member}" (Diagnostics.spec, "Names in messages").
-        ArgumentPlan? Resolve(TypeRef type, string owner, string member)
+        // Without a fallback provider, a missing optional dependency uses its default value.
+        ArgumentPlan? Resolve(TypeRef type, bool optional, string owner, string member)
         {
             if(BuiltIn(type, container.Type) is { } builtIn)
             {
@@ -152,6 +156,8 @@ internal static class ContainerAnalysis
                     // An error node: the original error is already reported, and the build fails because of it
                     reachesErrorNode = true;
                     return null;
+                case 0 when optional:
+                    return new ArgumentPlan(ArgumentKind.Default, -1);
                 case 0:
                     problems.Add(new ContainerProblem(Descriptors.MissingDependency.Id, [$"{owner} → {member}", TypeNames.Display(type)]));
                     return null;

@@ -128,7 +128,7 @@ internal static class ServiceCollectionExtensionEmitter
             {
                 if(parameters[i].ByReference)
                 {
-                    writer.WriteLine($"{TypeNames.CSharp(parameters[i].Type)} arg{i} = {Argument(parameters[i])};");
+                    writer.WriteLine($"{TypeNames.CSharp(parameters[i].Type)} arg{i} = {Argument(parameters[i], i)};");
                 }
             }
 
@@ -149,7 +149,7 @@ internal static class ServiceCollectionExtensionEmitter
             }
             else
             {
-                writer.WriteLine($"{Argument(parameters[i])}{(i < parameters.Length - 1 ? "," : ");")}");
+                writer.WriteLine($"{Argument(parameters[i], i)}{(i < parameters.Length - 1 ? "," : ");")}");
             }
         }
 
@@ -161,10 +161,31 @@ internal static class ServiceCollectionExtensionEmitter
     }
 
     /// <summary>The expression that resolves the argument of <paramref name="parameter"/> (ServiceCollection.Output.spec, "Dependency resolution").</summary>
-    private static string Argument(ConstructorParameter parameter)
-        => BuiltInServices.IsServiceProvider(parameter.Type)
-            ? "sp"
-            : $"{Provider}.GetRequiredService<{TypeNames.CSharp(parameter.Type)}>(sp)";
+    /// <param name="parameter">The parameter.</param>
+    /// <param name="index">The index of the parameter, for the name of a pattern variable.</param>
+    private static string Argument(ConstructorParameter parameter, int index)
+    {
+        string type = TypeNames.CSharp(parameter.Type);
+        if(BuiltInServices.IsServiceProvider(parameter.Type))
+        {
+            return "sp";
+        }
+
+        switch(parameter.Optional)
+        {
+            case OptionalMode.Nullable:
+                return $"{Provider}.GetService<{type}>(sp)";
+            case OptionalMode.Default when parameter.IsValueType:
+                // The generic GetService<X>() throws for a value type without a registration. A pattern cannot use
+                // Nullable<U>, so the test is on U and the conversion to U? is implicit
+                string test = parameter.Type is NamedTypeRef { MetadataName: "System.Nullable`1", Arguments: [TypeRef underlying] } ? TypeNames.CSharp(underlying) : type;
+                return $"sp.GetService(typeof({type})) is {test} v{index} ? ({type})v{index} : ({type})({ContainerEmitter.DefaultValue(parameter)})";
+            case OptionalMode.Default:
+                return $"{Provider}.GetService<{type}>(sp) ?? ({type})({ContainerEmitter.DefaultValue(parameter)})";
+            default:
+                return $"{Provider}.GetRequiredService<{type}>(sp)";
+        }
+    }
 
     private static void WriteGet(SourceWriter writer, ClosedDefinition definition)
     {

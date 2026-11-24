@@ -129,4 +129,20 @@ public class ResolutionTests
         await Assert.That(nested.GetRequiredService<Session>()).IsNotSameReferenceAs(scope.GetRequiredService<Session>());
         await Assert.That(session.Repository).IsSameReferenceAs(root.GetRequiredService<Repository>());
     }
+
+    [Test]
+    public async Task OptionalDependency_Missing_GetsNullOrTheDefaultValue()
+    {
+        using AppContainer root = new();
+
+        OptionalConsumer consumer = root.GetRequiredService<OptionalConsumer>();
+
+        await Assert.That(consumer.Clock).IsSameReferenceAs(root.Clock);
+        await Assert.That(consumer.Missing).IsNull();
+        await Assert.That(consumer.Label).IsEqualTo("none");
+        await Assert.That(consumer.Retries).IsEqualTo(3);
+        await Assert.That(consumer.Level).IsEqualTo(Level.High);
+        await Assert.That(consumer.Limit).IsNull();
+        await Assert.That(root.Missing).IsNull();
+    }
 }

@@ -328,7 +328,14 @@ internal static class DeclarationReader
                     return null;
                 }
 
-                parameters.Add(new ConstructorParameter(parameterRef, parameter.Name, parameter.RefKind is RefKind.In or RefKind.RefReadOnlyParameter));
+                (OptionalMode optional, string? defaultValue) = OptionalDependency.Of(parameter);
+                parameters.Add(new ConstructorParameter(
+                    parameterRef,
+                    parameter.Name,
+                    parameter.RefKind is RefKind.In or RefKind.RefReadOnlyParameter,
+                    optional,
+                    defaultValue,
+                    parameter.Type.IsValueType));
             }
 
             return parameters.ToImmutableEquatableArray();

@@ -72,4 +72,42 @@ public class ServiceCollectionExtensionTests
         await Assert.That(thrown.Message).Contains("'SourceGen.Ioc.TestAot'");
         await Assert.That(services.Count).IsEqualTo(count);
     }
+
+    [Test]
+    public async Task AddTestAot_OptionalDependencyMissing_GetsNullOrTheDefaultValue()
+    {
+        using ServiceProvider provider = Build();
+
+        OptionalConsumer consumer = provider.GetRequiredService<OptionalConsumer>();
+
+        await Assert.That(consumer.Clock).IsSameReferenceAs(provider.GetRequiredService<IClock>());
+        await Assert.That(consumer.Missing).IsNull();
+        await Assert.That(consumer.Label).IsEqualTo("none");
+        await Assert.That(consumer.Retries).IsEqualTo(3);
+        await Assert.That(consumer.Level).IsEqualTo(Level.High);
+        await Assert.That(consumer.Limit).IsNull();
+    }
+
+    [Test]
+    public async Task AddTestAot_OptionalDependencyRegisteredByTheUser_GetsTheService()
+    {
+        ServiceCollection services = new();
+        services.AddTestAot();
+        Missing missing = new();
+        services.AddSingleton<IMissing>(missing);
+        services.AddSingleton(typeof(int), (object)5);
+        services.AddSingleton(typeof(int?), (object)7);
+        services.AddSingleton<string>("label");
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        OptionalConsumer consumer = provider.GetRequiredService<OptionalConsumer>();
+
+        await Assert.That(consumer.Missing).IsSameReferenceAs(missing);
+        await Assert.That(consumer.Retries).IsEqualTo(5);
+        await Assert.That(consumer.Limit).IsEqualTo(7);
+        await Assert.That(consumer.Label).IsEqualTo("label");
+        await Assert.That(consumer.Level).IsEqualTo(Level.High);
+    }
+
+    private sealed class Missing : IMissing;
 }

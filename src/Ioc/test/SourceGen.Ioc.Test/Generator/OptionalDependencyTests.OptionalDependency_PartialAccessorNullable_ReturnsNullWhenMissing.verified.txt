@@ -1,0 +1,16 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::App.IRepo? Repo
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return null;
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::App.IClock? GetClock()
+    {
+        __ThrowIfDisposed();
+        return (global::App.IClock?)__Get_SystemClock_28ece501();
+    }

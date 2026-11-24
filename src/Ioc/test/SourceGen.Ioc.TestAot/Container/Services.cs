@@ -177,6 +177,32 @@ public sealed class FragileScoped
     public UnitOfWork UnitOfWork { get; }
 }
 
+/// <summary>A service that no registration of this assembly provides.</summary>
+public interface IMissing;
+
+public enum Level
+{
+    Low,
+    High,
+}
+
+/// <summary>Optional dependencies: one that is registered, and others that get <see langword="null"/> or their default value.</summary>
+[IocRegister(ServiceLifetime.Transient)]
+public sealed class OptionalConsumer(IClock? clock, IMissing? missing, string label = "none", int retries = 3, Level level = Level.High, int? limit = null)
+{
+    public IClock? Clock => clock;
+
+    public IMissing? Missing => missing;
+
+    public string Label => label;
+
+    public int Retries => retries;
+
+    public Level Level => level;
+
+    public int? Limit => limit;
+}
+
 /// <summary>The default options: <c>ThreadSafeStrategy.Lock</c> and eager Singletons.</summary>
 [IocContainer(IntegrateServiceProvider = false)]
 public partial class AppContainer
@@ -186,6 +212,8 @@ public partial class AppContainer
     public partial Session GetSession();
 
     public partial IServiceProvider Provider { get; }
+
+    public partial IMissing? Missing { get; }
 }
 
 [IocContainer(IntegrateServiceProvider = false, EagerResolveOptions = EagerResolveOptions.None)]

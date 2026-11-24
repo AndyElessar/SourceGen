@@ -61,6 +61,19 @@ internal sealed record ClosedDefinition(
     ImmutableEquatableArray<ConstructorParameter> ConstructorParameters,
     Disposal Disposal);
 
+/// <summary>The optional mode of a dependency site (Annotations.spec, "Extraction of dependency sites").</summary>
+internal enum OptionalMode
+{
+    /// <summary>A required dependency.</summary>
+    Required,
+
+    /// <summary>A reference type annotated as nullable: it gets <see langword="null"/> when no service is found.</summary>
+    Nullable,
+
+    /// <summary>A parameter with a default value: it gets the default value when no service is found.</summary>
+    Default,
+}
+
 /// <summary>A parameter of the selected constructor.</summary>
 /// <param name="Type">The type of the parameter.</param>
 /// <param name="Name">The name of the parameter, for the messages of diagnostics.</param>
@@ -68,7 +81,18 @@ internal sealed record ClosedDefinition(
 /// Whether it is an <c>in</c> or <c>ref readonly</c> parameter. The generated code passes it a local variable with
 /// <c>in</c>: a value passed to a <c>ref readonly</c> parameter gives warning CS9193.
 /// </param>
-internal sealed record ConstructorParameter(TypeRef Type, string Name, bool ByReference);
+/// <param name="Optional">The optional mode.</param>
+/// <param name="DefaultValue">
+/// For <see cref="OptionalMode.Default"/>, the C# expression of the default value, without a cast to the parameter type.
+/// </param>
+/// <param name="IsValueType">Whether the type is a value type: the generic <c>GetService&lt;T&gt;()</c> cannot ask for it.</param>
+internal sealed record ConstructorParameter(
+    TypeRef Type,
+    string Name,
+    bool ByReference,
+    OptionalMode Optional = OptionalMode.Required,
+    string? DefaultValue = null,
+    bool IsValueType = false);
 
 /// <summary>The settings of the service collection extension, read from <c>IocServiceCollectionExtensionsAttribute</c>.</summary>
 /// <param name="Name">The <c>{Name}</c> part, already reduced to identifier characters.</param>

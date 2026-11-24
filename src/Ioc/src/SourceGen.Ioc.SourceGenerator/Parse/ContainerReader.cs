@@ -20,7 +20,11 @@ internal sealed record ContainingType(string Keyword, string Name);
 /// Whether the definition part already has <c>GeneratedCodeAttribute</c>. The attributes of the two parts merge, and the
 /// attribute does not allow more than one.
 /// </param>
-internal sealed record PartialAccessor(string Name, bool IsProperty, string Modifiers, string ReturnType, TypeRef Type, bool HasKey, bool HasGeneratedCode);
+/// <param name="IsOptional">
+/// Whether the return type is a reference type annotated as nullable: an optional dependency. A nullable value type is
+/// a different type and stays required (Annotations.spec, "Partial accessor").
+/// </param>
+internal sealed record PartialAccessor(string Name, bool IsProperty, string Modifiers, string ReturnType, TypeRef Type, bool HasKey, bool HasGeneratedCode, bool IsOptional);
 
 /// <summary>A class with <c>IocContainerAttribute</c>. It holds no position, so a move of code does not change it.</summary>
 /// <param name="Type">The container class.</param>
@@ -114,13 +118,13 @@ internal static class ContainerReader
         foreach(ISymbol member in type.GetMembers())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            (ITypeSymbol? returnType, bool isProperty) = member switch
+            (ITypeSymbol? returnType, bool isProperty, NullableAnnotation annotation) = member switch
             {
                 IMethodSymbol { IsPartialDefinition: true, PartialImplementationPart: null, IsStatic: false, IsGenericMethod: false, Parameters.Length: 0, ReturnsVoid: false, RefKind: RefKind.None } method
-                    => (method.ReturnType, false),
+                    => (method.ReturnType, false, method.ReturnNullableAnnotation),
                 IPropertySymbol { IsPartialDefinition: true, PartialImplementationPart: null, IsStatic: false, IsIndexer: false, SetMethod: null, GetMethod: not null, RefKind: RefKind.None } property
-                    => (property.Type, true),
-                _ => (null, false),
+                    => (property.Type, true, property.NullableAnnotation),
+                _ => (null, false, NullableAnnotation.None),
             };
             if(returnType is null
                 || TypeRefFactory.Create(returnType, compilation) is not { } typeRef
@@ -152,7 +156,8 @@ internal static class ContainerReader
                 returnType.ToDisplayString(ReturnTypeFormat),
                 typeRef,
                 hasKey,
-                hasGeneratedCode));
+                hasGeneratedCode,
+                OptionalDependency.IsNullableReference(returnType, annotation)));
         }
 
         return accessors.ToImmutableEquatableArray();
