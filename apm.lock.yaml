@@ -176,7 +176,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:584afb2a04fec76da4be1c0687170179fde885cad137b06e02c91159a02e9b5e
+  content_hash: sha256:9305d25e152148dbffa5a58092e2ec3cb3b1e21409b2f08a0b5c1aace743e34e
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/sourcegen-spec-writing/references/rfc2119.md
@@ -482,7 +482,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:584afb2a04fec76da4be1c0687170179fde885cad137b06e02c91159a02e9b5e
+  content_hash: sha256:9305d25e152148dbffa5a58092e2ec3cb3b1e21409b2f08a0b5c1aace743e34e
 - kind: project-relative
   target: claude
   value: .claude/skills/sourcegen-spec-writing/references/rfc2119.md
@@ -718,7 +718,7 @@ local_deployed_file_hashes:
   .agents/skills/sourcegen-release-commands/scripts/monitor-release.ps1: sha256:8283b66594d1d70a85878bc9e4d593be874fd7b5284d93d14eec119158a90602
   .agents/skills/sourcegen-release-commands/scripts/post-release.ps1: sha256:18e1531e370ba9b04cb78dcaa05c0dac6ca6cee9740f82b275463d888b1bd159
   .agents/skills/sourcegen-release-commands/scripts/release.ps1: sha256:9cb1ae1365380b810ecd82d11a2b9f9c99afc2b8401232da9805126b55d398b1
-  .agents/skills/sourcegen-spec-writing/SKILL.md: sha256:584afb2a04fec76da4be1c0687170179fde885cad137b06e02c91159a02e9b5e
+  .agents/skills/sourcegen-spec-writing/SKILL.md: sha256:9305d25e152148dbffa5a58092e2ec3cb3b1e21409b2f08a0b5c1aace743e34e
   .agents/skills/sourcegen-spec-writing/references/rfc2119.md: sha256:1dca065f52260ad5dab6187cdc37b062aba412cefee09d0c7fda75fedca67046
   .agents/skills/ste80-humanizer/LICENSE: sha256:e591401d6bdba6400e2987c275a07a84d1e484fcb4b1556f43e1e7ac4f36cf2d
   .agents/skills/ste80-humanizer/SKILL.md: sha256:d332cfd96680ebdc3e805a297e705d49a0a515903aea42231eeda96db81d50c7
@@ -742,7 +742,7 @@ local_deployed_file_hashes:
   .claude/skills/sourcegen-release-commands/scripts/monitor-release.ps1: sha256:8283b66594d1d70a85878bc9e4d593be874fd7b5284d93d14eec119158a90602
   .claude/skills/sourcegen-release-commands/scripts/post-release.ps1: sha256:18e1531e370ba9b04cb78dcaa05c0dac6ca6cee9740f82b275463d888b1bd159
   .claude/skills/sourcegen-release-commands/scripts/release.ps1: sha256:9cb1ae1365380b810ecd82d11a2b9f9c99afc2b8401232da9805126b55d398b1
-  .claude/skills/sourcegen-spec-writing/SKILL.md: sha256:584afb2a04fec76da4be1c0687170179fde885cad137b06e02c91159a02e9b5e
+  .claude/skills/sourcegen-spec-writing/SKILL.md: sha256:9305d25e152148dbffa5a58092e2ec3cb3b1e21409b2f08a0b5c1aace743e34e
   .claude/skills/sourcegen-spec-writing/references/rfc2119.md: sha256:1dca065f52260ad5dab6187cdc37b062aba412cefee09d0c7fda75fedca67046
   .claude/skills/ste80-humanizer/LICENSE: sha256:e591401d6bdba6400e2987c275a07a84d1e484fcb4b1556f43e1e7ac4f36cf2d
   .claude/skills/ste80-humanizer/SKILL.md: sha256:d332cfd96680ebdc3e805a297e705d49a0a515903aea42231eeda96db81d50c7
