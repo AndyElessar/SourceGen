@@ -20,7 +20,7 @@ Thus the specifications contradicted the constitution.
 
 Both rules are added to the list in that section:
 
-- The item about optional dependencies now includes a field or property that has `[IocInject]`, has an initializer, and can be assigned after construction. The initializer counts only for a type whose source is in the current compilation, because metadata does not keep the initializer.
+- The item about optional dependencies now includes a field or property that has `[IocInject]`, has an initializer, and can be assigned after construction. The initializer counts only for a member that is declared in the current compilation, because metadata does not keep the initializer. [ADR IocRewrite/0016](0016_OptionalDependencies.md) gives the details of which initializers count.
 - The rule does not cover an `init` or `required` property, because an object initializer cannot assign it conditionally. It also does not cover a member that `IocInjectMemberAttribute` specifies. These stay required dependencies, as the specifications state.
 - A new item states the match by key type and the `object` case.
 

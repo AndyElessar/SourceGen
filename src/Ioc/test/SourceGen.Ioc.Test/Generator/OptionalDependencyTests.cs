@@ -106,7 +106,7 @@ public partial class OptionalDependencyTests
     [Test]
     public async Task SGIOC402_NullableReferenceWithoutDefaultValue_Required()
     {
-        // Only a default value makes a parameter optional, as in MS.DI (ADR IocRewrite/0020)
+        // Only a default value makes a parameter optional, as in MS.DI (ADR IocRewrite/0016)
         GeneratorTestResult result = await RunAsync(Usings + """
             public interface IRepo;
 

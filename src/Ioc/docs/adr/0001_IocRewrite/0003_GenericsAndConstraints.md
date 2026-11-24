@@ -28,7 +28,7 @@ Open generics were the most repaired area of the previous design.
 ## Rejected options
 
 - **Also register the open generic with MS.DI in the service collection extension**, as the previous design did. A closed type that appears only at run time would then work, but:
-  - The same service gets two behaviors. A closed type found at compile time uses generated code. A closed type that appears at run time is created by MS.DI with reflection and loses member injection, injection methods, the chosen constructor, keys from `[IocInject]`, decorators, asynchronous initialization, optional dependencies by nullable annotation, and its wrappers.
+  - The same service gets two behaviors. A closed type found at compile time uses generated code. A closed type that appears at run time is created by MS.DI with reflection and loses member injection, injection methods, the chosen constructor, keys from `[IocInject]`, decorators, asynchronous initialization, optional dependencies, and its wrappers.
   - Collections contain duplicates (see Evidence).
   - Under NativeAOT, MS.DI rejects an open generic closed with a value type at run time, with no publish warning.
   - The previous design needed two more diagnostics to explain when the open generic was not registered.

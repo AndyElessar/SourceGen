@@ -5,7 +5,7 @@ date: 2026-11-23
 
 # Rewrite of SourceGen.Ioc
 
-This document is the entry point of the ADR set of the rewrite, the folder `0001_IocRewrite`. It gives the background and the goal that all ADRs of the set share, and it links to each of them. Other documents refer to an ADR of the set as `IocRewrite/NNNN`, for example `IocRewrite/0020`. The set is open while the rewrite goes on, so its ADRs are edited in place when a decision changes (see [IocRewrite/0010](0010_DesignDocumentLayout.md)).
+This document is the entry point of the ADR set of the rewrite, the folder `0001_IocRewrite`. It gives the background and the goal that all ADRs of the set share, and it links to each of them. Other documents refer to an ADR of the set as `IocRewrite/NNNN`, for example `IocRewrite/0016`. The set is open while the rewrite goes on, so its ADRs are edited in place when a decision changes (see [IocRewrite/0010](0010_DesignDocumentLayout.md)).
 
 ## Context and problem statement
 
@@ -55,21 +55,14 @@ The [constitution](../../Constitution.md) holds the principles, the scope and li
 | [0008](0008_HoldersAndAsyncServices.md) | Holders, asynchronous services, and failure during creation in the service collection extension and the container. |
 | [0009](0009_RemovedFeatures.md) | Features of the previous version that the rewrite removes. |
 | [0010](0010_DesignDocumentLayout.md) | Layout and rules of the design documents. |
-
-Later decisions of the rewrite:
-
-| ADR | Topic |
-| --- | --- |
 | [0011](0011_ImplicitRulesInConstitution.md) | Initializers and the `object` key type in the list of implicit rules of the constitution. |
 | [0012](0012_ServiceCollectionExtensionWrapperWithoutCandidate.md) | A wrapper of a service that the service collection extension does not register. |
 | [0013](0013_CompositionRootAndServiceCollectionExtension.md) | The terms "composition root" and "service collection extension". |
 | [0014](0014_CycleReportForEachComponent.md) | One report of a circular dependency for each strongly connected component. |
 | [0015](0015_ContainerClassIsNotAService.md) | A container class cannot be registered as a service. |
-| [0016](0016_OptionalDependencyByNullableType.md) | A nullable value type (on a parameter or a partial accessor) and `[Optional]` without a default value are required dependencies. |
+| [0016](0016_OptionalDependencies.md) | Which dependencies are optional: only an explicit default value or a real initializer, not a nullable annotation. A partial accessor is the exception. |
 | [0017](0017_FallbackInterfacesAsServices.md) | The container gets `IServiceProviderIsService` and `IServiceProviderIsKeyedService` from the fallback provider as services. |
 | [0018](0018_NoAnyKeyRegistration.md) | A registration cannot use `KeyedService.AnyKey` as its key. A documented difference of the constitution. |
-| [0019](0019_NullForgivingInitializerIsRequired.md) | An initializer such as `null!` does not make an injected member optional. Changes the list of implicit rules of the constitution. |
-| [0020](0020_NullableReferenceIsNotOptional.md) | A nullable reference type does not make a parameter or an injected member optional. Only a partial accessor keeps this rule. |
 
 ### Consequences
 
