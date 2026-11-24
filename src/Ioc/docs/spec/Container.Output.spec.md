@@ -395,7 +395,7 @@ The container always aggregates and throws each exception that its `Dispose` and
 A partial accessor is the fast path of the container. The user declares a partial method or a partial property in the container class to skip the lookup by `Type` and get the service instance directly. For the shape, see "Partial accessor" in [Annotations](Annotations.spec.md#partial-accessor).
 
 - The generator generates the implementation part. It calls the internal resolver directly and does not use the lookup table.
-- A partial accessor is a dependency site. All rules and diagnostics of [Dependency resolution](Semantics.spec.md#dependency-resolution) apply. A nullable return type means that the dependency is optional.
+- A partial accessor is a dependency site. All rules and diagnostics of [Dependency resolution](Semantics.spec.md#dependency-resolution) apply. A return type that is a reference type annotated as nullable means that the dependency is optional. A nullable value type is required.
 - The return type MAY be a service type or any valid wrapper type.
 - The user gives the key with `[IocInject]` on the member.
 - An accessor that gets a Scoped service on the root throws `InvalidOperationException`. On a scope it works normally.

@@ -51,6 +51,9 @@ For the detailed rules, see [Constructor selection](Annotations.spec.md#construc
 - An optional dependency tries these in order: the container, then the fallback provider, then the default.
   - A parameter with a default value: the default value is used. This is also true when the parameter is nullable too.
   - A reference type annotated as nullable: it gets `null`. MS.DI looks at the default value only and not at the nullable annotation, so this is a documented difference. Code without nullable annotations (`#nullable disable`) is always required.
+  - A parameter of a nullable value type (`int?`) without a default value is required. MS.DI does the same.
+  - A parameter that has `[Optional]` and no default value is required. MS.DI does the same (see [ADR 2026112406](../adr/2026112406_OptionalDependencyByNullableType.md)).
+  - A partial accessor whose return type is a reference type annotated as nullable: it gets `null`. A nullable value type is required, as on a parameter.
   - An injected property or field that has an initializer and that can be assigned after construction: the generator does not assign it, and the initial value stays. This applies only to a type whose source is in the current compilation.
   - An `init` or `required` injected property is always required, because an object initializer cannot assign conditionally.
   - A member of a type that the user does not own, specified with `IocInjectMemberAttribute`, is always required.

@@ -560,7 +560,7 @@ A partial member of a container class with one of these shapes is a partial acce
 - A partial method without an implementation part that is an instance method, is not generic, has no parameters, and has a return type other than `void`.
 - A partial property without an implementation part that is an instance property and has only `get`.
 
-`[IocInject]` on the member specifies the key. `InheritKey` has no meaning here and counts as no key. A nullable return type means that the dependency is optional.
+`[IocInject]` on the member specifies the key. `InheritKey` has no meaning here and counts as no key. A return type that is a reference type annotated as nullable means that the dependency is optional. A nullable value type (`int?`) is required, as on a parameter.
 
 A partial member that does not have one of these shapes is not a partial accessor. The generator does not implement it, and the compiler reports the missing implementation.
 
