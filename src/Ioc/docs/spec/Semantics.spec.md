@@ -181,7 +181,7 @@ For the detailed rules, see [Service types of a factory](Annotations.spec.md#ser
   - On a constructor (to select the constructor) or on an injection method (to mark it for injection), `Key` and `LookupMode` MUST NOT be specified. If one is specified, it is an error. The key belongs on each parameter.
   - When `InheritKey` finds no registration for that key, it does not go back to the registration without a key. The generator handles it as a missing dependency. This agrees with MS.DI.
 - `[ServiceKey]` is supported on parameters only. A field or property that needs the key gets it through a parameter of the constructor or of an injection method.
-- `KeyedService.AnyKey`: registration with it is not supported and is an error. A query of `GetKeyedServices` with it is supported and returns all keyed registrations of that service type.
+- `KeyedService.AnyKey`: registration with it is not supported and is an error. A query of `GetKeyedServices` with it is supported and returns all keyed registrations of that service type. A dependency site with it is an error unless it asks for a collection or a dictionary, because MS.DI always throws when `AnyKey` resolves one service.
 
 For the detailed rules, see [Keys](Annotations.spec.md#keys) and [Key specification](Annotations.spec.md#key-specification).
 

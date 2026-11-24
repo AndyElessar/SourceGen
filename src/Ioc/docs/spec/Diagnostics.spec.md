@@ -72,7 +72,7 @@ A diagnostic message about the dependency graph MUST name the module and the ins
 The consequences follow the [Diagnostic policy](../Constitution.md#7-diagnostic-policy) of the constitution:
 
 - **Skip the declaration.** The complete instance definition that the declaration belongs to is skipped, also when its other declarations are valid. The instance definition stays in the dependency graph as an error node. A party that depends on it does not report a missing dependency as a result, and does not go to the fallback provider. Other outputs are processed as usual.
-  - When the key of a declaration is invalid (`SGIOC007`, `SGIOC011`, `SGIOC022`), the key is unknown. The declaration then belongs to no instance definition that another declaration has, and only that declaration is skipped. A valid declaration of the same implementation type, for example one without a key, is not affected.
+  - When the key of a declaration is invalid (`SGIOC007`, `SGIOC011`, `SGIOC022`), the key is unknown. The declaration then belongs to no instance definition that another declaration has, and only that declaration is skipped. A valid declaration of the same implementation type, for example one without a key, is not affected. Because the key is unknown, a dependency on the type of the skipped declaration with any key that has no other provider does not report a missing dependency.
 - **Do not generate the output.** The affected container, module output, or service collection extension is not generated at all. Other outputs are not affected.
 - **Inform only.** Warning and Info. Generation is not affected.
 
@@ -100,7 +100,7 @@ Error. Skip the declaration. Reported in the assembly that has the declaration.
 | `SGIOC004` | Invalid service type | `'{0}' cannot be a service type of '{1}': {2}` (`{2}`: `it is a value type` / `it is a pointer or void` / `it is a built-in service` / `it is a container class` / `the implementation type has no base type or interface of this generic type` / `it does not use type parameter '{name}'` / `the type arguments cannot come from a closed service type`) | Type argument of the attribute | [Annotations: Expansion of service types](Annotations.spec.md#expansion-of-service-types) |
 | `SGIOC005` | Nested open generic is not supported | `'{0}' is an open generic nested in an open generic type` | Type argument of the attribute | Same as above |
 | `SGIOC006` | Wrapper type cannot be registered | `'{0}' is generated automatically and cannot be registered; wrap it in a class or depend on it directly` | Type argument of the attribute | Same as above |
-| `SGIOC007` | AnyKey cannot be used to register | `KeyedService.AnyKey cannot be used as a registration key` | `Key` argument | [Annotations: Keys](Annotations.spec.md#keys) |
+| `SGIOC007` | AnyKey cannot be used here | `KeyedService.AnyKey cannot be used {0}` (`{0}`: `as a registration key` / `to resolve a single service`) | `Key` argument | [Annotations: Keys](Annotations.spec.md#keys), [Key specification](Annotations.spec.md#key-specification) |
 | `SGIOC008` | Batch implementation does not implement service type | `'{0}' does not implement '{1}'` | `IocRegisterBatchAttribute` | [Annotations: Expansion of service types](Annotations.spec.md#expansion-of-service-types) |
 | `SGIOC009` | Generic factory cannot specify ServiceTypes | `Generic factory '{0}' always registers its return type; remove ServiceTypes` | `ServiceTypes` argument | [Annotations: Service types of a factory](Annotations.spec.md#service-types-of-a-factory) |
 | `SGIOC010` | nameof refers to overloaded members | `'{0}' has multiple overloads; nameof cannot choose one` | `nameof` expression | [Annotations: How the generator reads `nameof()`](Annotations.spec.md#how-the-generator-reads-nameof) |
@@ -111,7 +111,7 @@ Error. Skip the declaration. Reported in the assembly that has the declaration.
 | `SGIOC015` | Decorators require a service type | `'{0}' specifies Decorators but has no service type other than itself` | Registration attribute | [Annotations: Other checks](Annotations.spec.md#other-checks) |
 | `SGIOC016` | Invalid injection method | `Method '{0}' cannot be injected: {1}` | Method or `IocInjectMemberAttribute` | [Annotations: Checks of an injection method](Annotations.spec.md#checks-of-an-injection-method) |
 | `SGIOC017` | LookupMode conflicts with Key | `LookupMode '{0}' cannot be combined with Key` | `[IocInject]` | [Annotations: Key specification](Annotations.spec.md#key-specification) |
-| `SGIOC018` | IocInject and FromKeyedServices used together | `'{0}' has both [IocInject] and [FromKeyedServices]` | `[IocInject]` | Same as above |
+| `SGIOC018` | Conflicting key annotations | `'{0}' has both {1} and {2}` (`{1}`, `{2}`: two of `[IocInject]`, `[FromKeyedServices]`, `[ServiceKey]`) | `[IocInject]`, or `[ServiceKey]` when the position has no `[IocInject]` | Same as above |
 | `SGIOC019` | Key specified on constructor or method | `[IocInject] on a {0} cannot specify Key or LookupMode; annotate the parameters instead` | `[IocInject]` | Same as above |
 | `SGIOC020` | IocInjectMember key on method | `Key cannot be specified for method '{0}'; use a factory registration` | `IocInjectMemberAttribute` | [Annotations: Types that the user does not own](Annotations.spec.md#types-that-the-user-does-not-own) |
 | `SGIOC021` | IocInjectMember without registration in scope | `'{0}' has no registration attribute in the same assembly and scope as this [IocInjectMember]` | `IocInjectMemberAttribute` | Same as above |
@@ -208,13 +208,13 @@ Generation is not affected. The user can change the level (see [Levels](#levels)
 | Invalid implementation type or service type | `SGIOC003`, `SGIOC004` |
 | Nested open generic | `SGIOC005` |
 | The user registers a wrapper type | `SGIOC006` |
-| Registration with `AnyKey` | `SGIOC007` |
+| Registration with `AnyKey`, or `AnyKey` at a site that asks for one service | `SGIOC007` |
 | The implementation type of `IocRegisterBatchAttribute` does not implement the service type | `SGIOC008` |
 | A generic factory specifies `ServiceTypes` | `SGIOC009` |
 | `nameof()` points to overloaded members / the member is not found | `SGIOC010`, `SGIOC011` |
 | Decorator: no service type that it applies to / more than one inner parameter / a type parameter that cannot be inferred / no service type other than itself | `SGIOC012` to `SGIOC015` |
 | Injection method: a generic method, a parameter with `ref`, `out` or `in`, or a return type of `Task<X>`, `ValueTask` or `async void` | `SGIOC016` |
-| `IocInjectAttribute`: `LookupMode` conflicts with `Key` / used together with `[FromKeyedServices]` / a key specified on a constructor or method | `SGIOC017` to `SGIOC019` |
+| `IocInjectAttribute`: `LookupMode` conflicts with `Key` / used together with `[FromKeyedServices]` or `[ServiceKey]` / a key specified on a constructor or method | `SGIOC017` to `SGIOC019` |
 | `IocInjectMemberAttribute`: a key used for a method / not in the same assembly or registration scope | `SGIOC020`, `SGIOC021` |
 | `ExplicitOnly` and `IncludeTags` are both set | `SGIOC101` |
 | One class is both a module and an `ExplicitOnly` container | `SGIOC102` |
