@@ -70,7 +70,7 @@ The generator decides a result from types alone only in the cases below. The dep
 4. A decorator applies only to the service types for which it has an inner parameter.
 5. A concrete registration suppresses a derived registration with the same implementation type and key.
 6. When a dependency site asks for one service, a concrete registration wins over a derived registration.
-7. A parameter with a default value, a reference type annotated as nullable, or a field or property that has `[IocInject]`, has an initializer, and can be assigned after construction is an optional dependency. An initializer counts only for a type whose source is in the current compilation.
+7. A parameter with a default value, a reference type annotated as nullable, or a field or property that has `[IocInject]`, has an initializer, and can be assigned after construction is an optional dependency. An initializer counts only for a member that is declared in the current compilation. An initializer that only suppresses the nullable warning (`null!`, `default!`, `default(T)!`) does not count.
 8. When a dependency site asks for `Task<T>` and the service is synchronous, the generator wraps the service in a completed task.
 9. When a dependency site asks for keyed services by key type (`KeyValuePair<TKey, T>`, a collection of them, or a dictionary), a registration matches only when its key type is exactly `TKey`. When `TKey` is `object`, all keyed registrations match.
 

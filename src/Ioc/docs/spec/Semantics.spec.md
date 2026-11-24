@@ -54,7 +54,8 @@ For the detailed rules, see [Constructor selection](Annotations.spec.md#construc
   - A parameter of a nullable value type (`int?`) without a default value is required. MS.DI does the same.
   - A parameter that has `[Optional]` and no default value is required. MS.DI does the same (see [ADR 2026112406](../adr/2026112406_OptionalDependencyByNullableType.md)).
   - A partial accessor whose return type is a reference type annotated as nullable: it gets `null`. A nullable value type is required, as on a parameter.
-  - An injected property or field that has an initializer and that can be assigned after construction: the generator does not assign it, and the initial value stays. This applies only to a type whose source is in the current compilation.
+  - An injected property or field that has an initializer and that can be assigned after construction: the generator does not assign it, and the initial value stays. This applies only to a member that is declared in the current compilation. The test is the assembly of the member and not the availability of syntax, because a project reference in the IDE also gives syntax.
+  - An initializer whose expression is the null-forgiving operator applied to `null`, `default`, or `default(T)` (for example `= null!`) does not count. Parentheses around it do not change this. Such an initializer only suppresses the nullable warning, so the member is required (see [ADR 2026112503](../adr/2026112503_NullForgivingInitializerIsRequired.md)).
   - An `init` or `required` injected property is always required, because an object initializer cannot assign conditionally.
   - A member of a type that the user does not own, specified with `IocInjectMemberAttribute`, is always required.
 - Lifetime limits on dependencies:
