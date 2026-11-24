@@ -9,6 +9,19 @@ namespace SourceGen.Ioc.Parse;
 /// <param name="Name">The name of the type.</param>
 internal sealed record ContainingType(string Keyword, string Name);
 
+/// <summary>A partial member of the container class that the generator implements (Annotations.spec, "Partial accessor").</summary>
+/// <param name="Name">The name of the member.</param>
+/// <param name="IsProperty">Whether it is a property. Otherwise it is a method without parameters.</param>
+/// <param name="Modifiers">The modifiers of the declaration, which the implementation part repeats.</param>
+/// <param name="ReturnType">The return type as declared, with its nullable annotation.</param>
+/// <param name="Type">The requested type.</param>
+/// <param name="HasKey">Whether <c>[IocInject]</c> sets a key. Keys come in a later slice.</param>
+/// <param name="HasGeneratedCode">
+/// Whether the definition part already has <c>GeneratedCodeAttribute</c>. The attributes of the two parts merge, and the
+/// attribute does not allow more than one.
+/// </param>
+internal sealed record PartialAccessor(string Name, bool IsProperty, string Modifiers, string ReturnType, TypeRef Type, bool HasKey, bool HasGeneratedCode);
+
 /// <summary>A class with <c>IocContainerAttribute</c>. It holds no position, so a move of code does not change it.</summary>
 /// <param name="Type">The container class.</param>
 /// <param name="Namespace">The namespace, or <see langword="null"/> for the global namespace.</param>
@@ -19,6 +32,7 @@ internal sealed record ContainingType(string Keyword, string Name);
 /// <param name="HasIncludeTags">Whether <c>IncludeTags</c> is not empty.</param>
 /// <param name="ThreadSafeStrategy">The value of <c>ThreadSafeStrategy</c>: 0 None, 1 Lock, 2 CompareExchange.</param>
 /// <param name="EagerResolveOptions">The flags of <c>EagerResolveOptions</c>: 1 Singleton, 2 Scoped.</param>
+/// <param name="Accessors">The partial accessors, in the order of <c>GetMembers()</c>.</param>
 internal sealed record ContainerModel(
     NamedTypeRef Type,
     string? Namespace,
@@ -28,7 +42,8 @@ internal sealed record ContainerModel(
     bool ExplicitOnly,
     bool HasIncludeTags,
     int ThreadSafeStrategy,
-    int EagerResolveOptions)
+    int EagerResolveOptions,
+    ImmutableEquatableArray<PartialAccessor> Accessors)
 {
     /// <summary>Gets the hint name of the generated file: the namespace, the containing types, and the name.</summary>
     public string HintName => string.Join(".", [.. Namespace is null ? [] : new[] { Namespace }, .. ContainingTypes.Select(static t => t.Name), Name]) + ".g.cs";
@@ -80,9 +95,67 @@ internal static class ContainerReader
             Named(attribute, "ExplicitOnly") is { Value: true },
             Named(attribute, "IncludeTags") is { Kind: TypedConstantKind.Array, Values.Length: > 0 },
             Named(attribute, "ThreadSafeStrategy") is { Value: int strategy } ? strategy : 1,
-            Named(attribute, "EagerResolveOptions") is { Value: int eager } ? eager : 1);
+            Named(attribute, "EagerResolveOptions") is { Value: int eager } ? eager : 1,
+            Accessors(type, context.SemanticModel.Compilation, cancellationToken));
         ClassDeclarationSyntax declaration = (ClassDeclarationSyntax)context.TargetNode;
         return new(container, new ContainerSite(typeRef, declaration.SyntaxTree.FilePath, declaration.Identifier.Span), null);
+    }
+
+    private static readonly SymbolDisplayFormat ReturnTypeFormat = SymbolDisplayFormat.FullyQualifiedFormat
+        .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
+    /// <summary>
+    /// The partial members without an implementation part that have the shape of a partial accessor. Another partial
+    /// member is not implemented, and the compiler reports it (Annotations.spec, "Partial accessor").
+    /// </summary>
+    private static ImmutableEquatableArray<PartialAccessor> Accessors(INamedTypeSymbol type, Compilation compilation, CancellationToken cancellationToken)
+    {
+        List<PartialAccessor> accessors = [];
+        foreach(ISymbol member in type.GetMembers())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            (ITypeSymbol? returnType, bool isProperty) = member switch
+            {
+                IMethodSymbol { IsPartialDefinition: true, PartialImplementationPart: null, IsStatic: false, IsGenericMethod: false, Parameters.Length: 0, ReturnsVoid: false, RefKind: RefKind.None } method
+                    => (method.ReturnType, false),
+                IPropertySymbol { IsPartialDefinition: true, PartialImplementationPart: null, IsStatic: false, IsIndexer: false, SetMethod: null, GetMethod: not null, RefKind: RefKind.None } property
+                    => (property.Type, true),
+                _ => (null, false),
+            };
+            if(returnType is null
+                || TypeRefFactory.Create(returnType, compilation) is not { } typeRef
+                || member.DeclaringSyntaxReferences is not [SyntaxReference reference, ..]
+                || reference.GetSyntax(cancellationToken) is not MemberDeclarationSyntax declaration)
+            {
+                continue;
+            }
+
+            bool hasKey = false;
+            bool hasGeneratedCode = false;
+            foreach(AttributeData attribute in member.GetAttributes())
+            {
+                switch(attribute.AttributeClass)
+                {
+                    case { Name: "IocInjectAttribute" } c when c.ToDisplayString() == DeclarationReader.InjectAttribute:
+                        hasKey |= attribute.NamedArguments.Any(static n => n.Key == "Key");
+                        break;
+                    case { Name: "GeneratedCodeAttribute" } c when c.ToDisplayString() == "System.CodeDom.Compiler.GeneratedCodeAttribute":
+                        hasGeneratedCode = true;
+                        break;
+                }
+            }
+
+            accessors.Add(new PartialAccessor(
+                member.Name,
+                isProperty,
+                string.Join(" ", declaration.Modifiers.Select(static m => m.Text)),
+                returnType.ToDisplayString(ReturnTypeFormat),
+                typeRef,
+                hasKey,
+                hasGeneratedCode));
+        }
+
+        return accessors.ToImmutableEquatableArray();
     }
 
     private static TypedConstant? Named(AttributeData attribute, string name)

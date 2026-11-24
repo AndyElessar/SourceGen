@@ -46,7 +46,8 @@ internal static class DeclarationReader
     /// <summary>The metadata name of <c>IocRegisterForAttribute</c>.</summary>
     public const string RegisterForAttribute = "SourceGen.Ioc.IocRegisterForAttribute";
 
-    private const string InjectAttribute = "SourceGen.Ioc.IocInjectAttribute";
+    /// <summary>The metadata name of <c>IocInjectAttribute</c>.</summary>
+    internal const string InjectAttribute = "SourceGen.Ioc.IocInjectAttribute";
     private const string ActivatorUtilitiesConstructorAttribute = "Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructorAttribute";
     private const string ModuleAttribute = "SourceGen.Ioc.IocModuleAttribute";
     private const string ContainerAttribute = "SourceGen.Ioc.IocContainerAttribute";

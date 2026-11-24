@@ -1,0 +1,53 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::App.IClock Clock
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return (global::App.IClock)__Get_SystemClock_28ece501();
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    internal partial global::App.Session GetSession()
+    {
+        __ThrowIfDisposed();
+        return (global::App.Session)__Get_Session_24b3f38a();
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    protected partial global::App.Formatter Formatter
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return (global::App.Formatter)__Get_Formatter_47faf9b4();
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::System.IServiceProvider Provider
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return (global::System.IServiceProvider)this;
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory GetScopeFactory()
+    {
+        __ThrowIfDisposed();
+        return (global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory)__singletons.Root;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::App.AppContainer Self
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return (global::App.AppContainer)this;
+        }
+    }

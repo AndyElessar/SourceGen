@@ -165,11 +165,11 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                     .ToImmutableEquatableArray();
             });
 
-        // The fallback provider (IntegrateServiceProvider), ExplicitOnly, and IncludeTags come in later slices.
+        // The fallback provider (IntegrateServiceProvider), ExplicitOnly, IncludeTags, and keys come in later slices.
         // Until then only a container without them is generated.
         IncrementalValuesProvider<ContainerAnalysisResult> analyses = containers
             .Select(static (r, _) => r.Container)
-            .Where(static c => c is { IntegrateServiceProvider: false, ExplicitOnly: false, HasIncludeTags: false })
+            .Where(static c => c is { IntegrateServiceProvider: false, ExplicitOnly: false, HasIncludeTags: false } && !c.Accessors.Any(static a => a.HasKey))
             .Combine(definitions.Combine(errorNodes))
             .WithTrackingName(TrackingNames.Views)
             .Select(static (input, ct) => ContainerAnalysis.Analyze(input.Left!, input.Right.Left, input.Right.Right, ct))

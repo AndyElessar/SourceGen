@@ -28,6 +28,11 @@ internal sealed record ArgumentPlan(ArgumentKind Kind, int Target);
 /// <param name="Arguments">The arguments, in the order of the constructor parameters.</param>
 internal sealed record DefinitionPlan(ClosedDefinition Definition, ImmutableEquatableArray<ArgumentPlan> Arguments);
 
+/// <summary>The resolution of one partial accessor.</summary>
+/// <param name="Accessor">The partial accessor.</param>
+/// <param name="Argument">How the accessor gets the service.</param>
+internal sealed record AccessorPlan(PartialAccessor Accessor, ArgumentPlan Argument);
+
 /// <summary>An item of the lookup table (Container.Output.spec, "Contents of the table").</summary>
 /// <param name="ServiceType">The service type <c>S</c>.</param>
 /// <param name="Candidates">The indexes of the closed definitions that provide it, in their ordering.</param>
@@ -38,11 +43,13 @@ internal sealed record LookupEntry(TypeRef ServiceType, ImmutableEquatableArray<
 /// <param name="Definitions">The construction plans, in the ordering of the closed definitions.</param>
 /// <param name="Lookup">The service types of the lookup table, by canonical string.</param>
 /// <param name="TopologicalOrder">The indexes of the closed definitions, each dependency before the definitions that depend on it.</param>
+/// <param name="Accessors">The partial accessors.</param>
 internal sealed record ContainerPlan(
     ContainerModel Container,
     ImmutableEquatableArray<DefinitionPlan> Definitions,
     ImmutableEquatableArray<LookupEntry> Lookup,
-    ImmutableEquatableArray<int> TopologicalOrder);
+    ImmutableEquatableArray<int> TopologicalOrder,
+    ImmutableEquatableArray<AccessorPlan> Accessors);
 
 /// <summary>A problem that the full check finds. The position is added from the site of the container.</summary>
 /// <param name="Id">The diagnostic ID.</param>
@@ -93,34 +100,27 @@ internal static class ContainerAnalysis
             for(int p = 0; p < definition.ConstructorParameters.Length; p++)
             {
                 ConstructorParameter parameter = definition.ConstructorParameters[p];
-                if(BuiltIn(parameter.Type, container.Type) is { } builtIn)
+                if(Resolve(parameter.Type, definition.Implementation.SortName, parameter.Name) is { } argument)
                 {
-                    arguments.Add(new ArgumentPlan(builtIn, -1));
-                    continue;
-                }
-
-                switch(providers.TryGetValue(parameter.Type, out List<int>? candidates) ? candidates.Count : 0)
-                {
-                    case 1:
-                        arguments.Add(new ArgumentPlan(ArgumentKind.Resolved, candidates![0]));
-                        edges[index].Add(new GraphEdge(index, p, candidates[0]));
-                        break;
-                    case 0 when skipped.Contains(parameter.Type):
-                        // An error node: the original error is already reported, and the build fails because of it
-                        reachesErrorNode = true;
-                        break;
-                    case 0:
-                        problems.Add(new ContainerProblem(Descriptors.MissingDependency.Id, [Site(definition, parameter), TypeNames.Display(parameter.Type)]));
-                        break;
-                    default:
-                        problems.Add(new ContainerProblem(
-                            Descriptors.AmbiguousDependency.Id,
-                            [Site(definition, parameter), TypeNames.Display(parameter.Type), candidates!.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), string.Join(", ", candidates.Select(c => definitions[c].Implementation.SortName))]));
-                        break;
+                    arguments.Add(argument);
+                    if(argument.Kind == ArgumentKind.Resolved)
+                    {
+                        edges[index].Add(new GraphEdge(index, p, argument.Target));
+                    }
                 }
             }
 
             plans.Add(new DefinitionPlan(definition, arguments.ToImmutableEquatableArray()));
+        }
+
+        // A partial accessor is a dependency site of the container, not of a closed definition: it adds no edge
+        List<AccessorPlan> accessors = [];
+        foreach(PartialAccessor accessor in container.Accessors)
+        {
+            if(Resolve(accessor.Type, container.Type.SortName, accessor.Name) is { } argument)
+            {
+                accessors.Add(new AccessorPlan(accessor, argument));
+            }
         }
 
         CheckGraph(definitions, edges, problems);
@@ -132,8 +132,36 @@ internal static class ContainerAnalysis
         LookupEntry[] lookup = [.. providers
             .OrderBy(static p => p.Key.CanonicalString, StringComparer.Ordinal)
             .Select(static p => new LookupEntry(p.Key, p.Value.ToImmutableEquatableArray()))];
-        ContainerPlan plan = new(container, plans.ToImmutableEquatableArray(), lookup.ToImmutableEquatableArray(), TopologicalOrder(plans));
+        ContainerPlan plan = new(container, plans.ToImmutableEquatableArray(), lookup.ToImmutableEquatableArray(), TopologicalOrder(plans), accessors.ToImmutableEquatableArray());
         return new(container.Type, plan, problems.ToImmutableEquatableArray());
+
+        // A single dependency (Analysis.Model.spec, "Single service"). A problem is recorded, and the result is null.
+        // The dependency site in a message is "{owner} → {member}" (Diagnostics.spec, "Names in messages").
+        ArgumentPlan? Resolve(TypeRef type, string owner, string member)
+        {
+            if(BuiltIn(type, container.Type) is { } builtIn)
+            {
+                return new ArgumentPlan(builtIn, -1);
+            }
+
+            switch(providers.TryGetValue(type, out List<int>? candidates) ? candidates.Count : 0)
+            {
+                case 1:
+                    return new ArgumentPlan(ArgumentKind.Resolved, candidates![0]);
+                case 0 when skipped.Contains(type):
+                    // An error node: the original error is already reported, and the build fails because of it
+                    reachesErrorNode = true;
+                    return null;
+                case 0:
+                    problems.Add(new ContainerProblem(Descriptors.MissingDependency.Id, [$"{owner} → {member}", TypeNames.Display(type)]));
+                    return null;
+                default:
+                    problems.Add(new ContainerProblem(
+                        Descriptors.AmbiguousDependency.Id,
+                        [$"{owner} → {member}", TypeNames.Display(type), candidates!.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), string.Join(", ", candidates.Select(c => definitions[c].Implementation.SortName))]));
+                    return null;
+            }
+        }
     }
 
     /// <summary>
@@ -178,8 +206,6 @@ internal static class ContainerAnalysis
         return type is NamedTypeRef { Arguments: null } named && BuiltInServices.IsRootService(named.MetadataName) ? ArgumentKind.Root : null;
     }
 
-    /// <summary>A dependency site in a message (Diagnostics.spec, "Names in messages").</summary>
-    private static string Site(ClosedDefinition definition, ConstructorParameter parameter) => $"{definition.Implementation.SortName} → {parameter.Name}";
 
     /// <summary>
     /// Each dependency before the definitions that depend on it. Definitions without a relation follow the ordering.

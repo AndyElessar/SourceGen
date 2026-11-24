@@ -57,6 +57,7 @@ internal static class ContainerEmitter
             WriteResolver(writer, plan, i, self);
         }
 
+        WriteAccessors(writer, plan);
         WriteLookup(writer, plan, self);
         WriteServiceProvider(writer, self);
         WriteDisposal(writer, plan);
@@ -389,6 +390,57 @@ internal static class ContainerEmitter
             ArgumentKind.Root => $"({type})c.__singletons.Root",
             _ => $"({type})c.{Get(plan.Definitions[argument.Target].Definition)}()",
         };
+    }
+
+    /// <summary>
+    /// The implementation parts of the partial accessors. Each one calls the internal resolver directly, without the
+    /// lookup table (Container.Output.spec, "Partial accessors").
+    /// </summary>
+    private static void WriteAccessors(SourceWriter writer, ContainerPlan plan)
+    {
+        foreach(AccessorPlan accessor in plan.Accessors)
+        {
+            PartialAccessor member = accessor.Accessor;
+            writer.WriteLine();
+            if(!member.HasGeneratedCode)
+            {
+                writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            }
+
+            // A keyword needs "@" as an identifier (@class)
+            writer.WriteLine($"{member.Modifiers} {member.ReturnType} {(SyntaxFacts.GetKeywordKind(member.Name) == SyntaxKind.None ? string.Empty : "@")}{member.Name}{(member.IsProperty ? string.Empty : "()")}");
+            writer.WriteLine('{');
+            writer.Indentation++;
+            if(member.IsProperty)
+            {
+                writer.WriteLine("get");
+                writer.WriteLine('{');
+                writer.Indentation++;
+            }
+
+            writer.WriteLine("__ThrowIfDisposed();");
+            switch(accessor.Argument.Kind)
+            {
+                case ArgumentKind.Self:
+                    writer.WriteLine($"return ({member.ReturnType})this;");
+                    break;
+                case ArgumentKind.Root:
+                    writer.WriteLine($"return ({member.ReturnType})__singletons.Root;");
+                    break;
+                default:
+                    writer.WriteLine($"return ({member.ReturnType}){Get(plan.Definitions[accessor.Argument.Target].Definition)}();");
+                    break;
+            }
+
+            if(member.IsProperty)
+            {
+                writer.Indentation--;
+                writer.WriteLine('}');
+            }
+
+            writer.Indentation--;
+            writer.WriteLine('}');
+        }
     }
 
     private static void WriteLookup(SourceWriter writer, ContainerPlan plan, string self)
