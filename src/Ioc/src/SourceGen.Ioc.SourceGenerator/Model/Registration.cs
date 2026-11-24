@@ -75,6 +75,30 @@ internal sealed record ClosedDefinition(
     /// </summary>
     public ImmutableEquatableArray<Dependency> Dependencies { get; } = [.. ConstructorParameters, .. Members.SelectMany(static m => m.Dependencies)];
 
+    /// <summary>The key of the dependency site at <paramref name="index"/> of <see cref="Dependencies"/>.</summary>
+    /// <param name="index">The index.</param>
+    /// <returns>The key.</returns>
+    public SitePosition SiteOf(int index)
+    {
+        if(index < ConstructorParameters.Length)
+        {
+            return new SitePosition(-1, 0, index);
+        }
+
+        index -= ConstructorParameters.Length;
+        foreach(InjectedMember member in Members)
+        {
+            if(index < member.Dependencies.Length)
+            {
+                return new SitePosition(member.Depth, member.Index, index);
+            }
+
+            index -= member.Dependencies.Length;
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(index));
+    }
+
     /// <summary>Whether a step after <c>new</c> can throw: an assignment or an injection method.</summary>
     public bool HasStepsAfterNew => Members.Any(static m => m.Kind != MemberKind.Initializer);
 }
@@ -96,7 +120,21 @@ internal enum MemberKind
 /// <param name="Kind">The step.</param>
 /// <param name="Name">The name of the member, as a C# identifier (a keyword has <c>@</c>).</param>
 /// <param name="Dependencies">The dependency of a field or property, or the parameters of a method.</param>
-internal sealed record InjectedMember(MemberKind Kind, string Name, ImmutableEquatableArray<Dependency> Dependencies);
+/// <param name="Depth">
+/// The number of base classes of the type that declares the member. With <paramref name="Index"/>, it identifies the
+/// member and gives its order inside one step: base members first (Annotations.spec, "Order").
+/// </param>
+/// <param name="Index">The position of the member in <c>GetMembers()</c> of the type that declares it.</param>
+internal sealed record InjectedMember(MemberKind Kind, string Name, ImmutableEquatableArray<Dependency> Dependencies, int Depth, int Index);
+
+/// <summary>
+/// Identifies a dependency site of an implementation type, independent of which other members are injected: a
+/// constructor parameter, or a parameter of an injected member (a field or property has one, at position 0).
+/// </summary>
+/// <param name="Depth">The <see cref="InjectedMember.Depth"/> of the member, or -1 for a constructor parameter.</param>
+/// <param name="Member">The <see cref="InjectedMember.Index"/> of the member, or 0 for a constructor parameter.</param>
+/// <param name="Parameter">The position of the parameter.</param>
+internal readonly record struct SitePosition(int Depth, int Member, int Parameter);
 
 /// <summary>The optional mode of a dependency site (Annotations.spec, "Extraction of dependency sites").</summary>
 internal enum OptionalMode

@@ -486,17 +486,20 @@ Member range and inheritance:
 | The member that is found is an overloaded method | `SGIOC010` |
 | The member is a method and `Key` is set | `SGIOC020` |
 | The member already has `[IocInject]` | `SGIOC024`: one member MUST NOT have two settings |
+| Another `IocInjectMemberAttribute` names the same member with other settings, such as another key | `SGIOC024` at each of the attributes |
 
+- Two attributes that name the same member with the same settings inject it once.
 - The attribute applies to all instance definitions of `Impl` in that registration scope. Each different key is a different instance definition, and each one gets the injection.
+- An injection method can have a required `[ServiceKey]` parameter. An instance definition of `Impl` without a key then reports `SGIOC023` at the attribute, and only that instance definition is skipped.
 - The attribute does not apply to decorators. When `Impl` appears only as a decorator and has no registration attribute of its own, the generator reports `SGIOC021`. When a decorator needs member injection, put `[IocInject]` on the decorator type.
 
 ### Member lookup by name
 
 The input is a type `Impl` and a name:
 
-1. The generator searches from `Impl` up through the base classes, one level at a time. The first type that declares an instance member with that name wins, and the search stops there. This agrees with C# member lookup: a base member that is hidden by `new` is not found.
+1. The generator searches from `Impl` up through the base classes, one level at a time. The first type that declares a member with that name wins, and the search stops there. A static member or a nested type also stops the search. This agrees with C# member lookup: a base member that is hidden by `new` is not found.
 2. When that level has more than one method with that name, the method is overloaded.
-3. Only fields, properties, and methods are accepted. If the member that is found is of another kind, such as an event or a nested type, the result is "not found".
+3. Only instance fields, properties, and methods are accepted. If the member that is found is of another kind, such as an event, a nested type, or a static member, the result is "not found".
 
 ### Checks of an injection method
 

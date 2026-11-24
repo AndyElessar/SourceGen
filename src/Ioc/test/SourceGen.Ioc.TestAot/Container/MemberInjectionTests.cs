@@ -43,6 +43,18 @@ public class MemberInjectionTests
         await Assert.That(string.Join(",", journal.Disposed)).StartsWith("InjectedScoped,InjectedScoped,");
     }
 
+    [Test]
+    public async Task GetService_InjectMemberAttribute_AssignsThePropertyThenCallsTheMethod()
+    {
+        using AppContainer root = new();
+        using AppContainer scope = root.CreateScope();
+
+        NotOwned service = scope.GetRequiredService<NotOwned>();
+
+        await Assert.That(service.Clock).IsSameReferenceAs(root.Clock);
+        await Assert.That(string.Join(",", service.Steps)).IsEqualTo("Initialize:True:True");
+    }
+
     /// <summary>Runs <paramref name="resolve"/> on this thread with a failing injection method, and returns its exception.</summary>
     internal static Exception? CatchInitialize(Func<object?> resolve)
     {

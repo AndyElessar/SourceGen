@@ -27,18 +27,50 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                 static (node, _) => node is CompilationUnitSyntax or ClassDeclarationSyntax or RecordDeclarationSyntax,
                 static (ctx, ct) => DeclarationReader.ReadRegisterFor(ctx, ct));
 
+        IncrementalValuesProvider<InjectMemberResult> injectMember = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                InjectMemberAttributeReader.Attribute,
+                static (node, _) => node is CompilationUnitSyntax or ClassDeclarationSyntax or RecordDeclarationSyntax,
+                static (ctx, ct) => InjectMemberAttributeReader.Read(ctx, ct));
+
         // The generation pipeline takes only the declarations. The sites and the diagnostics carry positions, and a
-        // change of position alone must not run the analysis again (Diagnostics.spec, "Two pipelines").
+        // change of position alone must not run the analysis again (Diagnostics.spec, "Two pipelines"). The sites and
+        // the diagnostics of IocInjectMemberAttribute join as one more result, with the checks that need the registrations.
         IncrementalValueProvider<ImmutableEquatableArray<DeclarationResult>> results = register.Collect()
             .Combine(registerFor.Collect())
-            .Select(static (pair, _) => pair.Left.Concat(pair.Right).ToImmutableEquatableArray());
+            .Combine(injectMember.Collect())
+            .Select(static (input, _) =>
+            {
+                DeclarationResult[] declared = [.. input.Left.Left, .. input.Left.Right];
+                ImmutableArray<InjectMemberResult> injected = input.Right;
+                if(injected.IsEmpty)
+                {
+                    return declared.ToImmutableEquatableArray();
+                }
+
+                IEnumerable<DiagnosticInfo> checks = InjectMemberAttributeReader.Diagnostics(
+                    injected.SelectMany(static r => r.Sites),
+                    declared.SelectMany(static r => r.RegisteredTypes),
+                    declared.SelectMany(static r => r.Declarations));
+                DeclarationResult members = new(
+                    [],
+                    [],
+                    injected.SelectMany(static r => r.ParameterSites).ToImmutableEquatableArray(),
+                    injected.SelectMany(static r => r.Diagnostics).Concat(checks).ToImmutableEquatableArray(),
+                    []);
+                return declared.Append(members).ToImmutableEquatableArray();
+            });
 
         IncrementalValueProvider<ImmutableEquatableArray<RegistrationDeclaration>> declarations = register
             .Select(static (r, _) => r.Declarations)
             .WithTrackingName(TrackingNames.Declarations)
             .Collect()
             .Combine(registerFor.Select(static (r, _) => r.Declarations).WithTrackingName(TrackingNames.Declarations).Collect())
-            .Select(static (pair, _) => pair.Left.Concat(pair.Right).SelectMany(static d => d).ToImmutableEquatableArray());
+            .Combine(injectMember.Select(static (r, _) => r.Declarations).WithTrackingName(TrackingNames.Declarations).Collect())
+            .Select(static (input, ct) => InjectMemberAttributeReader.Apply(
+                input.Left.Left.Concat(input.Left.Right).SelectMany(static d => d).ToImmutableEquatableArray(),
+                input.Right.SelectMany(static d => d),
+                ct));
 
         IncrementalValueProvider<ImmutableEquatableArray<ClosedDefinition>> definitions = declarations
             .Select(static (d, ct) => Definitions.Merge(d, ct))
@@ -53,7 +85,7 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
             static (spc, input) =>
             {
                 ImmutableEquatableArray<DeclarationResult> declared = input.Left.Left;
-                Dictionary<(NamedTypeRef, int), ParameterSite> sites = ParameterSites(declared);
+                Dictionary<(NamedTypeRef, SitePosition), ParameterSite> sites = ParameterSites(declared);
                 // One site can belong to more than one declaration (one type with several keys): each diagnostic once
                 IEnumerable<DiagnosticInfo> diagnostics = declared.SelectMany(static r => r.Diagnostics)
                     .Concat(Definitions.CheckMerge(declared.SelectMany(static r => r.Sites)))
@@ -104,17 +136,17 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
     }
 
     /// <summary>The site of each dependency site. A site declared in source wins over the attribute of a declaration.</summary>
-    private static Dictionary<(NamedTypeRef, int), ParameterSite> ParameterSites(ImmutableEquatableArray<DeclarationResult> results)
+    private static Dictionary<(NamedTypeRef, SitePosition), ParameterSite> ParameterSites(ImmutableEquatableArray<DeclarationResult> results)
     {
-        Dictionary<(NamedTypeRef, int), ParameterSite> sites = [];
+        Dictionary<(NamedTypeRef, SitePosition), ParameterSite> sites = [];
         foreach(ParameterSite site in results.SelectMany(static r => r.ParameterSites)
             .OrderBy(static s => s.InSource ? 0 : 1)
             .ThenBy(static s => s.FilePath, StringComparer.Ordinal)
             .ThenBy(static s => s.Span.Start))
         {
-            if(!sites.ContainsKey((site.Implementation, site.Index)))
+            if(!sites.ContainsKey((site.Implementation, site.Key)))
             {
-                sites[(site.Implementation, site.Index)] = site;
+                sites[(site.Implementation, site.Key)] = site;
             }
         }
 
@@ -125,14 +157,14 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
     /// The problems of the definite check at their dependency sites. A dependency site from metadata is reported at the
     /// registration attribute (Analysis.Model.spec, "Two levels of checks").
     /// </summary>
-    private static IEnumerable<DiagnosticInfo> DefiniteDiagnostics(ImmutableEquatableArray<GraphProblem> problems, Dictionary<(NamedTypeRef, int), ParameterSite> sites)
+    private static IEnumerable<DiagnosticInfo> DefiniteDiagnostics(ImmutableEquatableArray<GraphProblem> problems, Dictionary<(NamedTypeRef, SitePosition), ParameterSite> sites)
         => Reported(problems, sites).Select(static r => new DiagnosticInfo(r.Problem.Id, r.Problem.Arguments, r.Site.FilePath, r.Site.Span));
 
-    private static IEnumerable<(GraphProblem Problem, ParameterSite Site)> Reported(ImmutableEquatableArray<GraphProblem> problems, Dictionary<(NamedTypeRef, int), ParameterSite> sites)
+    private static IEnumerable<(GraphProblem Problem, ParameterSite Site)> Reported(ImmutableEquatableArray<GraphProblem> problems, Dictionary<(NamedTypeRef, SitePosition), ParameterSite> sites)
     {
         foreach(GraphProblem problem in problems)
         {
-            if(sites.TryGetValue((problem.Implementation, problem.Parameter), out ParameterSite? site))
+            if(sites.TryGetValue((problem.Implementation, problem.Site), out ParameterSite? site))
             {
                 yield return (problem, site);
             }
@@ -192,9 +224,9 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
             static (spc, input) =>
             {
                 ImmutableArray<ContainerResult> containerResults = input.Left.Left.Left;
-                Dictionary<(NamedTypeRef, int), ParameterSite> parameterSites = ParameterSites(input.Left.Right.Left);
-                HashSet<(string, NamedTypeRef, int, ImmutableEquatableArray<string>)> reportedByDefiniteCheck = [.. Reported(input.Left.Right.Right, parameterSites)
-                    .Select(static r => (r.Problem.Id, r.Problem.Implementation, r.Problem.Parameter, r.Problem.Arguments))];
+                Dictionary<(NamedTypeRef, SitePosition), ParameterSite> parameterSites = ParameterSites(input.Left.Right.Left);
+                HashSet<(string, NamedTypeRef, SitePosition, ImmutableEquatableArray<string>)> reportedByDefiniteCheck = [.. Reported(input.Left.Right.Right, parameterSites)
+                    .Select(static r => (r.Problem.Id, r.Problem.Implementation, r.Problem.Site, r.Problem.Arguments))];
                 List<DiagnosticInfo> diagnostics = [.. containerResults.SelectMany(static r => r.Diagnostics)];
                 Dictionary<NamedTypeRef, ContainerSite> sites = [];
                 foreach(ContainerSite site in containerResults.Select(static r => r.Site).OfType<ContainerSite>())
@@ -211,7 +243,7 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
 
                     // The same diagnostic with the same message at the same edge, which the definite check reports, is not reported again
                     diagnostics.AddRange(analysis.Problems
-                        .Where(p => p.Implementation is null || !reportedByDefiniteCheck.Contains((p.Id, p.Implementation, p.Parameter, p.Arguments)))
+                        .Where(p => p.Implementation is null || !reportedByDefiniteCheck.Contains((p.Id, p.Implementation, p.Site, p.Arguments)))
                         .Select(p => new DiagnosticInfo(p.Id, p.Arguments, site.FilePath, site.Span)));
                 }
 

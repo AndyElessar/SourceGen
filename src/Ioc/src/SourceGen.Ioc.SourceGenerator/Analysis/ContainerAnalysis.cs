@@ -81,8 +81,8 @@ internal sealed record ContainerPlan(
 /// For a problem that the definite check also finds, the implementation type of the dependency site. The full check
 /// does not report it again when the definite check reports it (Analysis.Model.spec, "Two levels of checks").
 /// </param>
-/// <param name="Parameter">The index of that dependency site in <see cref="ClosedDefinition.Dependencies"/>.</param>
-internal sealed record ContainerProblem(string Id, ImmutableEquatableArray<string> Arguments, NamedTypeRef? Implementation = null, int Parameter = -1);
+/// <param name="Site">That dependency site.</param>
+internal sealed record ContainerProblem(string Id, ImmutableEquatableArray<string> Arguments, NamedTypeRef? Implementation = null, SitePosition Site = default);
 
 /// <summary>The result of the analysis of one container.</summary>
 /// <param name="Type">The container class.</param>
@@ -225,7 +225,7 @@ internal static class ContainerAnalysis
         problems.AddRange(DependencyGraph.Cycles(definitions, edges)
             .Concat(DependencyGraph.Captives(definitions, edges))
             .Concat(DependencyGraph.HeldTransients(definitions, edges))
-            .Select(static p => new ContainerProblem(p.Id, p.Arguments, p.Implementation, p.Parameter)));
+            .Select(static p => new ContainerProblem(p.Id, p.Arguments, p.Implementation, p.Site)));
 
         // Disposable Transient is only in the full check (Analysis.Model.spec, "Disposable Transient")
         foreach(ClosedDefinition definition in definitions.Where(static d => d.Lifetime == Lifetime.Transient && d.Disposal != Disposal.None))

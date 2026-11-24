@@ -1,3 +1,7 @@
+[assembly: SourceGen.Ioc.IocRegisterFor(typeof(SourceGen.Ioc.TestAot.Container.NotOwned), Microsoft.Extensions.DependencyInjection.ServiceLifetime.Transient)]
+[assembly: SourceGen.Ioc.IocInjectMember(typeof(SourceGen.Ioc.TestAot.Container.NotOwned), nameof(SourceGen.Ioc.TestAot.Container.NotOwned.Initialize))]
+[assembly: SourceGen.Ioc.IocInjectMember(typeof(SourceGen.Ioc.TestAot.Container.NotOwned), nameof(SourceGen.Ioc.TestAot.Container.NotOwned.Clock))]
+
 namespace SourceGen.Ioc.TestAot.Container;
 
 /// <summary>A base class with injected members: they come before the members of the derived type.</summary>
@@ -47,4 +51,18 @@ public sealed class InjectedScoped(Journal journal) : InjectedBase, IDisposable
     }
 
     public void Dispose() => journal.OnDisposed(nameof(InjectedScoped));
+}
+
+/// <summary>
+/// A type without SourceGen.Ioc attributes, as a type that the user does not own: its members are injected with
+/// <c>IocInjectMemberAttribute</c> (Annotations.spec, "Types that the user does not own").
+/// </summary>
+public sealed class NotOwned
+{
+    /// <summary>Gets the injection steps, in the order in which they ran.</summary>
+    public List<string> Steps { get; } = [];
+
+    public IClock Clock { get; set; } = null!;
+
+    public void Initialize(Session session) => Steps.Add($"{nameof(Initialize)}:{Clock is not null}:{session is not null}");
 }

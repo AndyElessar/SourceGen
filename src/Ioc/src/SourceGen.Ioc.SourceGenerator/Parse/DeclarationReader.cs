@@ -19,11 +19,11 @@ internal sealed record MergeSite(NamedTypeRef Implementation, KeyRef? Key, strin
 /// parameter of a type from metadata has no syntax, so its site is the attribute of the declaration.
 /// </summary>
 /// <param name="Implementation">The implementation type that owns the dependency site.</param>
-/// <param name="Index">The index of the dependency site in <see cref="ClosedDefinition.Dependencies"/>.</param>
+/// <param name="Key">The dependency site.</param>
 /// <param name="InSource">Whether the site is declared in this assembly (and the span is the parameter or member).</param>
 /// <param name="FilePath">The path of the syntax tree.</param>
 /// <param name="Span">The span of the parameter, or of the attribute when <paramref name="InSource"/> is false.</param>
-internal sealed record ParameterSite(NamedTypeRef Implementation, int Index, bool InSource, string FilePath, TextSpan Span);
+internal sealed record ParameterSite(NamedTypeRef Implementation, SitePosition Key, bool InSource, string FilePath, TextSpan Span);
 
 /// <summary>
 /// What one attribute target gives. The generation pipeline uses only <see cref="Declarations"/>, so a change of
@@ -33,11 +33,16 @@ internal sealed record ParameterSite(NamedTypeRef Implementation, int Index, boo
 /// <param name="Sites">The sites of the valid declarations.</param>
 /// <param name="ParameterSites">The sites of the constructor parameters of the valid declarations.</param>
 /// <param name="Diagnostics">The diagnostics of the invalid declarations.</param>
+/// <param name="RegisteredTypes">
+/// The types that a registration attribute names, also when the attribute gives no declaration (an invalid type, or a
+/// shape of a later slice). The check of <c>IocInjectMemberAttribute</c> (SGIOC021) uses them.
+/// </param>
 internal sealed record DeclarationResult(
     ImmutableEquatableArray<RegistrationDeclaration> Declarations,
     ImmutableEquatableArray<MergeSite> Sites,
     ImmutableEquatableArray<ParameterSite> ParameterSites,
-    ImmutableEquatableArray<DiagnosticInfo> Diagnostics);
+    ImmutableEquatableArray<DiagnosticInfo> Diagnostics,
+    ImmutableEquatableArray<NamedTypeRef> RegisteredTypes);
 
 /// <summary>Reads registration declarations from the attributes (Annotations.spec, "Registration declarations").</summary>
 internal static class DeclarationReader
@@ -81,8 +86,7 @@ internal static class DeclarationReader
     public static DeclarationResult ReadRegisterFor(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
     {
         Builder builder = new(context.SemanticModel.Compilation, cancellationToken);
-        bool onPlainClass = context.TargetSymbol is INamedTypeSymbol host
-            && !host.GetAttributes().Any(static a => a.AttributeClass?.ToDisplayString() is ModuleAttribute or ContainerAttribute);
+        bool onPlainClass = IsPlainClass(context.TargetSymbol);
         foreach(AttributeData attribute in context.Attributes)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -102,6 +106,13 @@ internal static class DeclarationReader
         return builder.ToResult();
     }
 
+    /// <summary>Whether an assembly-or-class attribute is on a class that is neither a module nor a container (SGIOC025).</summary>
+    /// <param name="target">The target of the attribute.</param>
+    /// <returns>Whether the target is such a class.</returns>
+    internal static bool IsPlainClass(ISymbol target)
+        => target is INamedTypeSymbol host
+            && !host.GetAttributes().Any(static a => a.AttributeClass?.ToDisplayString() is ModuleAttribute or ContainerAttribute);
+
     /// <summary>Collects the declarations and the diagnostics of one attribute target.</summary>
     private sealed class Builder(Compilation compilation, CancellationToken cancellationToken)
     {
@@ -109,9 +120,10 @@ internal static class DeclarationReader
         private readonly List<MergeSite> sites = [];
         private readonly List<ParameterSite> parameterSites = [];
         private readonly List<DiagnosticInfo> diagnostics = [];
+        private readonly List<NamedTypeRef> registeredTypes = [];
 
         public DeclarationResult ToResult()
-            => new(declarations.ToImmutableEquatableArray(), sites.ToImmutableEquatableArray(), parameterSites.ToImmutableEquatableArray(), diagnostics.ToImmutableEquatableArray());
+            => new(declarations.ToImmutableEquatableArray(), sites.ToImmutableEquatableArray(), parameterSites.ToImmutableEquatableArray(), diagnostics.ToImmutableEquatableArray(), registeredTypes.ToImmutableEquatableArray());
 
         public void Report(string id, SyntaxNode? node, params string[] arguments)
             => diagnostics.Add(node is null ? DiagnosticInfo.Create(id, (Location?)null, arguments) : DiagnosticInfo.Create(id, node, arguments));
@@ -128,6 +140,11 @@ internal static class DeclarationReader
             if(type.TypeKind == TypeKind.Error)
             {
                 return;
+            }
+
+            if(type is INamedTypeSymbol named && TypeRefFactory.Create(named, compilation) is NamedTypeRef registered)
+            {
+                registeredTypes.Add(registered);
             }
 
             string name = type.ToDisplayString();
@@ -218,22 +235,20 @@ internal static class DeclarationReader
                 sites.Add(new MergeSite(implementationRef, key.Key, KeyNames.Definition(implementationRef, key.Key), (Lifetime)lifetime, syntax.SyntaxTree.FilePath, syntax.Span));
             }
 
-            // The index of a site is its index in ClosedDefinition.Dependencies: the constructor parameters, then the members.
-            // A site of another assembly is reported at the attribute, also when a project reference gives its syntax.
-            IEnumerable<SyntaxReference?> references = constructor.Parameters.Select(static p => p.DeclaringSyntaxReferences.FirstOrDefault()).Concat(members.Sites);
-            int index = 0;
-            foreach(SyntaxReference? reference in references)
+            // A site of another assembly is reported at the attribute, also when a project reference gives its syntax
+            IEnumerable<(SitePosition, SyntaxReference?)> references = constructor.Parameters
+                .Select(static (p, i) => (new SitePosition(-1, 0, i), p.DeclaringSyntaxReferences.FirstOrDefault()))
+                .Concat(members.Sites);
+            foreach((SitePosition position, SyntaxReference? reference) in references)
             {
                 if(reference is not null && compilation.ContainsSyntaxTree(reference.SyntaxTree))
                 {
-                    parameterSites.Add(new ParameterSite(implementationRef, index, true, reference.SyntaxTree.FilePath, reference.Span));
+                    parameterSites.Add(new ParameterSite(implementationRef, position, true, reference.SyntaxTree.FilePath, reference.Span));
                 }
                 else if(syntax is not null)
                 {
-                    parameterSites.Add(new ParameterSite(implementationRef, index, false, syntax.SyntaxTree.FilePath, syntax.Span));
+                    parameterSites.Add(new ParameterSite(implementationRef, position, false, syntax.SyntaxTree.FilePath, syntax.Span));
                 }
-
-                index++;
             }
         }
 

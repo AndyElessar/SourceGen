@@ -51,6 +51,13 @@ internal static class Descriptors
         "KeyedService.AnyKey cannot be used {0}",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC010: <c>nameof()</c> or a member name refers to overloaded methods.</summary>
+    public static readonly DiagnosticDescriptor NameofOverloaded = Create(
+        "SGIOC010",
+        "nameof refers to overloaded members",
+        "'{0}' has multiple overloads; nameof cannot choose one",
+        DiagnosticSeverity.Error);
+
     /// <summary>SGIOC011: an argument that needs a symbol is not a <c>nameof()</c> expression of the right member.</summary>
     public static readonly DiagnosticDescriptor NameofTargetNotFound = Create(
         "SGIOC011",
@@ -86,6 +93,20 @@ internal static class Descriptors
         "[IocInject] on a {0} cannot specify Key or LookupMode; annotate the parameters instead",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC020: <c>IocInjectMemberAttribute</c> sets a key for a method.</summary>
+    public static readonly DiagnosticDescriptor InjectMemberKeyOnMethod = Create(
+        "SGIOC020",
+        "IocInjectMember key on method",
+        "Key cannot be specified for method '{0}'; use a factory registration",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC021: <c>IocInjectMemberAttribute</c> without a registration of the type in its scope.</summary>
+    public static readonly DiagnosticDescriptor InjectMemberWithoutRegistration = Create(
+        "SGIOC021",
+        "IocInjectMember without registration in scope",
+        "'{0}' has no registration attribute in the same assembly and scope as this [IocInjectMember]",
+        DiagnosticSeverity.Error);
+
     /// <summary>SGIOC022: the type of a key value is not supported.</summary>
     public static readonly DiagnosticDescriptor UnsupportedKey = Create(
         "SGIOC022",
@@ -98,6 +119,13 @@ internal static class Descriptors
         "SGIOC023",
         "ServiceKey on non-keyed registration",
         "Parameter '{0}' has [ServiceKey] but '{1}' is registered without a key",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC024: <c>IocInjectMemberAttribute</c> names a member that has another injection setting.</summary>
+    public static readonly DiagnosticDescriptor InjectMemberAlreadyMarked = Create(
+        "SGIOC024",
+        "Member has two injection settings",
+        "Member '{0}' already has another injection setting: {1}",
         DiagnosticSeverity.Error);
 
     /// <summary>SGIOC025: an assembly-or-class attribute is on a class that is neither a module nor a container.</summary>
@@ -186,13 +214,17 @@ internal static class Descriptors
         InvalidServiceType,
         WrapperServiceType,
         AnyKeyRegistration,
+        NameofOverloaded,
         NameofTargetNotFound,
         InvalidInjectionMethod,
         LookupModeWithKey,
         InjectAndFromKeyedServices,
         KeyOnConstructorOrMethod,
+        InjectMemberKeyOnMethod,
+        InjectMemberWithoutRegistration,
         UnsupportedKey,
         ServiceKeyWithoutKey,
+        InjectMemberAlreadyMarked,
         AttributeOnPlainClass,
         UnsupportedOutputClass,
         InvalidServiceCollectionExtensionName,

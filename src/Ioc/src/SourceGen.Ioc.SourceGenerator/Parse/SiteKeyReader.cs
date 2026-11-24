@@ -143,7 +143,12 @@ internal static class SiteKeyReader
         return null;
     }
 
-    private static SiteKey FromResult(KeyResult result, SyntaxNode? fallbackLocation, List<DiagnosticInfo> errors)
+    /// <summary>The key specification of a key that <see cref="KeyReader"/> read.</summary>
+    /// <param name="result">The key or its error.</param>
+    /// <param name="fallbackLocation">Where the error goes when it has no node.</param>
+    /// <param name="errors">Receives the error.</param>
+    /// <returns>The key specification.</returns>
+    public static SiteKey FromResult(KeyResult result, SyntaxNode? fallbackLocation, List<DiagnosticInfo> errors)
     {
         if(result.ErrorId is { } id)
         {
