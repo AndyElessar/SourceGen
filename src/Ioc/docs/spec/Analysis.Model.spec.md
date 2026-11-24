@@ -329,6 +329,8 @@ For the types below with no key, the result is **built-in**. The generator does 
 
 A built-in service has no lifetime. It does not take part in the lifetime checks or in the check for circular dependencies.
 
+A container class cannot be registered (`SGIOC003`, `SGIOC004`). Thus no closed definition provides a container class, and a dependency on the container class of another container is a missing dependency.
+
 ### Single service
 
 1. When the candidates include a concrete registration, drop all derived registrations (a concrete registration wins).

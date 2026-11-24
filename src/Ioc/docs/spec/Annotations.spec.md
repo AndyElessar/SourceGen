@@ -351,6 +351,7 @@ The user gives the implementation type with `typeof()` or as the class that has 
 | --- | --- |
 | It is not a class, or it is an abstract type, a static type, or a delegate type | `SGIOC003` |
 | It uses a `file` type: the type, one of its outer types, or one of its type arguments is a `file` type | `SGIOC003` (see the note below) |
+| It is a container class: it has `IocContainerAttribute`. This includes a container class of a referenced assembly when its metadata keeps the attribute (the assembly was built with `SOURCEGEN`) | `SGIOC003` (see [ADR 2026112405](../adr/2026112405_ContainerClassIsNotAService.md)) |
 | It is a nested open generic (`Outer<>.Inner<>`: a containing type has type parameters that are not specified) | `SGIOC005` |
 
 A type argument that is not a concrete type (`typeof(Handler<T>)`) cannot be written in an attribute, so the generator does not handle it.
@@ -380,6 +381,7 @@ The generator then checks each service type that the expansion gives:
 | It is a value type, a pointer, `void`, or a type parameter itself | `SGIOC004` |
 | It is a wrapper type (see [Grammar of wrapper types](Analysis.Model.spec.md#grammar-of-wrapper-types)) | `SGIOC006` |
 | It is a built-in service type: `IServiceProvider`, `IServiceScopeFactory`, `IServiceProviderIsService`, `IServiceProviderIsKeyedService` | `SGIOC004`. The container supplies these itself, and a user registration causes an ambiguity. |
+| It is a container class: it has `IocContainerAttribute` | `SGIOC004`. A container class is a built-in service of its own container. |
 | It is a nested open generic | `SGIOC005` |
 
 ### Service types of a factory
@@ -393,9 +395,11 @@ The generator then checks each service type that the expansion gives:
 
 When the method returns `void`, `Task` (non-generic), `ValueTask`, `ValueTask<T>`, or a value type, the generator reports `SGIOC004`. A factory has no type of its own: the method is not a service type.
 
+The generator checks each service type of a factory with the table in [Expansion of service types](#expansion-of-service-types). For example, a factory that returns a container class causes `SGIOC004`.
+
 ### Service types of an instance
 
-When `ServiceTypes` is not set, the service type is the type of the field or property. When `ServiceTypes` is set, the service types are the specified types, and they can only be concrete types. When the type is a value type, the generator reports `SGIOC004`.
+When `ServiceTypes` is not set, the service type is the type of the field or property. When `ServiceTypes` is set, the service types are the specified types, and they can only be concrete types. When the type is a value type, the generator reports `SGIOC004`. The generator checks each service type of an instance with the table in [Expansion of service types](#expansion-of-service-types).
 
 ### Checks of a factory or instance member
 
