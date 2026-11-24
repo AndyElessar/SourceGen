@@ -176,7 +176,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:01d4fadad2bde88960044f6b953f6a0727144c06a8f0b49a210eeed57f55233e
+  content_hash: sha256:584afb2a04fec76da4be1c0687170179fde885cad137b06e02c91159a02e9b5e
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/sourcegen-spec-writing/references/rfc2119.md
@@ -311,7 +311,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:ae51313f52e61fc7bc3a4d398ce70ec8b9a46c30b1c6402ace13420a1b957746
+  content_hash: sha256:7606cb797a2d31b18069154a4d20b9ff5a0f23122d952389378ec162d257d715
 - kind: project-relative
   target: claude
   value: .claude/rules/csharp-source-generator.md
@@ -482,7 +482,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:01d4fadad2bde88960044f6b953f6a0727144c06a8f0b49a210eeed57f55233e
+  content_hash: sha256:584afb2a04fec76da4be1c0687170179fde885cad137b06e02c91159a02e9b5e
 - kind: project-relative
   target: claude
   value: .claude/skills/sourcegen-spec-writing/references/rfc2119.md
@@ -617,7 +617,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:ae51313f52e61fc7bc3a4d398ce70ec8b9a46c30b1c6402ace13420a1b957746
+  content_hash: sha256:7606cb797a2d31b18069154a4d20b9ff5a0f23122d952389378ec162d257d715
 - kind: project-relative
   target: copilot
   value: .github/instructions/csharp-source-generator.instructions.md
@@ -718,7 +718,7 @@ local_deployed_file_hashes:
   .agents/skills/sourcegen-release-commands/scripts/monitor-release.ps1: sha256:8283b66594d1d70a85878bc9e4d593be874fd7b5284d93d14eec119158a90602
   .agents/skills/sourcegen-release-commands/scripts/post-release.ps1: sha256:18e1531e370ba9b04cb78dcaa05c0dac6ca6cee9740f82b275463d888b1bd159
   .agents/skills/sourcegen-release-commands/scripts/release.ps1: sha256:9cb1ae1365380b810ecd82d11a2b9f9c99afc2b8401232da9805126b55d398b1
-  .agents/skills/sourcegen-spec-writing/SKILL.md: sha256:01d4fadad2bde88960044f6b953f6a0727144c06a8f0b49a210eeed57f55233e
+  .agents/skills/sourcegen-spec-writing/SKILL.md: sha256:584afb2a04fec76da4be1c0687170179fde885cad137b06e02c91159a02e9b5e
   .agents/skills/sourcegen-spec-writing/references/rfc2119.md: sha256:1dca065f52260ad5dab6187cdc37b062aba412cefee09d0c7fda75fedca67046
   .agents/skills/ste80-humanizer/LICENSE: sha256:e591401d6bdba6400e2987c275a07a84d1e484fcb4b1556f43e1e7ac4f36cf2d
   .agents/skills/ste80-humanizer/SKILL.md: sha256:d332cfd96680ebdc3e805a297e705d49a0a515903aea42231eeda96db81d50c7
@@ -729,7 +729,7 @@ local_deployed_file_hashes:
   .agents/skills/ste80-humanizer/references/word-swaps.md: sha256:d81abf0c559984800d8e75725150da1effef57047ecac1b09ab2f2c082cf68a1
   .agents/skills/ste80-humanizer/references/worked-example.md: sha256:474334f17a4ec2b45b51e9a64519085169f8cc7d907f77673ec81387b343780f
   .agents/skills/ste80-humanizer/scripts/ste_check.py: sha256:8a70fbcdc25906355933fca3e411aaadf8746d232b13dd54497c800bf4572430
-  .claude/agents/sourcegen-code-review.md: sha256:ae51313f52e61fc7bc3a4d398ce70ec8b9a46c30b1c6402ace13420a1b957746
+  .claude/agents/sourcegen-code-review.md: sha256:7606cb797a2d31b18069154a4d20b9ff5a0f23122d952389378ec162d257d715
   .claude/rules/csharp-source-generator.md: sha256:64dafaf4b7b55a05912df52d3f38fa7de95a56c618847fc48db07854019f5ffa
   .claude/rules/csharp-tunit.md: sha256:856cc30fe3516fbd453867d4bf50003212bb63437bc67d9433f1849da79cee26
   .claude/rules/csharp.md: sha256:2e0771ea2a19a995b3fdf09dee3aaf0d33723399ad334356edeaa60e26ddd603
@@ -742,7 +742,7 @@ local_deployed_file_hashes:
   .claude/skills/sourcegen-release-commands/scripts/monitor-release.ps1: sha256:8283b66594d1d70a85878bc9e4d593be874fd7b5284d93d14eec119158a90602
   .claude/skills/sourcegen-release-commands/scripts/post-release.ps1: sha256:18e1531e370ba9b04cb78dcaa05c0dac6ca6cee9740f82b275463d888b1bd159
   .claude/skills/sourcegen-release-commands/scripts/release.ps1: sha256:9cb1ae1365380b810ecd82d11a2b9f9c99afc2b8401232da9805126b55d398b1
-  .claude/skills/sourcegen-spec-writing/SKILL.md: sha256:01d4fadad2bde88960044f6b953f6a0727144c06a8f0b49a210eeed57f55233e
+  .claude/skills/sourcegen-spec-writing/SKILL.md: sha256:584afb2a04fec76da4be1c0687170179fde885cad137b06e02c91159a02e9b5e
   .claude/skills/sourcegen-spec-writing/references/rfc2119.md: sha256:1dca065f52260ad5dab6187cdc37b062aba412cefee09d0c7fda75fedca67046
   .claude/skills/ste80-humanizer/LICENSE: sha256:e591401d6bdba6400e2987c275a07a84d1e484fcb4b1556f43e1e7ac4f36cf2d
   .claude/skills/ste80-humanizer/SKILL.md: sha256:d332cfd96680ebdc3e805a297e705d49a0a515903aea42231eeda96db81d50c7
@@ -753,7 +753,7 @@ local_deployed_file_hashes:
   .claude/skills/ste80-humanizer/references/word-swaps.md: sha256:d81abf0c559984800d8e75725150da1effef57047ecac1b09ab2f2c082cf68a1
   .claude/skills/ste80-humanizer/references/worked-example.md: sha256:474334f17a4ec2b45b51e9a64519085169f8cc7d907f77673ec81387b343780f
   .claude/skills/ste80-humanizer/scripts/ste_check.py: sha256:8a70fbcdc25906355933fca3e411aaadf8746d232b13dd54497c800bf4572430
-  .github/agents/sourcegen-code-review.agent.md: sha256:ae51313f52e61fc7bc3a4d398ce70ec8b9a46c30b1c6402ace13420a1b957746
+  .github/agents/sourcegen-code-review.agent.md: sha256:7606cb797a2d31b18069154a4d20b9ff5a0f23122d952389378ec162d257d715
   .github/instructions/csharp-source-generator.instructions.md: sha256:5338c49d3545caece75bb1b8bb547bc87679c2043f7340f93c989e72b1287d3f
   .github/instructions/csharp-tunit.instructions.md: sha256:4e50991bcab08d56cc708ff8d8cc22d597612eb03795e978f34057c73a462b9c
   .github/instructions/csharp.instructions.md: sha256:bae93f32fb45ccce58d0ac27f309a3c1b15612a8699261f1366a47fb9eb6ead6

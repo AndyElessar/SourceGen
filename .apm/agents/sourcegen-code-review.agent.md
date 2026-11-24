@@ -43,7 +43,7 @@ Ordered by the project principles: correctness, AOT, performance, incremental pe
 
 ### Diagnostics and generation
 
-- IoC semantic diagnostics come from the same analysis result as the generated code (see `src/Ioc/docs/adr/2026112302_DiagnosticsByGenerator.md`). No second implementation of a rule exists in an analyzer. Every rule applies to both outputs (`Add{Name}` / MS.DI and the container) where the specification says so.
+- IoC semantic diagnostics come from the same analysis result as the generated code (see `src/Ioc/docs/adr/0001_IocRewrite/0001_DiagnosticsByGenerator.md`). No second implementation of a rule exists in an analyzer. Every rule applies to both outputs (`Add{Name}` / MS.DI and the container) where the specification says so.
 - The generation pipeline carries no `Diagnostic`, `Location`, or `SyntaxTree`. The diagnostic pipeline carries only equatable data and creates each `Location` from a `SyntaxTree` of the compilation at the output step.
 - A diagnostic is never suppressed for a shape the generator cannot handle, and never reported for a shape the generator handles.
 - Diagnostic message and description describe the actual cause (e.g. "implementation **or a decorator** has async inject methods").

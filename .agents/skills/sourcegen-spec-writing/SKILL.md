@@ -1,6 +1,6 @@
 ---
 name: sourcegen-spec-writing
-description: "Use when: creating or updating SourceGen design documents: the constitution, specifications (`src/<Domain>/docs/spec/*.spec.md`), and Architectural Decision Records (`src/<Domain>/docs/adr/*.md`). Covers document roles and precedence, layout, RFC 2119 keyword usage, writing style, examples, and when an ADR is required."
+description: "Use when: creating or updating SourceGen design documents: the constitution, specifications (`src/<Domain>/docs/spec/*.spec.md`), and Architectural Decision Records (`src/<Domain>/docs/adr/<NNNN_Set>/*.md`). Covers document roles and precedence, layout, RFC 2119 keyword usage, writing style, examples, and when an ADR is required."
 argument-hint: "design document(s) to create or update and the behavior or decision to describe"
 user-invocable: true
 ---
@@ -16,7 +16,7 @@ The design documents of a domain are in `src/<Domain>/docs/` (for IoC: `src/Ioc/
 | Constitution | `docs/Constitution.md` | Principles, scope and limits, terms, documented differences. It changes rarely. |
 | Specifications | `docs/spec/<Area>.spec.md` | The source of truth for current behavior. Rewrite in place when behavior changes. |
 | Index | `docs/spec/SPEC.spec.md` | MUST link every specification. Update it when you add, rename, or remove one. |
-| ADRs | `docs/adr/YYYYMMDDNN_Title.md` | Why a decision was made and which alternatives were rejected. Not a place to look up current behavior. |
+| ADRs | `docs/adr/NNNN_Set/NNNN_Title.md`, with a `README.md` for each set | Why a decision was made and which alternatives were rejected. Not a place to look up current behavior. |
 
 Rules:
 
@@ -37,13 +37,17 @@ A change that only fills in a detail stays in the specification.
 
 ADR format:
 
-- File name: `YYYYMMDDNN_Title.md`. The date, a two-digit sequence number for that date, and a title in PascalCase.
+- Sets: ADRs that belong together are one set, in a folder `docs/adr/NNNN_Set/`. `NNNN` is a four-digit sequence number of the set in the domain, and `Set` is a title in PascalCase. Example: `src/Ioc/docs/adr/0001_IocRewrite/`.
+- Entry point: the `README.md` of the set gives the shared background and links to each ADR of the set in a table. Add each new ADR of the set to that table.
+- File name: `NNNN_Title.md`. `NNNN` is a four-digit sequence number inside the set, starting at `0001`, and `Title` is in PascalCase. The file name has no date. The ADRs of a long effort are edited again while the work goes on, so a date says little.
+- Reference: write `{Set}/{NNNN}` and link to the file, for example "[ADR IocRewrite/0020](../adr/0001_IocRewrite/0020_NullableReferenceIsNotOptional.md)". Use the same form in code and test comments, for example `(ADR IocRewrite/0020)`.
 - Follow the MADR template (<https://github.com/adr/madr>) where it fits: YAML front matter with `status` and `date`, then `Context and problem statement`, `Decision outcome`, `Rejected options`, `Evidence`. Add or leave out sections when the content needs it.
-- ADRs of the same date that belong together are one set. The first ADR of the set (`NN` = `01`) gives the shared background and links to the others. Add a new ADR of the set to that index.
 - One ADR covers one topic and can hold several related decisions.
 - `Evidence` lists each tested fact that the decision relies on, with the versions of the tools and packages used. It also says what was not tested. Write it so that a reader understands it without the prototype.
 - Write a fact that supports several ADRs once, in the ADR that relies on it most. Link to it from the others.
-- When a later decision replaces an ADR, change the `status` of the old ADR to `superseded by` with a link. Keep its text.
+- Open and closed sets: the front matter of the `README.md` of a set has `status: open` while the work of the set goes on, and `status: closed` when it ends.
+  - In an open set, edit an ADR in place when its decision changes, so that it states the current decision. Move the earlier decision to `Rejected options` with the reason.
+  - In a closed set, do not change the decision of an ADR. A later decision gets a new ADR. Change the `status` of the old ADR to `superseded by` with a link, and keep its text.
 
 ## Language and style
 
@@ -70,7 +74,7 @@ C# example blocks are split with `#region Define:`, `#region Generate:`, `#regio
 - **No reference by number**: Do not refer to a part of another document by its number. The numbers change when an item or a section is added or removed. This applies to specifications, ADRs, and comments in code and tests.
   - An item of a numbered list or table: not "documented difference 21", "item 7", or "row 14". Describe the item in words, for example "a [documented difference](../Constitution.md#8-documented-differences-from-msdi)" or "the list of implicit rules".
   - A section: not "section 4.1" or "§8". Use the title of the section, for example "the section "Explicitness" of the constitution". A link can use the anchor that Markdown makes from the heading (`#41-explicitness`), but the link text uses the title.
-  - Stable identifiers are fine: diagnostic IDs (`SGIOC001`), ADR numbers, and the steps of a list in the same document.
+  - Stable identifiers are fine: diagnostic IDs (`SGIOC001`), ADR references (`IocRewrite/0020`), and the steps of a list in the same document.
 - **No history**: A specification states the current rule only. Do not mention a previous version of the library or how a rule changed. That belongs in an ADR.
 - **Truthfulness**: Describe only behavior that exists or is explicitly planned. Never guess. If the intended behavior is unclear, stop and ask.
 
