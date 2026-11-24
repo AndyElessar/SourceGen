@@ -98,7 +98,7 @@ public partial class KeyedDependencyTests
             public interface ILogger;
 
             [IocRegister(ServiceLifetime.Transient)]
-            public sealed class Consumer([IocInject(Key = "x")] ILogger logger, [FromKeyedServices("y")] ILogger? optional, [FromKeyedServices("z")] int count = 3);
+            public sealed class Consumer([IocInject(Key = "x")] ILogger logger, [FromKeyedServices("y")] ILogger? optional = null, [FromKeyedServices("z")] int count = 3);
 
             [IocContainer]
             public partial class {|SGIOC501:AppContainer|};
@@ -303,7 +303,7 @@ public partial class KeyedDependencyTests
             public sealed class Required([ServiceKey] string key);
 
             [IocRegister(ServiceLifetime.Transient)]
-            public sealed class Optional([ServiceKey] string? key, [ServiceKey] int number = 5);
+            public sealed class Optional([ServiceKey] string? key = null, [ServiceKey] int number = 5);
 
             [IocContainer(IntegrateServiceProvider = false)]
             public partial class AppContainer;
@@ -336,6 +336,7 @@ public partial class KeyedDependencyTests
     [Arguments("[FromKeyedServices({|SGIOC022:typeof(int)|})] IRepo repo", "")]
     [Arguments("[IocInject(KeyType = KeyType.Csharp, {|SGIOC007:Key = nameof(KeyedService.AnyKey)|})] IRepo repo", "")]
     [Arguments("[ServiceKey] string key", "SGIOC023")]
+    [Arguments("[ServiceKey] string? key", "SGIOC023")]
     public async Task SiteKeyError_DeclarationSkipped_NoOtherDiagnosticAndNoContainer(string parameter, string registrationError)
     {
         // The skipped declaration is an error node: the dependent User reports no SGIOC402, and the container is not

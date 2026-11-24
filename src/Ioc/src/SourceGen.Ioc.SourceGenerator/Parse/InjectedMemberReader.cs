@@ -216,10 +216,10 @@ internal static class InjectedMemberReader
         List<(InjectedMember, List<SyntaxReference?>)> members,
         CancellationToken cancellationToken)
     {
-        (ITypeSymbol type, NullableAnnotation annotation, bool initializer) = member switch
+        (ITypeSymbol type, bool initializer) = member switch
         {
-            IFieldSymbol field => (field.Type, field.NullableAnnotation, field.IsRequired),
-            IPropertySymbol property => (property.Type, property.NullableAnnotation, property.IsRequired || property.SetMethod is { IsInitOnly: true }),
+            IFieldSymbol field => (field.Type, field.IsRequired),
+            IPropertySymbol property => (property.Type, property.IsRequired || property.SetMethod is { IsInitOnly: true }),
             _ => throw new ArgumentOutOfRangeException(nameof(member)),
         };
 
@@ -239,7 +239,6 @@ internal static class InjectedMemberReader
         SyntaxReference? site = member.DeclaringSyntaxReferences.FirstOrDefault();
         OptionalMode optional = initializer ? OptionalMode.Required
             : InCompilation(member, compilation) && HasInitializer(site, cancellationToken) ? OptionalMode.KeepInitializer
-            : OptionalDependency.IsNullableReference(type, annotation) ? OptionalMode.Nullable
             : OptionalMode.Required;
         Dependency dependency = new(typeRef, member.Name, false, optional, null, type.IsValueType, siteKey.Mode, siteKey.Key);
         members.Add((new InjectedMember(initializer ? MemberKind.Initializer : MemberKind.Assignment, Identifier(member.Name), [dependency]), [site]));

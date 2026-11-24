@@ -11,18 +11,15 @@ internal static class OptionalDependency
     /// <returns>The mode and the default value expression.</returns>
     public static (OptionalMode Mode, string? DefaultValue) Of(IParameterSymbol parameter)
     {
-        // A default value wins, also when the type is nullable too
-        if(parameter.HasExplicitDefaultValue)
-        {
-            return (OptionalMode.Default, Format(parameter.ExplicitDefaultValue));
-        }
-
-        return IsNullableReference(parameter.Type, parameter.NullableAnnotation) ? (OptionalMode.Nullable, null) : (OptionalMode.Required, null);
+        // Only a default value makes a parameter optional. A nullable annotation does not (ADR 2026112504)
+        return parameter.HasExplicitDefaultValue
+            ? (OptionalMode.Default, Format(parameter.ExplicitDefaultValue))
+            : (OptionalMode.Required, null);
     }
 
     /// <summary>
-    /// Whether a type is a reference type annotated as nullable. Code without nullable annotations
-    /// (<c>#nullable disable</c>) is always required.
+    /// Whether the return type of a partial accessor is a reference type annotated as nullable. A partial accessor has
+    /// no place for a default value, so it is the only site that this annotation makes optional (ADR 2026112504).
     /// </summary>
     /// <param name="type">The type.</param>
     /// <param name="annotation">The annotation of the site.</param>

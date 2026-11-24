@@ -188,7 +188,7 @@ public enum Level
 
 /// <summary>Optional dependencies: one that is registered, and others that get <see langword="null"/> or their default value.</summary>
 [IocRegister(ServiceLifetime.Transient)]
-public sealed class OptionalConsumer(IClock? clock, IMissing? missing, string label = "none", int retries = 3, Level level = Level.High, int? limit = null)
+public sealed class OptionalConsumer(IClock? clock = null, IMissing? missing = null, string label = "none", int retries = 3, Level level = Level.High, int? limit = null)
 {
     public IClock? Clock => clock;
 
@@ -263,7 +263,7 @@ public interface IExternal
 /// dependency was already disposed when the container disposed this service.
 /// </summary>
 [IocRegister(ServiceLifetime.Scoped)]
-public sealed class ExternalConsumer(IExternal? external) : IDisposable
+public sealed class ExternalConsumer(IExternal? external = null) : IDisposable
 {
     public IExternal? External => external;
 
@@ -277,7 +277,7 @@ public sealed class ExternalConsumer(IExternal? external) : IDisposable
 /// <see cref="FragileSingleton"/> (ordering), so a failed constructor of the root has already used the fallback provider.
 /// </summary>
 [IocRegister(ServiceLifetime.Singleton)]
-public sealed class ExternalHolder(IExternal? external) : IDisposable
+public sealed class ExternalHolder(IExternal? external = null) : IDisposable
 {
     public IExternal? External => external;
 

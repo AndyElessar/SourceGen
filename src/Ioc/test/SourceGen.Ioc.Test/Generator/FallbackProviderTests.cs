@@ -27,7 +27,7 @@ public partial class FallbackProviderTests
         public sealed class SystemClock : IClock;
 
         [IocRegister(ServiceLifetime.Scoped)]
-        public sealed class Consumer(IClock clock, ILogger logger, IOptions? options, int retries = 3, int count = 0) : IDisposable
+        public sealed class Consumer(IClock clock, ILogger logger, IOptions? options = null, int retries = 3, int count = 0) : IDisposable
         {
             public void Dispose() { }
         }
@@ -106,7 +106,7 @@ public partial class FallbackProviderTests
             public interface IOptions;
 
             [IocRegister(ServiceLifetime.Transient)]
-            public sealed class Consumer(IOptions? options, int retries = 3);
+            public sealed class Consumer(IOptions? options = null, int retries = 3);
 
             [IocContainer]
             public partial class AppContainer;
@@ -142,7 +142,7 @@ public partial class FallbackProviderTests
             public sealed class SystemClock : IClock;
 
             [IocRegister(ServiceLifetime.Singleton)]
-            public sealed class Consumer(IEnumerable<IClock> clocks, Lazy<IClock>? lazy, IClock[] array);
+            public sealed class Consumer(IEnumerable<IClock> clocks, IClock[] array, Lazy<IClock>? lazy = null);
 
             [IocContainer]
             public partial class {|SGIOC402,SGIOC402,SGIOC402:AppContainer|};

@@ -63,7 +63,7 @@
             instance = new global::App.Consumer(
                 (global::App.IClock)c.__Get_SystemClock_28ece501(),
                 (global::App.ILogger)global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(c.__Fallback(), typeof(global::App.ILogger)),
-                (global::App.IOptions?)c.__Fallback().GetService(typeof(global::App.IOptions)),
+                (global::App.IOptions)c.__Fallback().GetService(typeof(global::App.IOptions))!,
                 c.__Fallback().GetService(typeof(global::System.Int32)) is global::System.Int32 v3 ? (global::System.Int32)v3 : (global::System.Int32)(3),
                 c.__Fallback().GetService(typeof(global::System.Int32)) is global::System.Int32 v4 ? (global::System.Int32)v4 : (global::System.Int32)(0));
             global::System.Threading.Interlocked.Exchange(ref __f_Consumer_fd0ac76a, instance);

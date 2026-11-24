@@ -461,8 +461,14 @@ internal static class ContainerEmitter
         string get = FallbackGet(provider, parameter, key);
         if(!parameter.IsValueType)
         {
-            return parameter.Optional == OptionalMode.Nullable
-                ? $"({type}?){get}"
+            if(parameter.Optional == OptionalMode.Nullable)
+            {
+                return $"({type}?){get}";
+            }
+
+            // The parameter type can be non-nullable (IRepo repo = null!), so a null default has "!"
+            return IsNullDefault(parameter)
+                ? $"({type}){get}!"
                 : $"({type}?){get} ?? ({type})({DefaultValue(parameter)})";
         }
 
@@ -477,6 +483,10 @@ internal static class ContainerEmitter
         => key is null
             ? $"{provider}.GetService(typeof({TypeNames.CSharp(dependency.Type)}))"
             : $"{DependencyInjection}.ServiceProviderKeyedServiceExtensions.GetKeyedService({provider}, typeof({TypeNames.CSharp(dependency.Type)}), {KeyNames.Expression(key)})";
+
+    /// <summary>Whether an optional reference type has <see langword="null"/> as its default value: it needs no <c>??</c>.</summary>
+    internal static bool IsNullDefault(Dependency dependency)
+        => !dependency.IsValueType && dependency.Optional == OptionalMode.Default && dependency.DefaultValue is null or "default";
 
     /// <summary>The type that a pattern tests: a pattern cannot use <c>Nullable&lt;U&gt;</c>, so the test is on <c>U</c>.</summary>
     internal static string PatternType(Dependency dependency)

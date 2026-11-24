@@ -12,15 +12,15 @@
             instance.BaseClock = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp);
             instance.Field = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp);
             instance.Repo = (global::App.IRepo)global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(sp, typeof(global::App.IRepo), "main");
-            instance.Nullable = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp);
+            if(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp) is { } v6) instance.Nullable = v6;
             if(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.ILog>(sp) is { } v7) instance.Log = v7;
-            instance.Virtual = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IClock>(sp);
+            instance.Virtual = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp);
             instance.InitBase(
                 global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp));
             instance.Initialize(
                 global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IClock>(sp),
                 "svc",
-                global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp) ?? (global::App.IRepo)(default!));
+                global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp)!);
             instance.@event();
         }
         catch

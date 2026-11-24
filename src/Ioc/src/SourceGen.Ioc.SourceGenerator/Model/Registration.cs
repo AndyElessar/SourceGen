@@ -104,7 +104,7 @@ internal enum OptionalMode
     /// <summary>A required dependency.</summary>
     Required,
 
-    /// <summary>A reference type annotated as nullable: it gets <see langword="null"/> when no service is found.</summary>
+    /// <summary>A partial accessor that returns a reference type annotated as nullable: it gets <see langword="null"/> when no service is found.</summary>
     Nullable,
 
     /// <summary>A parameter with a default value: it gets the default value when no service is found.</summary>

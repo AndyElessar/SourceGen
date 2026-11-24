@@ -228,13 +228,14 @@ internal static class ServiceCollectionExtensionEmitter
 
         switch(parameter.Optional)
         {
-            case OptionalMode.Nullable:
-                return $"{Provider}.GetService<{type}>(sp)";
             case OptionalMode.Default when parameter.IsValueType:
                 // The generic GetService<X>() throws for a value type without a registration. A pattern cannot use
                 // Nullable<U>, so the test is on U and the conversion to U? is implicit
                 string test = parameter.Type is NamedTypeRef { MetadataName: "System.Nullable`1", Arguments: [TypeRef underlying] } ? TypeNames.CSharp(underlying) : type;
                 return $"sp.GetService(typeof({type})) is {test} v{index} ? ({type})v{index} : ({type})({ContainerEmitter.DefaultValue(parameter)})";
+            case OptionalMode.Default when ContainerEmitter.IsNullDefault(parameter):
+                // The parameter type can be non-nullable (IRepo repo = null!), so the result has "!"
+                return $"{Provider}.GetService<{type}>(sp)!";
             case OptionalMode.Default:
                 return $"{Provider}.GetService<{type}>(sp) ?? ({type})({ContainerEmitter.DefaultValue(parameter)})";
             default:

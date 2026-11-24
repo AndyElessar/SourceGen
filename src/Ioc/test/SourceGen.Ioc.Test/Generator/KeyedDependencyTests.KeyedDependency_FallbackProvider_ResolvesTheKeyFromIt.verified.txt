@@ -4,7 +4,7 @@
         global::App.AppContainer c = this;
         global::App.Consumer instance = new global::App.Consumer(
             (global::App.ILogger)global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(c.__Fallback(), typeof(global::App.ILogger), "x"),
-            (global::App.ILogger?)global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetKeyedService(c.__Fallback(), typeof(global::App.ILogger), "y"),
+            (global::App.ILogger)global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetKeyedService(c.__Fallback(), typeof(global::App.ILogger), "y")!,
             global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetKeyedService(c.__Fallback(), typeof(global::System.Int32), "z") is global::System.Int32 v2 ? (global::System.Int32)v2 : (global::System.Int32)(3));
         return instance;
     }

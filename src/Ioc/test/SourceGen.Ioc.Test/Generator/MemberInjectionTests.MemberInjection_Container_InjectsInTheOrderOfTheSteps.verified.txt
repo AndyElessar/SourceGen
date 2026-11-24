@@ -23,7 +23,6 @@
                 instance.BaseClock = (global::App.IClock)c.__Get_SystemClock_28ece501();
                 instance.Field = (global::App.IClock)c.__Get_SystemClock_28ece501();
                 instance.Repo = (global::App.IRepo)c.__Get_MainRepo_9268831a();
-                instance.Nullable = (global::App.IRepo)(default!);
                 instance.Virtual = (global::App.IClock)c.__Get_SystemClock_28ece501();
                 instance.InitBase(
                     (global::App.IClock)c.__Get_SystemClock_28ece501());

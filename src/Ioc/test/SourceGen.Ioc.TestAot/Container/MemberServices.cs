@@ -30,7 +30,7 @@ public sealed class InjectedScoped(Journal journal) : InjectedBase, IDisposable
     public required Session Session { get; init; }
 
     [IocInject]
-    public IMissing? Missing { get; set; }
+    public IMissing? Missing { get; set; } = null;
 
     /// <summary>No service provides <see cref="string"/>, so the initializer stays.</summary>
     [IocInject]

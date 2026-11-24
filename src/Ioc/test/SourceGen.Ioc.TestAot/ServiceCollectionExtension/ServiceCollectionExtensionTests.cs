@@ -54,7 +54,7 @@ public class ServiceCollectionExtensionTests
 
         // MS.DI tracks the holder and each object that a factory delegate returns, so an instance is disposed one time
         // by its holder and one time by each service type that was resolved (ServiceCollection.Output.spec, "Number of
-        // disposals"; Constitution, documented difference 21). The order is the reverse of creation.
+        // disposals"; Constitution, "Documented differences from MS.DI"). The order is the reverse of creation.
         await Assert.That(unitOfWork.Session.Repository).IsSameReferenceAs(repository);
         await Assert.That(string.Join(",", journal.Disposed)).IsEqualTo("UnitOfWork,UnitOfWork,Session,Session,Repository,Repository,SystemClock,SystemClock");
     }

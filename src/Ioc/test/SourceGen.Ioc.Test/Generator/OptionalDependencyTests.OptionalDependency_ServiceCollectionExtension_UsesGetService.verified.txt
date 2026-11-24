@@ -26,10 +26,10 @@ public static class AppServiceCollectionExtensions
     {
         global::App.Options arg17 = sp.GetService(typeof(global::App.Options)) is global::App.Options v17 ? (global::App.Options)v17 : (global::App.Options)(default);
         return new global::App.Consumer(
-            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IClock>(sp),
-            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp),
-            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp) ?? (global::App.IRepo)(default!),
-            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp) ?? (global::App.IRepo)(default!),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IClock>(sp)!,
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp)!,
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp)!,
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IRepo>(sp)!,
             sp.GetService(typeof(global::System.Int32)) is global::System.Int32 v4 ? (global::System.Int32)v4 : (global::System.Int32)(3),
             sp.GetService(typeof(global::System.Int64)) is global::System.Int64 v5 ? (global::System.Int64)v5 : (global::System.Int64)(-1L),
             sp.GetService(typeof(global::System.UInt32)) is global::System.UInt32 v6 ? (global::System.UInt32)v6 : (global::System.UInt32)(7U),

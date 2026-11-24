@@ -50,7 +50,7 @@ public partial class MemberInjectionTests
             [IocInject] public required IClock Required { get; set; }
             [IocInject] public IClock Init { get; init; } = null!;
             [IocInject(Key = "main")] public IRepo Repo { get; set; }
-            [IocInject] public IRepo? Nullable { get; set; }
+            [IocInject] public IRepo? Nullable { get; set; } = null;
             [IocInject] public ILog Log { get; set; } = new NullLog();
             public override IClock? Virtual { get; set; }
             public new IClock Hidden { get; set; } = null!;
@@ -287,6 +287,28 @@ public partial class MemberInjectionTests
             {
                 [IocInject] public IClock Property { get; set; } {{initializer}}
                 [IocInject] public IClock Field {{initializer}}
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class {|SGIOC402,SGIOC402:AppContainer|};
+            """);
+
+        await Assert.That(result.GetGeneratedSource("AppContainer.g.cs")).IsNull();
+    }
+
+    [Test]
+    public async Task SGIOC402_NullableMemberWithoutInitializer_Required()
+    {
+        // A nullable annotation does not make a member optional (ADR 2026112504)
+        GeneratorTestResult result = await RunAsync(Usings + """
+            public interface IClock;
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public sealed class Service
+            {
+                [IocInject] public IClock? Property { get; set; }
+                [IocInject] public IClock? Field;
+                [IocInject] public IClock? Kept { get; set; } = null;
             }
 
             [IocContainer(IntegrateServiceProvider = false)]

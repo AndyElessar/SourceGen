@@ -28,8 +28,8 @@ public partial class OptionalDependencyTests
 
         [IocRegister(ServiceLifetime.Transient)]
         public sealed class Consumer(
-            IClock? clock,
-            IRepo? repo,
+            IClock? clock = null,
+            IRepo? repo = null,
             IRepo? other = null,
             IRepo withDefault = null!,
             int retries = 3,
@@ -101,6 +101,40 @@ public partial class OptionalDependencyTests
 
         await result.VerifyCompilableAsync();
         await Assert.That(result.GetGeneratedSource("AppContainer.g.cs")).Contains("(global::System.DateTime)(new global::System.DateTime(638000000000000000L))");
+    }
+
+    [Test]
+    public async Task SGIOC402_NullableReferenceWithoutDefaultValue_Required()
+    {
+        // Only a default value makes a parameter optional, as in MS.DI (ADR 2026112504)
+        GeneratorTestResult result = await RunAsync(Usings + """
+            public interface IRepo;
+
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer(IRepo? repo);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class {|SGIOC402:AppContainer|};
+            """);
+
+        await Assert.That(result.GeneratedSources).IsEmpty();
+    }
+
+    [Test]
+    public async Task NullableReferenceWithoutDefaultValue_ServiceCollectionExtension_UsesGetRequiredService()
+    {
+        GeneratorTestResult result = await RunAsync(
+            Usings + """
+            public interface IRepo;
+
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer(IRepo? repo);
+            """,
+            new() { GlobalOptions = new Dictionary<string, string> { ["build_property.RootNamespace"] = "App" } },
+            "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]");
+
+        await result.VerifyCompilableAsync();
+        await Assert.That(result.GetGeneratedSource("AppServiceCollectionExtensions.g.cs")).Contains("GetRequiredService<global::App.IRepo>(sp)");
     }
 
     [Test]
