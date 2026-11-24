@@ -160,7 +160,7 @@ Error. Do not generate the output. The definite check reports one time in each a
 | ID | Title | Message | Rule |
 | --- | --- | --- | --- |
 | `SGIOC301` | Circular dependency | `Circular dependency: {0}` (`{0}`: the instance definitions joined with ` → `, where the first and the last are the same) | [Analysis model: Circular dependencies](Analysis.Model.spec.md#circular-dependencies) |
-| `SGIOC302` | Captive dependency | `Singleton '{0}' depends on scoped '{1}'{2}` (`{2}`: the path, when the dependency goes through Transient services) | [Analysis model: Lifetime checks](Analysis.Model.spec.md#lifetime-checks) |
+| `SGIOC302` | Captive dependency | `Singleton '{0}' depends on scoped '{1}'{2}` (`{2}`: empty when the Singleton depends on the Scoped service directly. Otherwise ` through ` and the path from the Singleton to the Scoped service, with the closed definitions joined with ` → `) | [Analysis model: Lifetime checks](Analysis.Model.spec.md#lifetime-checks) |
 | `SGIOC303` | Asynchronous service injected synchronously | `'{0}' is initialized asynchronously; '{1}' must depend on Task<{2}>` | [Analysis model: Asynchronous classification](Analysis.Model.spec.md#asynchronous-classification) |
 | `SGIOC304` | Unsupported wrapper combination | `'{0}' is not a supported combination of wrapper types` | [Analysis model: Grammar of wrapper types](Analysis.Model.spec.md#grammar-of-wrapper-types) |
 | `SGIOC305` | Invalid Func with arguments | `'{0}' cannot be generated: {1}` | [Analysis model: Mapping of `Func<..., T>`](Analysis.Model.spec.md#mapping-of-func-t) |
@@ -174,7 +174,7 @@ Error. Do not generate the output. Only a container reports `SGIOC401` to `SGIOC
 | --- | --- | --- | --- |
 | `SGIOC401` | Ambiguous dependency | `'{0}' requires a single '{1}' but {2} registrations provide it: {3}; use a key or depend on a collection` | [Analysis model: Single service](Analysis.Model.spec.md#single-service) |
 | `SGIOC402` | Missing dependency | `'{0}' requires '{1}', which is not registered` | Same as above |
-| `SGIOC403` | Disposable Transient | `Transient '{0}' is disposable ({1}); the container does not track transient services` | [Analysis model: Disposable Transient](Analysis.Model.spec.md#disposable-transient) |
+| `SGIOC403` | Disposable Transient | `Transient '{0}' is disposable ({1}); the container does not track transient services` (`{1}`: `IDisposable`, `IAsyncDisposable`, or `IDisposable, IAsyncDisposable`) | [Analysis model: Disposable Transient](Analysis.Model.spec.md#disposable-transient) |
 | `SGIOC404` | Duplicate dictionary key | `Dictionary of '{0}' has more than one registration for key '{1}': {2}` | [Analysis model: Multiple services](Analysis.Model.spec.md#multiple-services) |
 | `SGIOC405` | Open generic cannot be closed here | `'{0}' must be closed with '{1}', which is not accessible from this assembly` | [Module output: Closing entry](Module.Output.spec.md#closing-entry) |
 

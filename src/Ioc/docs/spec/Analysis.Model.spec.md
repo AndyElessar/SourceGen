@@ -454,13 +454,13 @@ The definite check is the check of the assembly view. It uses only definite edge
 | Disposable Transient | `SGIOC403` | No | Yes |
 | Duplicate key of a Dictionary | `SGIOC404` | No | Yes |
 | Closing needs a type that cannot be written | `SGIOC405` | Only in an assembly that generates the service collection extension (it is the composition root) | Yes |
-| Singleton depends on Transient (Warning) | `SGIOC502` | Definite edges, and the dependency site is declared in this assembly | All |
-| Scoped depends on Transient (Warning) | `SGIOC503` | Definite edges, and the dependency site is declared in this assembly | All |
+| Singleton depends on Transient (Warning) | `SGIOC502` | Definite edges | All |
+| Scoped depends on Transient (Warning) | `SGIOC503` | Definite edges | All |
 | Definite ambiguity in the service collection extension (Warning) | `SGIOC504` | Only in an assembly that generates the service collection extension. See [Definite ambiguity](ServiceCollection.Output.spec.md#definite-ambiguity) | No |
 
 Reporting rules:
 
-- The definite check reports one time for each assembly, at the location of the dependency site (parameter or member).
+- The definite check reports one time for each assembly, at the location of the dependency site (parameter or member). A cycle is reported at the first edge of its message. A captive dependency is reported at the first edge of its path, which is a dependency site of the Singleton. When the dependency site is not declared in source (a type from metadata), the definite check reports at the registration attribute that brings the type in.
 - The full check reports for each container, on the container class. In the full check of a normal container, a problem that the definite check of this assembly already reported (the same diagnostic and the same edge) is not reported again. That container is still not generated.
 - The private definitions of an `ExplicitOnly` container are not in the assembly view. The full check reports all their problems.
 - The Warnings (`SGIOC502`, `SGIOC503`) follow the same rules, but they have no effect on generation. For an edge whose dependency site comes from an imported module, the definite check does not report, because the assembly that declares it has already checked it. The full check still reports, because the registrations of the importer can change the target that the edge resolves to.
@@ -474,7 +474,7 @@ The nodes of the graph are the closed definitions. An edge is "closed definition
 - An inner parameter is not an edge.
 - Built-in services and the fallback provider are not nodes.
 
-When the graph has a cycle that consists only of edges that are not deferred, the generator reports `SGIOC301`. It reports one time for each cycle, and the message lists the closed definitions on the cycle.
+When the graph has a cycle that consists only of edges that are not deferred, the generator reports `SGIOC301`. It reports one time for each strongly connected component that has a cycle (see [ADR 2026112404](../adr/2026112404_CycleReportForEachComponent.md)). The message lists the closed definitions of the shortest cycle through the first closed definition of the component in the ordering. The cycle starts and ends at that closed definition.
 
 An implementation type that asks for a collection of a service type that it provides itself (`Composite : IFoo` depends on `IEnumerable<IFoo>`) is a cycle.
 
@@ -486,7 +486,7 @@ For each edge of each closed definition in the singleton context (deferred edges
 
 | Lifetime of the target | Shape of the edge | Result |
 | --- | --- | --- |
-| Scoped | Any | `SGIOC302` |
+| Scoped | Any | `SGIOC302`. The generator reports each pair of a Singleton and a Scoped closed definition one time, with the shortest path |
 | Transient | Through `Func<...>` or `Func<..., ...>` | Valid. The target joins the singleton context |
 | Transient | Other (direct, `Lazy`, `Task`, Collection, Dictionary, `KeyValuePair`) | Valid. The target joins the singleton context. When the dependency site is Singleton, the generator reports `SGIOC502` (Warning) |
 | Singleton | Any | Valid |
