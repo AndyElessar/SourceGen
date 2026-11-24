@@ -49,7 +49,7 @@ ADR format:
 
 - All design documents are in English.
 - Invoke the `ste80-humanizer` skill and write in that style: one idea per sentence, active voice, simple tenses, plain words, no semicolons, no dashes.
-- Use one term for one thing. The terms are in section 3 of the constitution. A term that belongs to one output only is defined in its specification.
+- Use one term for one thing. The terms are in the "Terms" section of the constitution. A term that belongs to one output only is defined in its specification.
 
 ## Specification structure
 
@@ -67,6 +67,10 @@ C# example blocks are split with `#region Define:`, `#region Generate:`, `#regio
 - **Precision**: One unambiguous condition and action per rule. Include edge cases and defaults. Reference diagnostic IDs (for example `SGIOC001`) when you describe a constraint.
 - **Examples**: At least one C# example per major feature, with valid and invalid usage. Keep examples minimal.
 - **Consistency**: Reuse existing table structures. Do not restructure existing content unless asked.
+- **No reference by number**: Do not refer to a part of another document by its number. The numbers change when an item or a section is added or removed. This applies to specifications, ADRs, and comments in code and tests.
+  - An item of a numbered list or table: not "documented difference 21", "item 7", or "row 14". Describe the item in words, for example "a [documented difference](../Constitution.md#8-documented-differences-from-msdi)" or "the list of implicit rules".
+  - A section: not "section 4.1" or "§8". Use the title of the section, for example "the section "Explicitness" of the constitution". A link can use the anchor that Markdown makes from the heading (`#41-explicitness`), but the link text uses the title.
+  - Stable identifiers are fine: diagnostic IDs (`SGIOC001`), ADR numbers, and the steps of a list in the same document.
 - **No history**: A specification states the current rule only. Do not mention a previous version of the library or how a rule changed. That belongs in an ADR.
 - **Truthfulness**: Describe only behavior that exists or is explicitly planned. Never guess. If the intended behavior is unclear, stop and ask.
 
