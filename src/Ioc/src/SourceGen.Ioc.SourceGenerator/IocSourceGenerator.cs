@@ -44,22 +44,9 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
             .Select(static (d, ct) => Definitions.Merge(d, ct))
             .WithTrackingName(TrackingNames.Analysis);
 
-        IncrementalValuesProvider<ContainerResult> containers = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                ContainerReader.Attribute,
-                static (node, _) => node is ClassDeclarationSyntax,
-                static (ctx, ct) => ContainerReader.Read(ctx, ct));
-
-        // The container classes are built-in services, not nodes of the graph
-        IncrementalValueProvider<ImmutableEquatableArray<NamedTypeRef>> containerTypes = containers
-            .Select(static (r, _) => r.Container?.Type)
-            .Collect()
-            .Select(static (types, _) => types.OfType<NamedTypeRef>().OrderBy(static t => t.CanonicalString, StringComparer.Ordinal).ToImmutableEquatableArray());
-
         // The definite check of the assembly view (Analysis.Model.spec, "Two levels of checks")
         IncrementalValueProvider<ImmutableEquatableArray<GraphProblem>> definiteProblems = definitions
-            .Combine(containerTypes)
-            .Select(static (input, ct) => DependencyGraph.DefiniteCheck(input.Left, input.Right, ct));
+            .Select(static (d, ct) => DependencyGraph.DefiniteCheck(d, ct));
 
         context.RegisterSourceOutput(
             results.Combine(definiteProblems).Combine(context.CompilationProvider),
@@ -111,7 +98,7 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                 }
             });
 
-        InitializeContainers(context, containers, results, declarations, definitions, definiteProblems);
+        InitializeContainers(context, results, declarations, definitions, definiteProblems);
     }
 
     /// <summary>The site of each constructor parameter. A parameter declared in source wins over the attribute of a declaration.</summary>
@@ -152,12 +139,17 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
 
     private static void InitializeContainers(
         IncrementalGeneratorInitializationContext context,
-        IncrementalValuesProvider<ContainerResult> containers,
         IncrementalValueProvider<ImmutableEquatableArray<DeclarationResult>> results,
         IncrementalValueProvider<ImmutableEquatableArray<RegistrationDeclaration>> declarations,
         IncrementalValueProvider<ImmutableEquatableArray<ClosedDefinition>> definitions,
         IncrementalValueProvider<ImmutableEquatableArray<GraphProblem>> definiteProblems)
     {
+        IncrementalValuesProvider<ContainerResult> containers = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                ContainerReader.Attribute,
+                static (node, _) => node is ClassDeclarationSyntax,
+                static (ctx, ct) => ContainerReader.Read(ctx, ct));
+
         // The skipped instance definitions: a dependency on one of them, by the implementation type or by a known
         // service type, is not a missing dependency
         IncrementalValueProvider<ImmutableEquatableArray<TypeRef>> errorNodes = declarations

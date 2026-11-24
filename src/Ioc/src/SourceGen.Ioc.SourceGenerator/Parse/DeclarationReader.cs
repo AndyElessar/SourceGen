@@ -208,6 +208,10 @@ internal static class DeclarationReader
                 return "it is abstract";
             }
 
+            if(IsContainer(type))
+            {
+                return "it is a container class";
+            }
 
             // Only a file type: the generated code cannot name it. Other accessibility errors are reported by the
             // compiler (Constitution, "Diagnostic policy").
@@ -294,9 +298,20 @@ internal static class DeclarationReader
                 return (Descriptors.InvalidServiceType.Id, "it is a value type");
             }
 
+            if(IsContainer(type))
+            {
+                return (Descriptors.InvalidServiceType.Id, "it is a container class");
+            }
 
             return BuiltInServices.IsBuiltIn(type) ? (Descriptors.InvalidServiceType.Id, "it is a built-in service") : null;
         }
+
+        /// <summary>
+        /// A container class is a built-in service of its own container and cannot be registered (Annotations.spec,
+        /// "Checks of the implementation type").
+        /// </summary>
+        private static bool IsContainer(ITypeSymbol type)
+            => type.GetAttributes().Any(static a => a.AttributeClass is { Name: "IocContainerAttribute" } c && c.ToDisplayString() == ContainerReader.Attribute);
 
         /// <summary>The constructor parameters.</summary>
         /// <returns>The types, or <see langword="null"/> when a parameter cannot take a generated argument.</returns>

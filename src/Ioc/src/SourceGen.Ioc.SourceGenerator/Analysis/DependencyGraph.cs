@@ -52,13 +52,12 @@ internal static class DependencyGraph
 
     /// <summary>
     /// Gets the edges of the assembly view for each closed definition, in the order of its parameters. A container
-    /// class is a built-in service and not a node (Analysis.Model.spec, "Built-in services").
+    /// class cannot be registered, so it has no provider and is not a node (Analysis.Model.spec, "Built-in services").
     /// </summary>
     /// <param name="definitions">The closed definitions.</param>
     /// <param name="providers">The providers of each service type.</param>
-    /// <param name="containers">The container classes of the assembly.</param>
     /// <returns>The edges, by the index of the closed definition that owns them.</returns>
-    private static List<GraphEdge>[] Edges(ImmutableEquatableArray<ClosedDefinition> definitions, Dictionary<TypeRef, List<int>> providers, HashSet<TypeRef> containers)
+    private static List<GraphEdge>[] Edges(ImmutableEquatableArray<ClosedDefinition> definitions, Dictionary<TypeRef, List<int>> providers)
     {
         List<GraphEdge>[] edges = new List<GraphEdge>[definitions.Length];
         for(int i = 0; i < definitions.Length; i++)
@@ -67,7 +66,7 @@ internal static class DependencyGraph
             ImmutableEquatableArray<ConstructorParameter> parameters = definitions[i].ConstructorParameters;
             for(int p = 0; p < parameters.Length; p++)
             {
-                if(!containers.Contains(parameters[p].Type) && providers.TryGetValue(parameters[p].Type, out List<int>? candidates) && candidates.Count == 1)
+                if(providers.TryGetValue(parameters[p].Type, out List<int>? candidates) && candidates.Count == 1)
                 {
                     edges[i].Add(new GraphEdge(i, p, candidates[0]));
                 }
@@ -79,15 +78,11 @@ internal static class DependencyGraph
 
     /// <summary>The definite check of the assembly view (Analysis.Model.spec, "Two levels of checks").</summary>
     /// <param name="definitions">The closed definitions of the assembly view.</param>
-    /// <param name="containers">The container classes of the assembly.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The problems, each at its dependency site.</returns>
-    public static ImmutableEquatableArray<GraphProblem> DefiniteCheck(
-        ImmutableEquatableArray<ClosedDefinition> definitions,
-        ImmutableEquatableArray<NamedTypeRef> containers,
-        CancellationToken cancellationToken)
+    public static ImmutableEquatableArray<GraphProblem> DefiniteCheck(ImmutableEquatableArray<ClosedDefinition> definitions, CancellationToken cancellationToken)
     {
-        List<GraphEdge>[] edges = Edges(definitions, Providers(definitions), [.. containers]);
+        List<GraphEdge>[] edges = Edges(definitions, Providers(definitions));
         cancellationToken.ThrowIfCancellationRequested();
         return Cycles(definitions, edges)
             .Concat(Captives(definitions, edges))

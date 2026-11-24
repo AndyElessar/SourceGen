@@ -254,17 +254,14 @@ public class DependencyGraphTests
     }
 
     [Test]
-    [Arguments("Transient")]
-    [Arguments("Scoped")]
-    public async Task ContainerClass_AsDependency_IsNotANode(string lifetime)
+    public async Task ContainerClass_AsDependency_IsABuiltInServiceOfItsOwnContainer()
     {
-        GeneratorTestResult result = await RunAsync(Usings + $$"""
+        GeneratorTestResult result = await RunAsync(Usings + """
             namespace App;
 
             [IocRegister(ServiceLifetime.Singleton)]
             public sealed class Holder(AppContainer container);
 
-            [IocRegister(ServiceLifetime.{{lifetime}})]
             [IocContainer(IntegrateServiceProvider = false)]
             public partial class AppContainer;
             """);
@@ -273,54 +270,65 @@ public class DependencyGraphTests
     }
 
     [Test]
-    [Arguments("Scoped", "SGIOC302")]
-    [Arguments("Transient", "SGIOC502")]
-    public async Task ContainerClass_RegisteredInAnotherContainer_ReportedOnThatContainer(string lifetime, string id)
-    {
-        GeneratorTestResult result = await RunAsync(Usings + $$"""
-            namespace App;
-
-            [IocRegister(ServiceLifetime.Singleton)]
-            public sealed class Holder(FirstContainer container);
-
-            [IocRegister(ServiceLifetime.{{lifetime}})]
-            [IocContainer(IntegrateServiceProvider = false)]
-            public partial class FirstContainer;
-
-            [IocContainer(IntegrateServiceProvider = false)]
-            public partial class {|{{id}}:SecondContainer|};
-            """);
-
-        await Assert.That(HasSource(result, "FirstContainer.g.cs")).IsTrue();
-    }
-
-    [Test]
-    public async Task ContainerClass_SecondCaptiveAtTheSameSite_ReportedOnThatContainer()
+    public async Task ContainerClass_AsDependencyInAnotherContainer_IsMissing()
     {
         GeneratorTestResult result = await RunAsync(Usings + """
             namespace App;
 
             [IocRegister(ServiceLifetime.Singleton)]
-            public sealed class Holder({|SGIOC302,SGIOC502:Reader reader|});
+            public sealed class Holder(FirstContainer container);
 
-            [IocRegister(ServiceLifetime.Transient)]
-            public sealed class Reader(Session session, FirstContainer container);
-
-            [IocRegister(ServiceLifetime.Scoped)]
-            public sealed class Session;
-
-            [IocRegister(ServiceLifetime.Scoped)]
             [IocContainer(IntegrateServiceProvider = false)]
             public partial class FirstContainer;
 
             [IocContainer(IntegrateServiceProvider = false)]
-            public partial class {|SGIOC302:SecondContainer|};
+            public partial class {|SGIOC402:SecondContainer|};
             """);
 
-        string[] messages = [.. result.ReportedDiagnostics.Where(static d => d.Id == "SGIOC302").Select(static d => d.GetMessage(CultureInfo.InvariantCulture)).Order(StringComparer.Ordinal)];
-        await Assert.That(messages).IsEquivalentTo([
-            "Singleton 'App.Holder' depends on scoped 'App.FirstContainer' through App.Holder → App.Reader → App.FirstContainer",
-            "Singleton 'App.Holder' depends on scoped 'App.Session' through App.Holder → App.Reader → App.Session"]);
+        await Assert.That(HasSource(result, "FirstContainer.g.cs")).IsTrue();
+        await Assert.That(HasSource(result, "SecondContainer.g.cs")).IsFalse();
+    }
+
+    [Test]
+    public async Task ContainerClass_RegisteredWithIocRegister_ReportsSGIOC003()
+    {
+        GeneratorTestResult result = await RunAsync(Usings + """
+            namespace App;
+
+            [{|SGIOC003:IocRegister(ServiceLifetime.Scoped)|}]
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class AppContainer;
+            """);
+
+        await Assert.That(Message(result, "SGIOC003")).IsEqualTo("'App.AppContainer' cannot be an implementation or decorator type: it is a container class");
+        await Assert.That(HasSource(result, "AppContainer.g.cs")).IsTrue();
+    }
+
+    [Test]
+    public async Task ContainerClass_RegisteredWithIocRegisterFor_ReportsSGIOC003()
+        => await RunAsync(Usings + """
+            [assembly: IocRegisterFor({|SGIOC003:typeof(App.AppContainer)|}, ServiceLifetime.Singleton)]
+
+            namespace App;
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class AppContainer;
+            """);
+
+    [Test]
+    public async Task ContainerClass_AsServiceType_ReportsSGIOC004()
+    {
+        GeneratorTestResult result = await RunAsync(Usings + """
+            namespace App;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [{|SGIOC004:typeof(AppContainer)|}])]
+            public sealed class Derived : AppContainer;
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class AppContainer;
+            """);
+
+        await Assert.That(Message(result, "SGIOC004")).IsEqualTo("'App.AppContainer' cannot be a service type of 'App.Derived': it is a container class");
     }
 
     [Test]
