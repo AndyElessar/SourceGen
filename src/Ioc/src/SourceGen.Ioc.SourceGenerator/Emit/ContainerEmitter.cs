@@ -4,9 +4,11 @@ using SourceGen.Ioc.Parse;
 
 namespace SourceGen.Ioc.Emit;
 
-/// <summary>Generates the container (Container.Output.spec) without a fallback provider.</summary>
+/// <summary>Generates the container (Container.Output.spec).</summary>
 internal static class ContainerEmitter
 {
+    private const string ServiceProvider = "global::System.IServiceProvider";
+    private const string DependencyInjection = "global::Microsoft.Extensions.DependencyInjection";
     private const string Lock = "global::System.Threading.Lock";
     private const string Exception = "global::System.Exception";
     private const string ExceptionList = "global::System.Collections.Generic.List<global::System.Exception>";
@@ -59,7 +61,7 @@ internal static class ContainerEmitter
 
         WriteAccessors(writer, plan);
         WriteLookup(writer, plan, self);
-        WriteServiceProvider(writer, self);
+        WriteServiceProvider(writer, self, plan.Container.IntegrateServiceProvider);
         WriteDisposal(writer, plan);
         WriteHelpers(writer, plan);
 
@@ -93,6 +95,12 @@ internal static class ContainerEmitter
         writer.WriteLine('{');
         writer.Indentation++;
         writer.WriteLine($"public {self} Root = null!;");
+        if(plan.Container.IntegrateServiceProvider)
+        {
+            writer.WriteLine($"public {ServiceProvider} Fallback = null!;");
+            writer.WriteLine("public bool OwnsFallback;");
+        }
+
         foreach(DefinitionPlan definition in plan.Definitions.Where(static d => d.Definition.Lifetime == Lifetime.Singleton))
         {
             if(locks)
@@ -112,6 +120,12 @@ internal static class ContainerEmitter
         writer.WriteLine("private readonly bool __isRoot;");
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine("private int __disposed;");
+        if(plan.Container.IntegrateServiceProvider)
+        {
+            // The fallback scope of a scope, created at its first use (Container.Output.spec, "Which provider resolves")
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine($"private {DependencyInjection}.IServiceScope? __fallbackScope;");
+        }
         if(locks)
         {
             writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
@@ -131,11 +145,33 @@ internal static class ContainerEmitter
         int eager = plan.Container.EagerResolveOptions;
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-        writer.WriteLine($"public {name}()");
+        if(plan.Container.IntegrateServiceProvider)
+        {
+            // Only the constructor with the fallback provider: each missing dependency goes to it (Container.Output.spec,
+            // "Constructor"). The private one lets ServiceProviderFactory give the root the provider that it creates.
+            writer.WriteLine($"public {name}({ServiceProvider} fallbackProvider)");
+            writer.WriteLine("    : this(fallbackProvider, false)");
+            writer.WriteLine('{');
+            writer.WriteLine('}');
+            writer.WriteLine();
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine($"private {name}({ServiceProvider} fallbackProvider, bool ownsFallback)");
+        }
+        else
+        {
+            writer.WriteLine($"public {name}()");
+        }
+
         writer.WriteLine('{');
         writer.Indentation++;
         writer.WriteLine("__singletons = new __Singletons();");
         writer.WriteLine("__singletons.Root = this;");
+        if(plan.Container.IntegrateServiceProvider)
+        {
+            writer.WriteLine("__singletons.Fallback = fallbackProvider ?? throw new global::System.ArgumentNullException(nameof(fallbackProvider));");
+            writer.WriteLine("__singletons.OwnsFallback = ownsFallback;");
+        }
+
         writer.WriteLine("__isRoot = true;");
         if((eager & EagerSingleton) != 0)
         {
@@ -390,8 +426,36 @@ internal static class ContainerEmitter
             ArgumentKind.Self => $"({type})c",
             ArgumentKind.Root => $"({type})c.__singletons.Root",
             ArgumentKind.Default => $"({type})({DefaultValue(parameter)})",
+            ArgumentKind.Fallback => FallbackArgument("c.__Fallback()", parameter, index),
             _ => $"({type})c.{Get(plan.Definitions[argument.Target].Definition)}()",
         };
+    }
+
+    /// <summary>
+    /// The expression that resolves a missing dependency from the fallback provider (Container.Output.spec, "Behavior for
+    /// each request"). A required one throws when the result is <see langword="null"/>. An optional one uses its default
+    /// value. A value type is unboxed: a pattern cannot use <c>Nullable&lt;U&gt;</c>, so the test is on <c>U</c>.
+    /// </summary>
+    /// <param name="provider">The expression of the fallback provider.</param>
+    /// <param name="parameter">The dependency.</param>
+    /// <param name="index">The index of the dependency, for the name of a pattern variable.</param>
+    internal static string FallbackArgument(string provider, ConstructorParameter parameter, int index)
+    {
+        string type = TypeNames.CSharp(parameter.Type);
+        if(parameter.Optional == OptionalMode.Required)
+        {
+            return $"({type}){DependencyInjection}.ServiceProviderServiceExtensions.GetRequiredService({provider}, typeof({type}))";
+        }
+
+        if(!parameter.IsValueType)
+        {
+            return parameter.Optional == OptionalMode.Nullable
+                ? $"({type}?){provider}.GetService(typeof({type}))"
+                : $"({type}?){provider}.GetService(typeof({type})) ?? ({type})({DefaultValue(parameter)})";
+        }
+
+        string test = parameter.Type is NamedTypeRef { MetadataName: "System.Nullable`1", Arguments: [TypeRef underlying] } ? TypeNames.CSharp(underlying) : type;
+        return $"{provider}.GetService(typeof({type})) is {test} v{index} ? ({type})v{index} : ({type})({DefaultValue(parameter)})";
     }
 
     /// <summary>
@@ -439,6 +503,10 @@ internal static class ContainerEmitter
                     break;
                 case ArgumentKind.Default:
                     writer.WriteLine("return null;");
+                    break;
+                case ArgumentKind.Fallback:
+                    ConstructorParameter dependency = new(member.Type, member.Name, false, member.IsOptional ? OptionalMode.Nullable : OptionalMode.Required);
+                    writer.WriteLine($"return {FallbackArgument("__Fallback()", dependency, 0)};");
                     break;
                 default:
                     writer.WriteLine($"return ({member.ReturnType}){Get(plan.Definitions[accessor.Argument.Target].Definition)}();");
@@ -490,7 +558,16 @@ internal static class ContainerEmitter
                 writer.WriteLine($"{{ typeof({service}), static c => throw new {InvalidOperation}(\"More than one registration provides '{TypeNames.Display(entry.ServiceType)}': {names}.\") }},");
             }
 
-            writer.WriteLine($"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static c => new {service}[] {{ {string.Join(", ", entry.Candidates.Select(i => $"({service})c.{Get(plan.Definitions[i].Definition)}()"))} }} }},");
+            // With a fallback provider, its services come first (Container.Output.spec, "Behavior for each request")
+            string elements = string.Join(", ", entry.Candidates.Select(i => $"({service})c.{Get(plan.Definitions[i].Definition)}()"));
+            if(plan.Container.IntegrateServiceProvider)
+            {
+                writer.WriteLine($"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static c => __Merge(c.__Fallback(), new {service}[] {{ {elements} }}) }},");
+            }
+            else
+            {
+                writer.WriteLine($"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static c => new {service}[] {{ {elements} }} }},");
+            }
         }
 
         writer.Indentation--;
@@ -498,26 +575,43 @@ internal static class ContainerEmitter
         writer.Indentation--;
     }
 
-    private static void WriteServiceProvider(SourceWriter writer, string self)
+    /// <summary>
+    /// The lookup by <c>Type</c>. A type that the table does not have goes to the fallback provider when the container
+    /// has one (Container.Output.spec, "Lookup rules" and "Behavior for each request").
+    /// </summary>
+    private static void WriteServiceProvider(SourceWriter writer, string self, bool fallback)
     {
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine("public object? GetService(global::System.Type serviceType)");
         writer.WriteLine('{');
         writer.WriteLine("    __ThrowIfDisposed();");
-        writer.WriteLine($"    return __lookup.TryGetValue(serviceType, out global::System.Func<{self}, object>? factory) ? factory(this) : null;");
+        writer.WriteLine($"    return __lookup.TryGetValue(serviceType, out global::System.Func<{self}, object>? factory) ? factory(this) : {(fallback ? "__Fallback().GetService(serviceType)" : "null")};");
         writer.WriteLine('}');
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine("public object GetRequiredService(global::System.Type serviceType)");
         writer.WriteLine($"    => GetService(serviceType) ?? throw new {InvalidOperation}(\"No service for type '\" + serviceType + \"' has been registered.\");");
         writer.WriteLine();
-        writer.WriteLine("// Keyed registrations come in a later slice. Until then a key finds nothing");
+        writer.WriteLine("// Keyed registrations come in a later slice. Until then a key finds nothing in the container");
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine("public object? GetKeyedService(global::System.Type serviceType, object? serviceKey)");
         writer.WriteLine('{');
         writer.WriteLine("    __ThrowIfDisposed();");
-        writer.WriteLine("    return serviceKey is null ? GetService(serviceType) : null;");
+        if(fallback)
+        {
+            writer.WriteLine("    if(serviceKey is null)");
+            writer.WriteLine("    {");
+            writer.WriteLine("        return GetService(serviceType);");
+            writer.WriteLine("    }");
+            writer.WriteLine();
+            writer.WriteLine($"    return __Fallback() is {DependencyInjection}.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;");
+        }
+        else
+        {
+            writer.WriteLine("    return serviceKey is null ? GetService(serviceType) : null;");
+        }
+
         writer.WriteLine('}');
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
@@ -525,10 +619,23 @@ internal static class ContainerEmitter
         writer.WriteLine($"    => GetKeyedService(serviceType, serviceKey) ?? throw new {InvalidOperation}(\"No service for type '\" + serviceType + \"' has been registered.\");");
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-        writer.WriteLine("public bool IsService(global::System.Type serviceType) => __lookup.ContainsKey(serviceType);");
-        writer.WriteLine();
-        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-        writer.WriteLine("public bool IsKeyedService(global::System.Type serviceType, object? serviceKey) => serviceKey is null && IsService(serviceType);");
+        if(fallback)
+        {
+            // MS.DI supplies these interfaces as services: its provider does not implement them
+            writer.WriteLine("public bool IsService(global::System.Type serviceType)");
+            writer.WriteLine($"    => __lookup.ContainsKey(serviceType) || (__singletons.Fallback.GetService(typeof({DependencyInjection}.IServiceProviderIsService)) is {DependencyInjection}.IServiceProviderIsService fallback && fallback.IsService(serviceType));");
+            writer.WriteLine();
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine("public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)");
+            writer.WriteLine($"    => serviceKey is null ? IsService(serviceType) : __singletons.Fallback.GetService(typeof({DependencyInjection}.IServiceProviderIsKeyedService)) is {DependencyInjection}.IServiceProviderIsKeyedService fallback && fallback.IsKeyedService(serviceType, serviceKey);");
+        }
+        else
+        {
+            writer.WriteLine("public bool IsService(global::System.Type serviceType) => __lookup.ContainsKey(serviceType);");
+            writer.WriteLine();
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine("public bool IsKeyedService(global::System.Type serviceType, object? serviceKey) => serviceKey is null && IsService(serviceType);");
+        }
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine("public T? GetService<T>() where T : class => (T?)GetService(typeof(T));");
@@ -607,15 +714,71 @@ internal static class ContainerEmitter
         writer.Indentation++;
         writer.WriteLine("__Singletons s = __singletons;");
         WriteDisposals(writer, plan, Lifetime.Singleton, "s.", isAsync);
+        if(plan.Container.IntegrateServiceProvider)
+        {
+            // The last step: the provider that ServiceProviderFactory created. The root never disposes a provider that
+            // the user passes (Container.Output.spec, "Disposal of the fallback scope and the fallback provider").
+            writer.WriteLine("if(s.OwnsFallback)");
+            writer.WriteLine('{');
+            writer.Indentation++;
+            WriteFallbackDisposal(writer, "s.Fallback", isAsync);
+            writer.Indentation--;
+            writer.WriteLine('}');
+        }
+
         writer.Indentation--;
         writer.WriteLine('}');
         writer.WriteLine("else");
         writer.WriteLine('{');
         writer.Indentation++;
         WriteDisposals(writer, plan, Lifetime.Scoped, string.Empty, isAsync);
+        if(plan.Container.IntegrateServiceProvider)
+        {
+            // The last step: the fallback scope. The exchange is the right to dispose it
+            writer.WriteLine($"if({Interlocked}.Exchange(ref __fallbackScope, null) is {{ }} fallbackScope)");
+            writer.WriteLine('{');
+            writer.Indentation++;
+            WriteFallbackDisposal(writer, "fallbackScope", isAsync);
+            writer.Indentation--;
+            writer.WriteLine('}');
+        }
+
         writer.Indentation--;
         writer.WriteLine('}');
         writer.WriteLine();
+    }
+
+    /// <summary>
+    /// Disposes the fallback scope or the fallback provider that the container owns. <c>DisposeAsync</c> prefers
+    /// <c>IAsyncDisposable</c>. An exception counts in the aggregation.
+    /// </summary>
+    private static void WriteFallbackDisposal(SourceWriter writer, string target, bool isAsync)
+    {
+        writer.WriteLine("try");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        if(isAsync)
+        {
+            writer.WriteLine($"if({target} is global::System.IAsyncDisposable asyncDisposable)");
+            writer.WriteLine('{');
+            writer.WriteLine("    await asyncDisposable.DisposeAsync().ConfigureAwait(false);");
+            writer.WriteLine('}');
+            writer.WriteLine($"else if({target} is global::System.IDisposable disposable)");
+        }
+        else
+        {
+            writer.WriteLine($"if({target} is global::System.IDisposable disposable)");
+        }
+
+        writer.WriteLine('{');
+        writer.WriteLine("    disposable.Dispose();");
+        writer.WriteLine('}');
+        writer.Indentation--;
+        writer.WriteLine('}');
+        writer.WriteLine($"catch({Exception} e)");
+        writer.WriteLine('{');
+        writer.WriteLine($"    (errors ??= new {ExceptionList}()).Add(e);");
+        writer.WriteLine('}');
     }
 
     private static void WriteDisposals(SourceWriter writer, ContainerPlan plan, Lifetime lifetime, string owner, bool isAsync)
@@ -698,9 +861,14 @@ internal static class ContainerEmitter
         writer.WriteLine("    throw new global::System.AggregateException(errors);");
         writer.WriteLine('}');
 
-        if(stored.Any(static d => d.Definition.Disposal != Disposal.None))
+        if(container.IntegrateServiceProvider || stored.Any(static d => d.Definition.Disposal != Disposal.None))
         {
             WriteDisposeLost(writer);
+        }
+
+        if(container.IntegrateServiceProvider)
+        {
+            WriteFallbackHelpers(writer, container);
         }
 
         if(container.ThreadSafeStrategy is not (StrategyNone or StrategyLock) && stored.Any(static d => (d.Definition.Disposal & Disposal.Sync) != 0))
@@ -752,6 +920,100 @@ internal static class ContainerEmitter
         writer.WriteLine("    {");
         writer.WriteLine($"        {Report}(e);");
         writer.WriteLine("    }");
+        writer.WriteLine('}');
+    }
+
+    /// <summary>
+    /// <c>__Fallback</c> (the provider for a resolution), the lazy fallback scope, the merge of collections, and
+    /// <c>ServiceProviderFactory</c> (Container.Output.spec, "Fallback provider" and "Integration with IServiceCollection").
+    /// </summary>
+    private static void WriteFallbackHelpers(SourceWriter writer, ContainerModel container)
+    {
+        // The root uses the fallback provider itself, and a scope uses its fallback scope
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private {ServiceProvider} __Fallback() => __isRoot ? __singletons.Fallback : __fallbackScope?.ServiceProvider ?? __CreateFallbackScope();");
+
+        // Concurrent first uses leave one fallback scope, and each extra one is disposed at once. A disposal of the scope
+        // that started meanwhile and this side compete for the new fallback scope, so that it is disposed exactly one time.
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private {ServiceProvider} __CreateFallbackScope()");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        writer.WriteLine($"{ServiceProvider} fallback = __singletons.Fallback;");
+        writer.WriteLine($"if(fallback.GetService(typeof({DependencyInjection}.IServiceScopeFactory)) is not {DependencyInjection}.IServiceScopeFactory factory)");
+        writer.WriteLine('{');
+        writer.WriteLine("    return fallback;");
+        writer.WriteLine('}');
+        writer.WriteLine();
+        writer.WriteLine($"{DependencyInjection}.IServiceScope scope = factory.CreateScope();");
+        writer.WriteLine($"if({Interlocked}.CompareExchange(ref __fallbackScope, scope, null) is {{ }} winner)");
+        writer.WriteLine('{');
+        writer.WriteLine("    __DisposeLost(scope);");
+        writer.WriteLine("    return winner.ServiceProvider;");
+        writer.WriteLine('}');
+        writer.WriteLine();
+        writer.WriteLine($"if({Volatile}.Read(ref __disposed) != 0)");
+        writer.WriteLine('{');
+        writer.WriteLine($"    if(global::System.Object.ReferenceEquals({Interlocked}.CompareExchange(ref __fallbackScope, null, scope), scope))");
+        writer.WriteLine("    {");
+        writer.WriteLine("        __DisposeLost(scope);");
+        writer.WriteLine("    }");
+        writer.WriteLine();
+        writer.WriteLine($"    throw new global::System.ObjectDisposedException(\"{container.Name}\");");
+        writer.WriteLine('}');
+        writer.WriteLine();
+        writer.WriteLine("return scope.ServiceProvider;");
+        writer.Indentation--;
+        writer.WriteLine('}');
+
+        // The services of the fallback provider first, then those of the container
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private static T[] __Merge<T>({ServiceProvider} fallback, T[] own)");
+        writer.WriteLine('{');
+        writer.WriteLine("    if(fallback.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) is not global::System.Collections.Generic.IEnumerable<T> external)");
+        writer.WriteLine("    {");
+        writer.WriteLine("        return own;");
+        writer.WriteLine("    }");
+        writer.WriteLine();
+        writer.WriteLine("    global::System.Collections.Generic.List<T> all = new global::System.Collections.Generic.List<T>(external);");
+        writer.WriteLine("    all.AddRange(own);");
+        writer.WriteLine("    return all.ToArray();");
+        writer.WriteLine('}');
+
+        if(!container.HasServiceProviderBuilder)
+        {
+            return;
+        }
+
+        // An independent nested class: nobody creates a container only to get the factory. The root disposes the
+        // provider that the factory builds. When the constructor of the root throws, the factory disposes it.
+        string collection = $"{DependencyInjection}.IServiceCollection";
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"public sealed class ServiceProviderFactory : {DependencyInjection}.IServiceProviderFactory<{collection}>");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        writer.WriteLine($"public {collection} CreateBuilder({collection} services) => services;");
+        writer.WriteLine();
+        writer.WriteLine($"public {ServiceProvider} CreateServiceProvider({collection} containerBuilder)");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        writer.WriteLine($"{DependencyInjection}.ServiceProvider provider = {DependencyInjection}.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);");
+        writer.WriteLine("try");
+        writer.WriteLine('{');
+        writer.WriteLine($"    return new {TypeNames.CSharp(container.Type)}(provider, true);");
+        writer.WriteLine('}');
+        writer.WriteLine("catch");
+        writer.WriteLine('{');
+        writer.WriteLine("    __DisposeLost(provider);");
+        writer.WriteLine("    throw;");
+        writer.WriteLine('}');
+        writer.Indentation--;
+        writer.WriteLine('}');
+        writer.Indentation--;
         writer.WriteLine('}');
     }
 

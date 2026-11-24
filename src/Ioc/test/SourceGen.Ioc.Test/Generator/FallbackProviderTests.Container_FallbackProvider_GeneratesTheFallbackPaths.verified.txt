@@ -1,0 +1,264 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public AppContainer(global::System.IServiceProvider fallbackProvider)
+        : this(fallbackProvider, false)
+    {
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private AppContainer(global::System.IServiceProvider fallbackProvider, bool ownsFallback)
+    {
+        __singletons = new __Singletons();
+        __singletons.Root = this;
+        __singletons.Fallback = fallbackProvider ?? throw new global::System.ArgumentNullException(nameof(fallbackProvider));
+        __singletons.OwnsFallback = ownsFallback;
+        __isRoot = true;
+        try
+        {
+            __Get_SystemClock_28ece501();
+        }
+        catch
+        {
+            global::System.Threading.Interlocked.Exchange(ref __disposed, 1);
+
+            throw;
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private AppContainer(global::App.AppContainer root)
+    {
+        __singletons = root.__singletons;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private sealed class __Singletons
+    {
+        public global::App.AppContainer Root = null!;
+        public global::System.IServiceProvider Fallback = null!;
+        public bool OwnsFallback;
+        public readonly global::System.Threading.Lock __lock_SystemClock_28ece501 = new global::System.Threading.Lock();
+        public global::App.SystemClock? __f_SystemClock_28ece501;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::Microsoft.Extensions.DependencyInjection.IServiceScope? __fallbackScope;
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer __Create_Consumer_fd0ac76a()
+    {
+        if(__isRoot)
+        {
+            throw new global::System.InvalidOperationException("Cannot resolve scoped service 'App.Consumer' from the root container.");
+        }
+
+        global::App.Consumer instance;
+        lock(__scopedLock)
+        {
+            if(__f_Consumer_fd0ac76a is { } existing)
+            {
+                return existing;
+            }
+
+            global::App.AppContainer c = this;
+            instance = new global::App.Consumer(
+                (global::App.IClock)c.__Get_SystemClock_28ece501(),
+                (global::App.ILogger)global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(c.__Fallback(), typeof(global::App.ILogger)),
+                (global::App.IOptions?)c.__Fallback().GetService(typeof(global::App.IOptions)),
+                c.__Fallback().GetService(typeof(global::System.Int32)) is global::System.Int32 v3 ? (global::System.Int32)v3 : (global::System.Int32)(3),
+                c.__Fallback().GetService(typeof(global::System.Int32)) is global::System.Int32 v4 ? (global::System.Int32)v4 : (global::System.Int32)(0));
+            global::System.Threading.Interlocked.Exchange(ref __f_Consumer_fd0ac76a, instance);
+        }
+
+        if(global::System.Threading.Volatile.Read(ref __disposed) != 0)
+        {
+            if(global::System.Object.ReferenceEquals(global::System.Threading.Interlocked.CompareExchange(ref __f_Consumer_fd0ac76a, null, instance), instance))
+            {
+                __DisposeLost(instance);
+            }
+
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::App.IOptions? Options
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return (global::App.IOptions?)__Fallback().GetService(typeof(global::App.IOptions));
+        }
+    }
+
+    // The lookup table (Container.Output.spec, "Lookup by Type")
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>> __lookup =
+        global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>>
+        {
+            { typeof(global::System.IServiceProvider), static c => c },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c.__singletons.Root },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService), static c => c.__singletons.Root },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService), static c => c.__singletons.Root },
+            { typeof(global::App.AppContainer), static c => c },
+            { typeof(global::App.Consumer), static c => (global::App.Consumer)c.__Get_Consumer_fd0ac76a() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Consumer>), static c => __Merge(c.__Fallback(), new global::App.Consumer[] { (global::App.Consumer)c.__Get_Consumer_fd0ac76a() }) },
+            { typeof(global::App.IClock), static c => (global::App.IClock)c.__Get_SystemClock_28ece501() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IClock>), static c => __Merge(c.__Fallback(), new global::App.IClock[] { (global::App.IClock)c.__Get_SystemClock_28ece501() }) },
+            { typeof(global::App.SystemClock), static c => (global::App.SystemClock)c.__Get_SystemClock_28ece501() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.SystemClock>), static c => __Merge(c.__Fallback(), new global::App.SystemClock[] { (global::App.SystemClock)c.__Get_SystemClock_28ece501() }) },
+        });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public object? GetService(global::System.Type serviceType)
+    {
+        __ThrowIfDisposed();
+        return __lookup.TryGetValue(serviceType, out global::System.Func<global::App.AppContainer, object>? factory) ? factory(this) : __Fallback().GetService(serviceType);
+    }
+
+    // Keyed registrations come in a later slice. Until then a key finds nothing in the container
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public object? GetKeyedService(global::System.Type serviceType, object? serviceKey)
+    {
+        __ThrowIfDisposed();
+        if(serviceKey is null)
+        {
+            return GetService(serviceType);
+        }
+
+        return __Fallback() is global::Microsoft.Extensions.DependencyInjection.IKeyedServiceProvider keyed ? keyed.GetKeyedService(serviceType, serviceKey) : null;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public bool IsService(global::System.Type serviceType)
+        => __lookup.ContainsKey(serviceType) || (__singletons.Fallback.GetService(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService)) is global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService fallback && fallback.IsService(serviceType));
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public bool IsKeyedService(global::System.Type serviceType, object? serviceKey)
+        => serviceKey is null ? IsService(serviceType) : __singletons.Fallback.GetService(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService)) is global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService fallback && fallback.IsKeyedService(serviceType, serviceKey);
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public T? GetService<T>() where T : class => (T?)GetService(typeof(T));
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public T? GetKeyedService<T>(object? serviceKey) where T : class => (T?)GetKeyedService(typeof(T), serviceKey);
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.List<global::System.Exception>? __DisposeInstances()
+    {
+        global::System.Collections.Generic.List<global::System.Exception>? errors = null;
+        if(__isRoot)
+        {
+            __Singletons s = __singletons;
+            if(s.OwnsFallback)
+            {
+                try
+                {
+                    if(s.Fallback is global::System.IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                    }
+                }
+                catch(global::System.Exception e)
+                {
+                    (errors ??= new global::System.Collections.Generic.List<global::System.Exception>()).Add(e);
+                }
+            }
+        }
+        else
+        {
+            if(global::System.Threading.Interlocked.Exchange(ref __f_Consumer_fd0ac76a, null) is { } i0)
+            {
+                try
+                {
+                    ((global::System.IDisposable)i0).Dispose();
+                }
+                catch(global::System.Exception e)
+                {
+                    (errors ??= new global::System.Collections.Generic.List<global::System.Exception>()).Add(e);
+                }
+            }
+            if(global::System.Threading.Interlocked.Exchange(ref __fallbackScope, null) is { } fallbackScope)
+            {
+                try
+                {
+                    if(fallbackScope is global::System.IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                    }
+                }
+                catch(global::System.Exception e)
+                {
+                    (errors ??= new global::System.Collections.Generic.List<global::System.Exception>()).Add(e);
+                }
+            }
+        }
+
+        return errors;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.IServiceProvider __Fallback() => __isRoot ? __singletons.Fallback : __fallbackScope?.ServiceProvider ?? __CreateFallbackScope();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.IServiceProvider __CreateFallbackScope()
+    {
+        global::System.IServiceProvider fallback = __singletons.Fallback;
+        if(fallback.GetService(typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory)) is not global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory factory)
+        {
+            return fallback;
+        }
+
+        global::Microsoft.Extensions.DependencyInjection.IServiceScope scope = factory.CreateScope();
+        if(global::System.Threading.Interlocked.CompareExchange(ref __fallbackScope, scope, null) is { } winner)
+        {
+            __DisposeLost(scope);
+            return winner.ServiceProvider;
+        }
+
+        if(global::System.Threading.Volatile.Read(ref __disposed) != 0)
+        {
+            if(global::System.Object.ReferenceEquals(global::System.Threading.Interlocked.CompareExchange(ref __fallbackScope, null, scope), scope))
+            {
+                __DisposeLost(scope);
+            }
+
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return scope.ServiceProvider;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static T[] __Merge<T>(global::System.IServiceProvider fallback, T[] own)
+    {
+        if(fallback.GetService(typeof(global::System.Collections.Generic.IEnumerable<T>)) is not global::System.Collections.Generic.IEnumerable<T> external)
+        {
+            return own;
+        }
+
+        global::System.Collections.Generic.List<T> all = new global::System.Collections.Generic.List<T>(external);
+        all.AddRange(own);
+        return all.ToArray();
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public sealed class ServiceProviderFactory : global::Microsoft.Extensions.DependencyInjection.IServiceProviderFactory<global::Microsoft.Extensions.DependencyInjection.IServiceCollection>
+    {
+        public global::Microsoft.Extensions.DependencyInjection.IServiceCollection CreateBuilder(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services) => services;
+
+        public global::System.IServiceProvider CreateServiceProvider(global::Microsoft.Extensions.DependencyInjection.IServiceCollection containerBuilder)
+        {
+            global::Microsoft.Extensions.DependencyInjection.ServiceProvider provider = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(containerBuilder);
+            try
+            {
+                return new global::App.AppContainer(provider, true);
+            }
+            catch
+            {
+                __DisposeLost(provider);
+                throw;
+            }
+        }
+    }

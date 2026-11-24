@@ -19,6 +19,12 @@ internal enum ArgumentKind
 
     /// <summary>A missing optional dependency: the default value, or <see langword="null"/>.</summary>
     Default,
+
+    /// <summary>
+    /// A missing dependency that the fallback provider resolves (of the root, or the fallback scope of a scope). An
+    /// optional dependency uses its default value when the fallback provider returns <see langword="null"/>.
+    /// </summary>
+    Fallback,
 }
 
 /// <summary>The resolution result of one constructor parameter.</summary>
@@ -140,7 +146,8 @@ internal static class ContainerAnalysis
 
         // A single dependency (Analysis.Model.spec, "Single service"). A problem is recorded, and the result is null.
         // The dependency site in a message is "{owner} → {member}" (Diagnostics.spec, "Names in messages").
-        // Without a fallback provider, a missing optional dependency uses its default value.
+        // With a fallback provider, a missing dependency goes to it, and only a required one is reported (SGIOC501).
+        // Without one, a missing optional dependency uses its default value.
         ArgumentPlan? Resolve(TypeRef type, bool optional, string owner, string member)
         {
             if(BuiltIn(type, container.Type) is { } builtIn)
@@ -156,6 +163,19 @@ internal static class ContainerAnalysis
                     // An error node: the original error is already reported, and the build fails because of it
                     reachesErrorNode = true;
                     return null;
+                case 0 when WrapperTypes.IsWrapper(type):
+                    // Wrapper types and collections come in a later slice. The container must create them itself and
+                    // must merge a collection with the fallback provider, so until then they stay missing, also when
+                    // they are optional or the container has a fallback provider.
+                    problems.Add(new ContainerProblem(Descriptors.MissingDependency.Id, [$"{owner} → {member}", TypeNames.Display(type)]));
+                    return null;
+                case 0 when container.IntegrateServiceProvider:
+                    if(!optional)
+                    {
+                        problems.Add(new ContainerProblem(Descriptors.FallbackDependency.Id, [$"{owner} → {member}", TypeNames.Display(type)]));
+                    }
+
+                    return new ArgumentPlan(ArgumentKind.Fallback, -1);
                 case 0 when optional:
                     return new ArgumentPlan(ArgumentKind.Default, -1);
                 case 0:

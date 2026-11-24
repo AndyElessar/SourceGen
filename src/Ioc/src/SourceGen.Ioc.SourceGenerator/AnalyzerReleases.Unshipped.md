@@ -15,5 +15,6 @@ SGIOC302 | SourceGen.Ioc | Error | Captive dependency
 SGIOC401 | SourceGen.Ioc | Error | Ambiguous dependency
 SGIOC402 | SourceGen.Ioc | Error | Missing dependency
 SGIOC403 | SourceGen.Ioc | Error | Disposable Transient
+SGIOC501 | SourceGen.Ioc | Info | Dependency resolved from the fallback provider
 SGIOC502 | SourceGen.Ioc | Warning | Singleton holds a transient service
 SGIOC503 | SourceGen.Ioc | Warning | Scoped service holds a transient service

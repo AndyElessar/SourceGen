@@ -28,6 +28,16 @@ internal static class WrapperTypes
         INamedTypeSymbol { ContainingType: null, ContainingNamespace: { } ns } named => Definitions.Contains($"{ns.ToDisplayString()}.{named.MetadataName}"),
         _ => false,
     };
+
+    /// <summary>Gets a value indicating whether <paramref name="type"/> is a wrapper type, by its original definition only.</summary>
+    /// <param name="type">The type.</param>
+    /// <returns>Whether it is a wrapper type. A one-dimensional array is a collection.</returns>
+    public static bool IsWrapper(TypeRef type) => type switch
+    {
+        ArrayTypeRef array => array.Rank == 1,
+        NamedTypeRef named => Definitions.Contains(named.MetadataName),
+        _ => false,
+    };
 }
 
 /// <summary>The built-in services (Analysis.Model.spec, "Built-in services").</summary>

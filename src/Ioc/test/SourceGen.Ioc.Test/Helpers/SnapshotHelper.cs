@@ -33,6 +33,18 @@ public static class SnapshotHelper
         return string.Join($"{Environment.NewLine}{Environment.NewLine}", parts);
     }
 
+    /// <summary>
+    /// Returns the text of each constructor of <paramref name="source"/>, in source order. A constructor has the name of
+    /// its type, so <see cref="Members"/> would return the complete type.
+    /// </summary>
+    public static string Constructors(string source)
+        => string.Join(
+            $"{Environment.NewLine}{Environment.NewLine}",
+            CSharpSyntaxTree.ParseText(source, SourceGeneratorTestHelper.ParseOptions).GetRoot()
+                .DescendantNodes()
+                .OfType<ConstructorDeclarationSyntax>()
+                .Select(static c => c.ToFullString().Trim('\r', '\n')));
+
     private static string? Name(MemberDeclarationSyntax member) => member switch
     {
         BaseTypeDeclarationSyntax t => t.Identifier.Text,

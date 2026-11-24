@@ -176,7 +176,7 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
     public object GetRequiredService(global::System.Type serviceType)
         => GetService(serviceType) ?? throw new global::System.InvalidOperationException("No service for type '" + serviceType + "' has been registered.");
 
-    // Keyed registrations come in a later slice. Until then a key finds nothing
+    // Keyed registrations come in a later slice. Until then a key finds nothing in the container
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public object? GetKeyedService(global::System.Type serviceType, object? serviceKey)
     {

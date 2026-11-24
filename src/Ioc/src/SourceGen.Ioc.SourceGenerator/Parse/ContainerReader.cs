@@ -37,6 +37,10 @@ internal sealed record PartialAccessor(string Name, bool IsProperty, string Modi
 /// <param name="ThreadSafeStrategy">The value of <c>ThreadSafeStrategy</c>: 0 None, 1 Lock, 2 CompareExchange.</param>
 /// <param name="EagerResolveOptions">The flags of <c>EagerResolveOptions</c>: 1 Singleton, 2 Scoped.</param>
 /// <param name="Accessors">The partial accessors, in the order of <c>GetMembers()</c>.</param>
+/// <param name="HasServiceProviderBuilder">
+/// Whether the compilation references <c>Microsoft.Extensions.DependencyInjection</c>, which supplies
+/// <c>BuildServiceProvider</c>. The container then has <c>ServiceProviderFactory</c> when it has a fallback provider.
+/// </param>
 internal sealed record ContainerModel(
     NamedTypeRef Type,
     string? Namespace,
@@ -47,7 +51,8 @@ internal sealed record ContainerModel(
     bool HasIncludeTags,
     int ThreadSafeStrategy,
     int EagerResolveOptions,
-    ImmutableEquatableArray<PartialAccessor> Accessors)
+    ImmutableEquatableArray<PartialAccessor> Accessors,
+    bool HasServiceProviderBuilder)
 {
     /// <summary>Gets the hint name of the generated file: the namespace, the containing types, and the name.</summary>
     public string HintName => string.Join(".", [.. Namespace is null ? [] : new[] { Namespace }, .. ContainingTypes.Select(static t => t.Name), Name]) + ".g.cs";
@@ -70,6 +75,9 @@ internal static class ContainerReader
 {
     /// <summary>The metadata name of <c>IocContainerAttribute</c>.</summary>
     public const string Attribute = "SourceGen.Ioc.IocContainerAttribute";
+
+    /// <summary>The type that supplies <c>BuildServiceProvider</c>, in the <c>Microsoft.Extensions.DependencyInjection</c> package.</summary>
+    private const string ServiceProviderBuilder = "Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions";
 
     /// <summary>Reads the container class.</summary>
     /// <param name="context">The context of the attribute.</param>
@@ -100,7 +108,8 @@ internal static class ContainerReader
             Named(attribute, "IncludeTags") is { Kind: TypedConstantKind.Array, Values.Length: > 0 },
             Named(attribute, "ThreadSafeStrategy") is { Value: int strategy } ? strategy : 1,
             Named(attribute, "EagerResolveOptions") is { Value: int eager } ? eager : 1,
-            Accessors(type, context.SemanticModel.Compilation, cancellationToken));
+            Accessors(type, context.SemanticModel.Compilation, cancellationToken),
+            context.SemanticModel.Compilation.GetTypeByMetadataName(ServiceProviderBuilder) is not null);
         ClassDeclarationSyntax declaration = (ClassDeclarationSyntax)context.TargetNode;
         return new(container, new ContainerSite(typeRef, declaration.SyntaxTree.FilePath, declaration.Identifier.Span), null);
     }

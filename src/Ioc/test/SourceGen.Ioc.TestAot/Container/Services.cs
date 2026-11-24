@@ -203,6 +203,54 @@ public sealed class OptionalConsumer(IClock? clock, IMissing? missing, string la
     public int? Limit => limit;
 }
 
+/// <summary>A service that only the fallback provider supplies.</summary>
+public interface IExternal
+{
+    bool IsDisposed { get; }
+}
+
+/// <summary>
+/// A Scoped service with an optional dependency that only the fallback provider supplies. It records whether that
+/// dependency was already disposed when the container disposed this service.
+/// </summary>
+[IocRegister(ServiceLifetime.Scoped)]
+public sealed class ExternalConsumer(IExternal? external) : IDisposable
+{
+    public IExternal? External => external;
+
+    public bool? ExternalDisposedBefore { get; private set; }
+
+    public void Dispose() => ExternalDisposedBefore = external?.IsDisposed;
+}
+
+/// <summary>
+/// A Singleton with an optional dependency that only the fallback provider supplies. Eager resolution creates it before
+/// <see cref="FragileSingleton"/> (ordering), so a failed constructor of the root has already used the fallback provider.
+/// </summary>
+[IocRegister(ServiceLifetime.Singleton)]
+public sealed class ExternalHolder(IExternal? external) : IDisposable
+{
+    public IExternal? External => external;
+
+    public bool? ExternalDisposedBefore { get; private set; }
+
+    public void Dispose() => ExternalDisposedBefore = external?.IsDisposed;
+}
+
+/// <summary>
+/// The default <c>IntegrateServiceProvider = true</c>: a missing dependency goes to the fallback provider (SGIOC501 is an
+/// Info and does not stop the build).
+/// </summary>
+[IocContainer]
+public partial class FallbackContainer
+{
+    public partial IExternal External { get; }
+
+    public partial IExternal? OptionalExternal { get; }
+
+    public partial IClock Clock { get; }
+}
+
 /// <summary>The default options: <c>ThreadSafeStrategy.Lock</c> and eager Singletons.</summary>
 [IocContainer(IntegrateServiceProvider = false)]
 public partial class AppContainer

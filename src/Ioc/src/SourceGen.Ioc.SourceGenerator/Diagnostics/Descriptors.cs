@@ -100,6 +100,13 @@ internal static class Descriptors
         "Transient '{0}' is disposable ({1}); the container does not track transient services",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC501: a required dependency is not registered in the container and comes from the fallback provider.</summary>
+    public static readonly DiagnosticDescriptor FallbackDependency = Create(
+        "SGIOC501",
+        "Dependency resolved from the fallback provider",
+        "'{0}' requires '{1}', which is not registered in the container; it is resolved from the fallback service provider",
+        DiagnosticSeverity.Info);
+
     /// <summary>SGIOC502: a Singleton holds a Transient instance.</summary>
     public static readonly DiagnosticDescriptor SingletonHoldsTransient = Create(
         "SGIOC502",
@@ -130,6 +137,7 @@ internal static class Descriptors
         AmbiguousDependency,
         MissingDependency,
         DisposableTransient,
+        FallbackDependency,
         SingletonHoldsTransient,
         ScopedHoldsTransient,
     }.ToDictionary(static d => d.Id);
