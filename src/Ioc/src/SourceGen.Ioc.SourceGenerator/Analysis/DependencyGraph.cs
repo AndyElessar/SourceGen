@@ -1,0 +1,279 @@
+using SourceGen.Ioc.Diagnostics;
+using SourceGen.Ioc.Emit;
+using SourceGen.Ioc.Model;
+
+namespace SourceGen.Ioc.Analysis;
+
+/// <summary>An edge of the dependency graph: constructor parameter <paramref name="Parameter"/> of <paramref name="From"/> resolves to <paramref name="To"/>.</summary>
+/// <param name="From">The index of the closed definition that owns the dependency site.</param>
+/// <param name="Parameter">The index of the constructor parameter.</param>
+/// <param name="To">The index of the closed definition that the dependency resolves to.</param>
+internal readonly record struct GraphEdge(int From, int Parameter, int To);
+
+/// <summary>A problem of the dependency graph. The definite check reports it at the dependency site.</summary>
+/// <param name="Id">The diagnostic ID.</param>
+/// <param name="Arguments">The message arguments.</param>
+/// <param name="Implementation">The implementation type that owns the dependency site.</param>
+/// <param name="Parameter">The index of the constructor parameter.</param>
+internal sealed record GraphProblem(string Id, ImmutableEquatableArray<string> Arguments, NamedTypeRef Implementation, int Parameter);
+
+/// <summary>
+/// The checks of the dependency graph (Analysis.Model.spec, "Circular dependencies", "Lifetime checks", "Warning for a
+/// held Transient"). The nodes are the closed definitions. Built-in services are not nodes.
+/// </summary>
+/// <remarks>
+/// Tags, modules, and wrapper types come in later slices. Until then every edge has one candidate, which is a concrete
+/// registration without tags, so every edge is definite (Analysis.Model.spec, "Definite edges"). A single dependency
+/// with more than one candidate is <c>SGIOC401</c> and is not an edge.
+/// </remarks>
+internal static class DependencyGraph
+{
+    /// <summary>Gets the closed definitions that provide each service type.</summary>
+    /// <param name="definitions">The closed definitions.</param>
+    /// <returns>The indexes of the providers, by service type, in the ordering.</returns>
+    public static Dictionary<TypeRef, List<int>> Providers(ImmutableEquatableArray<ClosedDefinition> definitions)
+    {
+        Dictionary<TypeRef, List<int>> providers = [];
+        for(int i = 0; i < definitions.Length; i++)
+        {
+            foreach(TypeRef serviceType in definitions[i].ServiceTypes)
+            {
+                if(!providers.TryGetValue(serviceType, out List<int>? list))
+                {
+                    providers[serviceType] = list = [];
+                }
+
+                list.Add(i);
+            }
+        }
+
+        return providers;
+    }
+
+    /// <summary>
+    /// Gets the edges of the assembly view for each closed definition, in the order of its parameters. A container
+    /// class is a built-in service and not a node (Analysis.Model.spec, "Built-in services").
+    /// </summary>
+    /// <param name="definitions">The closed definitions.</param>
+    /// <param name="providers">The providers of each service type.</param>
+    /// <param name="containers">The container classes of the assembly.</param>
+    /// <returns>The edges, by the index of the closed definition that owns them.</returns>
+    private static List<GraphEdge>[] Edges(ImmutableEquatableArray<ClosedDefinition> definitions, Dictionary<TypeRef, List<int>> providers, HashSet<TypeRef> containers)
+    {
+        List<GraphEdge>[] edges = new List<GraphEdge>[definitions.Length];
+        for(int i = 0; i < definitions.Length; i++)
+        {
+            edges[i] = [];
+            ImmutableEquatableArray<ConstructorParameter> parameters = definitions[i].ConstructorParameters;
+            for(int p = 0; p < parameters.Length; p++)
+            {
+                if(!containers.Contains(parameters[p].Type) && providers.TryGetValue(parameters[p].Type, out List<int>? candidates) && candidates.Count == 1)
+                {
+                    edges[i].Add(new GraphEdge(i, p, candidates[0]));
+                }
+            }
+        }
+
+        return edges;
+    }
+
+    /// <summary>The definite check of the assembly view (Analysis.Model.spec, "Two levels of checks").</summary>
+    /// <param name="definitions">The closed definitions of the assembly view.</param>
+    /// <param name="containers">The container classes of the assembly.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The problems, each at its dependency site.</returns>
+    public static ImmutableEquatableArray<GraphProblem> DefiniteCheck(
+        ImmutableEquatableArray<ClosedDefinition> definitions,
+        ImmutableEquatableArray<NamedTypeRef> containers,
+        CancellationToken cancellationToken)
+    {
+        List<GraphEdge>[] edges = Edges(definitions, Providers(definitions), [.. containers]);
+        cancellationToken.ThrowIfCancellationRequested();
+        return Cycles(definitions, edges)
+            .Concat(Captives(definitions, edges))
+            .Concat(HeldTransients(definitions, edges))
+            .ToImmutableEquatableArray();
+    }
+
+    /// <summary>
+    /// <c>SGIOC301</c>: one cycle for each strongly connected component that has a cycle. The cycle starts at the first
+    /// closed definition of the component in the ordering, and the generator reports it at the first edge.
+    /// </summary>
+    public static IEnumerable<GraphProblem> Cycles(ImmutableEquatableArray<ClosedDefinition> definitions, List<GraphEdge>[] edges)
+    {
+        foreach(List<int> component in Components(edges))
+        {
+            int start = component.Min();
+            HashSet<int> members = [.. component];
+            if(ShortestCycle(start, members, edges) is not { } cycle)
+            {
+                continue;
+            }
+
+            IEnumerable<string> names = cycle.Select(e => definitions[e.From].Implementation.SortName).Append(definitions[start].Implementation.SortName);
+            yield return Problem(Descriptors.CircularDependency.Id, [string.Join(" → ", names)], definitions, cycle[0]);
+        }
+    }
+
+    /// <summary>
+    /// <c>SGIOC302</c>: a Scoped closed definition that a Singleton reaches directly or through Transient closed
+    /// definitions. The generator reports each pair one time, with the shortest path, at the first edge of the path.
+    /// </summary>
+    public static IEnumerable<GraphProblem> Captives(ImmutableEquatableArray<ClosedDefinition> definitions, List<GraphEdge>[] edges)
+    {
+        for(int singleton = 0; singleton < definitions.Length; singleton++)
+        {
+            if(definitions[singleton].Lifetime != Lifetime.Singleton)
+            {
+                continue;
+            }
+
+            Dictionary<int, GraphEdge> previous = [];
+            HashSet<int> reported = [];
+            Queue<int> queue = new([singleton]);
+            while(queue.Count > 0)
+            {
+                foreach(GraphEdge edge in edges[queue.Dequeue()])
+                {
+                    switch(definitions[edge.To].Lifetime)
+                    {
+                        case Lifetime.Scoped when reported.Add(edge.To):
+                            List<GraphEdge> path = [.. PathTo(edge.From, singleton, previous), edge];
+                            string through = path.Count == 1
+                                ? string.Empty
+                                : " through " + string.Join(" → ", path.Select(e => definitions[e.From].Implementation.SortName).Append(definitions[edge.To].Implementation.SortName));
+                            yield return Problem(
+                                Descriptors.CaptiveDependency.Id,
+                                [definitions[singleton].Implementation.SortName, definitions[edge.To].Implementation.SortName, through],
+                                definitions,
+                                path[0]);
+                            break;
+                        case Lifetime.Transient when edge.To != singleton && !previous.ContainsKey(edge.To):
+                            previous[edge.To] = edge;
+                            queue.Enqueue(edge.To);
+                            break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary><c>SGIOC502</c> and <c>SGIOC503</c>: a Singleton or Scoped closed definition that holds a Transient instance.</summary>
+    public static IEnumerable<GraphProblem> HeldTransients(ImmutableEquatableArray<ClosedDefinition> definitions, List<GraphEdge>[] edges)
+    {
+        foreach(GraphEdge edge in edges.SelectMany(static e => e))
+        {
+            ClosedDefinition holder = definitions[edge.From];
+            if(definitions[edge.To].Lifetime != Lifetime.Transient || holder.Lifetime == Lifetime.Transient)
+            {
+                continue;
+            }
+
+            string id = holder.Lifetime == Lifetime.Singleton ? Descriptors.SingletonHoldsTransient.Id : Descriptors.ScopedHoldsTransient.Id;
+            yield return Problem(
+                id,
+                [holder.Implementation.SortName, definitions[edge.To].Implementation.SortName, TypeNames.Display(holder.ConstructorParameters[edge.Parameter].Type)],
+                definitions,
+                edge);
+        }
+    }
+
+    private static GraphProblem Problem(string id, ImmutableEquatableArray<string> arguments, ImmutableEquatableArray<ClosedDefinition> definitions, GraphEdge site)
+        => new(id, arguments, definitions[site.From].Implementation, site.Parameter);
+
+    /// <summary>The edges from <paramref name="start"/> to <paramref name="node"/>, from the breadth-first walk.</summary>
+    private static List<GraphEdge> PathTo(int node, int start, Dictionary<int, GraphEdge> previous)
+    {
+        List<GraphEdge> path = [];
+        while(node != start)
+        {
+            GraphEdge edge = previous[node];
+            path.Add(edge);
+            node = edge.From;
+        }
+
+        path.Reverse();
+        return path;
+    }
+
+    /// <summary>The shortest cycle through <paramref name="start"/> inside one component, or <see langword="null"/>.</summary>
+    private static List<GraphEdge>? ShortestCycle(int start, HashSet<int> members, List<GraphEdge>[] edges)
+    {
+        Dictionary<int, GraphEdge> previous = [];
+        Queue<int> queue = new([start]);
+        while(queue.Count > 0)
+        {
+            foreach(GraphEdge edge in edges[queue.Dequeue()])
+            {
+                if(edge.To == start)
+                {
+                    return [.. PathTo(edge.From, start, previous), edge];
+                }
+
+                if(members.Contains(edge.To) && !previous.ContainsKey(edge.To))
+                {
+                    previous[edge.To] = edge;
+                    queue.Enqueue(edge.To);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The strongly connected components (Tarjan), ordered by their first closed definition.</summary>
+    private static IEnumerable<List<int>> Components(List<GraphEdge>[] edges)
+    {
+        int count = edges.Length;
+        int[] index = new int[count];
+        int[] low = new int[count];
+        bool[] onStack = new bool[count];
+        Stack<int> stack = new();
+        List<List<int>> components = [];
+        int next = 1;
+        for(int i = 0; i < count; i++)
+        {
+            if(index[i] == 0)
+            {
+                Connect(i);
+            }
+        }
+
+        return components.OrderBy(static c => c.Min());
+
+        void Connect(int node)
+        {
+            index[node] = low[node] = next++;
+            stack.Push(node);
+            onStack[node] = true;
+            foreach(GraphEdge edge in edges[node])
+            {
+                if(index[edge.To] == 0)
+                {
+                    Connect(edge.To);
+                    low[node] = Math.Min(low[node], low[edge.To]);
+                }
+                else if(onStack[edge.To])
+                {
+                    low[node] = Math.Min(low[node], index[edge.To]);
+                }
+            }
+
+            if(low[node] != index[node])
+            {
+                return;
+            }
+
+            List<int> component = [];
+            int member;
+            do
+            {
+                member = stack.Pop();
+                onStack[member] = false;
+                component.Add(member);
+            }
+            while(member != node);
+            components.Add(component);
+        }
+    }
+}

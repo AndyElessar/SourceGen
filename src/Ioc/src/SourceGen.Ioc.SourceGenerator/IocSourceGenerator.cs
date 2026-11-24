@@ -44,12 +44,32 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
             .Select(static (d, ct) => Definitions.Merge(d, ct))
             .WithTrackingName(TrackingNames.Analysis);
 
+        IncrementalValuesProvider<ContainerResult> containers = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                ContainerReader.Attribute,
+                static (node, _) => node is ClassDeclarationSyntax,
+                static (ctx, ct) => ContainerReader.Read(ctx, ct));
+
+        // The container classes are built-in services, not nodes of the graph
+        IncrementalValueProvider<ImmutableEquatableArray<NamedTypeRef>> containerTypes = containers
+            .Select(static (r, _) => r.Container?.Type)
+            .Collect()
+            .Select(static (types, _) => types.OfType<NamedTypeRef>().OrderBy(static t => t.CanonicalString, StringComparer.Ordinal).ToImmutableEquatableArray());
+
+        // The definite check of the assembly view (Analysis.Model.spec, "Two levels of checks")
+        IncrementalValueProvider<ImmutableEquatableArray<GraphProblem>> definiteProblems = definitions
+            .Combine(containerTypes)
+            .Select(static (input, ct) => DependencyGraph.DefiniteCheck(input.Left, input.Right, ct));
+
         context.RegisterSourceOutput(
-            results.Combine(context.CompilationProvider),
+            results.Combine(definiteProblems).Combine(context.CompilationProvider),
             static (spc, input) =>
             {
-                IEnumerable<DiagnosticInfo> diagnostics = input.Left.SelectMany(static r => r.Diagnostics)
-                    .Concat(Definitions.CheckMerge(input.Left.SelectMany(static r => r.Sites)));
+                ImmutableEquatableArray<DeclarationResult> declared = input.Left.Left;
+                Dictionary<(NamedTypeRef, int), ParameterSite> sites = ParameterSites(declared);
+                IEnumerable<DiagnosticInfo> diagnostics = declared.SelectMany(static r => r.Diagnostics)
+                    .Concat(Definitions.CheckMerge(declared.SelectMany(static r => r.Sites)))
+                    .Concat(DefiniteDiagnostics(input.Left.Right, sites));
                 DiagnosticReporter.Report(spc, input.Right, diagnostics);
             });
 
@@ -76,31 +96,68 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                 }
             });
 
+        // An Error of the definite check stops the service collection extension (ServiceCollection.Output.spec, "Checks")
+        IncrementalValueProvider<bool> definiteErrors = definiteProblems
+            .Select(static (problems, _) => problems.Any(static p => !ContainerAnalysis.IsWarning(p.Id)));
+
         context.RegisterSourceOutput(
-            settings.Select(static (s, _) => s.Settings).Combine(definitions),
+            settings.Select(static (s, _) => s.Settings).Combine(definitions).Combine(definiteErrors),
             static (spc, input) =>
             {
-                if(input.Left is { } extensionSettings)
+                if(input.Left.Left is { } extensionSettings && !input.Right)
                 {
-                    ServiceCollectionExtensionModel model = new(extensionSettings, input.Right);
+                    ServiceCollectionExtensionModel model = new(extensionSettings, input.Left.Right);
                     spc.AddSource(ServiceCollectionExtensionEmitter.HintName(extensionSettings), ServiceCollectionExtensionEmitter.Generate(model));
                 }
             });
 
-        InitializeContainers(context, declarations, definitions);
+        InitializeContainers(context, containers, results, declarations, definitions, definiteProblems);
+    }
+
+    /// <summary>The site of each constructor parameter. A parameter declared in source wins over the attribute of a declaration.</summary>
+    private static Dictionary<(NamedTypeRef, int), ParameterSite> ParameterSites(ImmutableEquatableArray<DeclarationResult> results)
+    {
+        Dictionary<(NamedTypeRef, int), ParameterSite> sites = [];
+        foreach(ParameterSite site in results.SelectMany(static r => r.ParameterSites)
+            .OrderBy(static s => s.InSource ? 0 : 1)
+            .ThenBy(static s => s.FilePath, StringComparer.Ordinal)
+            .ThenBy(static s => s.Span.Start))
+        {
+            if(!sites.ContainsKey((site.Implementation, site.Index)))
+            {
+                sites[(site.Implementation, site.Index)] = site;
+            }
+        }
+
+        return sites;
+    }
+
+    /// <summary>
+    /// The problems of the definite check at their dependency sites. A dependency site from metadata is reported at the
+    /// registration attribute (Analysis.Model.spec, "Two levels of checks").
+    /// </summary>
+    private static IEnumerable<DiagnosticInfo> DefiniteDiagnostics(ImmutableEquatableArray<GraphProblem> problems, Dictionary<(NamedTypeRef, int), ParameterSite> sites)
+        => Reported(problems, sites).Select(static r => new DiagnosticInfo(r.Problem.Id, r.Problem.Arguments, r.Site.FilePath, r.Site.Span));
+
+    private static IEnumerable<(GraphProblem Problem, ParameterSite Site)> Reported(ImmutableEquatableArray<GraphProblem> problems, Dictionary<(NamedTypeRef, int), ParameterSite> sites)
+    {
+        foreach(GraphProblem problem in problems)
+        {
+            if(sites.TryGetValue((problem.Implementation, problem.Parameter), out ParameterSite? site))
+            {
+                yield return (problem, site);
+            }
+        }
     }
 
     private static void InitializeContainers(
         IncrementalGeneratorInitializationContext context,
+        IncrementalValuesProvider<ContainerResult> containers,
+        IncrementalValueProvider<ImmutableEquatableArray<DeclarationResult>> results,
         IncrementalValueProvider<ImmutableEquatableArray<RegistrationDeclaration>> declarations,
-        IncrementalValueProvider<ImmutableEquatableArray<ClosedDefinition>> definitions)
+        IncrementalValueProvider<ImmutableEquatableArray<ClosedDefinition>> definitions,
+        IncrementalValueProvider<ImmutableEquatableArray<GraphProblem>> definiteProblems)
     {
-        IncrementalValuesProvider<ContainerResult> containers = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                ContainerReader.Attribute,
-                static (node, _) => node is ClassDeclarationSyntax,
-                static (ctx, ct) => ContainerReader.Read(ctx, ct));
-
         // The skipped instance definitions: a dependency on one of them, by the implementation type or by a known
         // service type, is not a missing dependency
         IncrementalValueProvider<ImmutableEquatableArray<TypeRef>> errorNodes = declarations
@@ -137,24 +194,31 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
         // The full check reports on the identifier of the container class. The positions come from the sites, so a
         // move of code does not run the analysis again.
         context.RegisterSourceOutput(
-            containers.Collect().Combine(analyses.Collect()).Combine(context.CompilationProvider),
+            containers.Collect().Combine(analyses.Collect()).Combine(results.Combine(definiteProblems)).Combine(context.CompilationProvider),
             static (spc, input) =>
             {
-                List<DiagnosticInfo> diagnostics = [.. input.Left.Left.Select(static r => r.Diagnostic).OfType<DiagnosticInfo>()];
+                ImmutableArray<ContainerResult> containerResults = input.Left.Left.Left;
+                Dictionary<(NamedTypeRef, int), ParameterSite> parameterSites = ParameterSites(input.Left.Right.Left);
+                HashSet<(string, NamedTypeRef, int, ImmutableEquatableArray<string>)> reportedByDefiniteCheck = [.. Reported(input.Left.Right.Right, parameterSites)
+                    .Select(static r => (r.Problem.Id, r.Problem.Implementation, r.Problem.Parameter, r.Problem.Arguments))];
+                List<DiagnosticInfo> diagnostics = [.. containerResults.Select(static r => r.Diagnostic).OfType<DiagnosticInfo>()];
                 Dictionary<NamedTypeRef, ContainerSite> sites = [];
-                foreach(ContainerSite site in input.Left.Left.Select(static r => r.Site).OfType<ContainerSite>())
+                foreach(ContainerSite site in containerResults.Select(static r => r.Site).OfType<ContainerSite>())
                 {
                     sites[site.Type] = site;
                 }
 
-                foreach(ContainerAnalysisResult analysis in input.Left.Right)
+                foreach(ContainerAnalysisResult analysis in input.Left.Left.Right)
                 {
                     if(!sites.TryGetValue(analysis.Type, out ContainerSite? site))
                     {
                         continue;
                     }
 
-                    diagnostics.AddRange(analysis.Problems.Select(p => new DiagnosticInfo(p.Id, p.Arguments, site.FilePath, site.Span)));
+                    // The same diagnostic with the same message at the same edge, which the definite check reports, is not reported again
+                    diagnostics.AddRange(analysis.Problems
+                        .Where(p => p.Implementation is null || !reportedByDefiniteCheck.Contains((p.Id, p.Implementation, p.Parameter, p.Arguments)))
+                        .Select(p => new DiagnosticInfo(p.Id, p.Arguments, site.FilePath, site.Span)));
                 }
 
                 DiagnosticReporter.Report(spc, input.Right, diagnostics);

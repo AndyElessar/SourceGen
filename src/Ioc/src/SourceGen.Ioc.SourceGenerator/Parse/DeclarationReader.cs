@@ -13,15 +13,28 @@ namespace SourceGen.Ioc.Parse;
 internal sealed record MergeSite(NamedTypeRef Implementation, string Name, Lifetime Lifetime, string FilePath, TextSpan Span);
 
 /// <summary>
+/// Where a dependency site is written, for the definite check (Analysis.Model.spec, "Two levels of checks"). A
+/// parameter of a type from metadata has no syntax, so its site is the attribute of the declaration.
+/// </summary>
+/// <param name="Implementation">The implementation type that owns the constructor.</param>
+/// <param name="Index">The index of the constructor parameter.</param>
+/// <param name="InSource">Whether the parameter is declared in this assembly (and the span is the parameter).</param>
+/// <param name="FilePath">The path of the syntax tree.</param>
+/// <param name="Span">The span of the parameter, or of the attribute when <paramref name="InSource"/> is false.</param>
+internal sealed record ParameterSite(NamedTypeRef Implementation, int Index, bool InSource, string FilePath, TextSpan Span);
+
+/// <summary>
 /// What one attribute target gives. The generation pipeline uses only <see cref="Declarations"/>, so a change of
 /// position, which changes only the sites and the diagnostics, does not run the analysis again.
 /// </summary>
 /// <param name="Declarations">The valid declarations.</param>
 /// <param name="Sites">The sites of the valid declarations.</param>
+/// <param name="ParameterSites">The sites of the constructor parameters of the valid declarations.</param>
 /// <param name="Diagnostics">The diagnostics of the invalid declarations.</param>
 internal sealed record DeclarationResult(
     ImmutableEquatableArray<RegistrationDeclaration> Declarations,
     ImmutableEquatableArray<MergeSite> Sites,
+    ImmutableEquatableArray<ParameterSite> ParameterSites,
     ImmutableEquatableArray<DiagnosticInfo> Diagnostics);
 
 /// <summary>Reads registration declarations from the attributes (Annotations.spec, "Registration declarations").</summary>
@@ -91,10 +104,11 @@ internal static class DeclarationReader
     {
         private readonly List<RegistrationDeclaration> declarations = [];
         private readonly List<MergeSite> sites = [];
+        private readonly List<ParameterSite> parameterSites = [];
         private readonly List<DiagnosticInfo> diagnostics = [];
 
         public DeclarationResult ToResult()
-            => new(declarations.ToImmutableEquatableArray(), sites.ToImmutableEquatableArray(), diagnostics.ToImmutableEquatableArray());
+            => new(declarations.ToImmutableEquatableArray(), sites.ToImmutableEquatableArray(), parameterSites.ToImmutableEquatableArray(), diagnostics.ToImmutableEquatableArray());
 
         public void Report(string id, SyntaxNode? node, params string[] arguments)
             => diagnostics.Add(node is null ? DiagnosticInfo.Create(id, (Location?)null, arguments) : DiagnosticInfo.Create(id, node, arguments));
@@ -155,6 +169,18 @@ internal static class DeclarationReader
             {
                 sites.Add(new MergeSite(implementationRef, name, (Lifetime)lifetime, syntax.SyntaxTree.FilePath, syntax.Span));
             }
+
+            for(int i = 0; i < constructor.Parameters.Length; i++)
+            {
+                if(constructor.Parameters[i].DeclaringSyntaxReferences is [SyntaxReference reference, ..])
+                {
+                    parameterSites.Add(new ParameterSite(implementationRef, i, true, reference.SyntaxTree.FilePath, reference.Span));
+                }
+                else if(syntax is not null)
+                {
+                    parameterSites.Add(new ParameterSite(implementationRef, i, false, syntax.SyntaxTree.FilePath, syntax.Span));
+                }
+            }
         }
 
         /// <summary>
@@ -181,6 +207,7 @@ internal static class DeclarationReader
             {
                 return "it is abstract";
             }
+
 
             // Only a file type: the generated code cannot name it. Other accessibility errors are reported by the
             // compiler (Constitution, "Diagnostic policy").
@@ -266,6 +293,7 @@ internal static class DeclarationReader
             {
                 return (Descriptors.InvalidServiceType.Id, "it is a value type");
             }
+
 
             return BuiltInServices.IsBuiltIn(type) ? (Descriptors.InvalidServiceType.Id, "it is a built-in service") : null;
         }

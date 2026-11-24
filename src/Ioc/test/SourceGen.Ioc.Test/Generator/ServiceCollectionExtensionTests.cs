@@ -15,6 +15,7 @@ public class ServiceCollectionExtensionTests
         [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IRepo)])]
         internal sealed class Repo : IRepo;
 
+        // Scoped holds the Transient Clock: SGIOC503 (Warning), which does not affect generation
         [IocRegister(ServiceLifetime.Scoped)]
         internal sealed class Service(IRepo repo, Clock clock);
 
@@ -25,6 +26,8 @@ public class ServiceCollectionExtensionTests
         }
         """;
 
+    private static readonly string[] HeldTransient = ["SGIOC503"];
+
     private static GeneratorRunOptions RootNamespace(string value) => new() { GlobalOptions = new Dictionary<string, string> { ["build_property.RootNamespace"] = value } };
 
     [Test]
@@ -33,7 +36,7 @@ public class ServiceCollectionExtensionTests
         GeneratorTestResult result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>(Services);
 
         await Assert.That(result.GeneratedSources).IsEmpty();
-        await Assert.That(result.ReportedDiagnostics).IsEmpty();
+        await Assert.That(result.ReportedDiagnostics.Select(static d => d.Id)).IsEquivalentTo(HeldTransient);
     }
 
     [Test]
@@ -55,7 +58,7 @@ public class ServiceCollectionExtensionTests
             RootNamespace("App"));
 
         await result.VerifyCompilableAsync();
-        await Assert.That(result.ReportedDiagnostics).IsEmpty();
+        await Assert.That(result.ReportedDiagnostics.Select(static d => d.Id)).IsEquivalentTo(HeldTransient);
         await Verify(result.GetGeneratedSource("AppServiceCollectionExtensions.g.cs"));
     }
 

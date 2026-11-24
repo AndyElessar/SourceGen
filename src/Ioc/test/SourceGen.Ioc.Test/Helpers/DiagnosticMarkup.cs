@@ -12,7 +12,7 @@ public readonly record struct ExpectedDiagnostic(string Id, string FilePath, Tex
 
 /// <summary>
 /// Source text with markers of the expected diagnostics. <c>{|SGIOC002:Foo|}</c> expects <c>SGIOC002</c> on the
-/// text <c>Foo</c>. Markers do not nest.
+/// text <c>Foo</c>. <c>{|SGIOC302,SGIOC502:Foo|}</c> expects both on the same text. Markers do not nest.
 /// </summary>
 public static class DiagnosticMarkup
 {
@@ -55,7 +55,10 @@ public static class DiagnosticMarkup
             builder.Append(marked, position, open - position);
             int start = builder.Length;
             builder.Append(marked, colon + 1, close - colon - 1);
-            markers.Add((marked[(open + 2)..colon], TextSpan.FromBounds(start, builder.Length)));
+            foreach(string id in marked[(open + 2)..colon].Split(','))
+            {
+                markers.Add((id, TextSpan.FromBounds(start, builder.Length)));
+            }
             position = close + 2;
         }
     }

@@ -47,7 +47,12 @@ internal sealed record ContainerPlan(
 /// <summary>A problem that the full check finds. The position is added from the site of the container.</summary>
 /// <param name="Id">The diagnostic ID.</param>
 /// <param name="Arguments">The message arguments.</param>
-internal sealed record ContainerProblem(string Id, ImmutableEquatableArray<string> Arguments);
+/// <param name="Implementation">
+/// For a problem that the definite check also finds, the implementation type of the dependency site. The full check
+/// does not report it again when the definite check reports it (Analysis.Model.spec, "Two levels of checks").
+/// </param>
+/// <param name="Parameter">The index of the constructor parameter of that dependency site.</param>
+internal sealed record ContainerProblem(string Id, ImmutableEquatableArray<string> Arguments, NamedTypeRef? Implementation = null, int Parameter = -1);
 
 /// <summary>The result of the analysis of one container.</summary>
 /// <param name="Type">The container class.</param>
@@ -73,30 +78,21 @@ internal static class ContainerAnalysis
         ImmutableEquatableArray<TypeRef> errorNodes,
         CancellationToken cancellationToken)
     {
-        Dictionary<TypeRef, List<int>> providers = [];
-        for(int i = 0; i < definitions.Length; i++)
-        {
-            foreach(TypeRef serviceType in definitions[i].ServiceTypes)
-            {
-                if(!providers.TryGetValue(serviceType, out List<int>? list))
-                {
-                    providers[serviceType] = list = [];
-                }
-
-                list.Add(i);
-            }
-        }
-
+        Dictionary<TypeRef, List<int>> providers = DependencyGraph.Providers(definitions);
         HashSet<TypeRef> skipped = [.. errorNodes];
         List<ContainerProblem> problems = [];
         List<DefinitionPlan> plans = [];
+        List<GraphEdge>[] edges = new List<GraphEdge>[definitions.Length];
         bool reachesErrorNode = false;
-        foreach(ClosedDefinition definition in definitions)
+        for(int index = 0; index < definitions.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            ClosedDefinition definition = definitions[index];
             List<ArgumentPlan> arguments = [];
-            foreach(ConstructorParameter parameter in definition.ConstructorParameters)
+            edges[index] = [];
+            for(int p = 0; p < definition.ConstructorParameters.Length; p++)
             {
+                ConstructorParameter parameter = definition.ConstructorParameters[p];
                 if(BuiltIn(parameter.Type, container.Type) is { } builtIn)
                 {
                     arguments.Add(new ArgumentPlan(builtIn, -1));
@@ -107,6 +103,7 @@ internal static class ContainerAnalysis
                 {
                     case 1:
                         arguments.Add(new ArgumentPlan(ArgumentKind.Resolved, candidates![0]));
+                        edges[index].Add(new GraphEdge(index, p, candidates[0]));
                         break;
                     case 0 when skipped.Contains(parameter.Type):
                         // An error node: the original error is already reported, and the build fails because of it
@@ -126,7 +123,8 @@ internal static class ContainerAnalysis
             plans.Add(new DefinitionPlan(definition, arguments.ToImmutableEquatableArray()));
         }
 
-        if(problems.Count > 0 || reachesErrorNode)
+        CheckGraph(definitions, edges, problems);
+        if(reachesErrorNode || problems.Any(static p => !IsWarning(p.Id)))
         {
             return new(container.Type, null, problems.ToImmutableEquatableArray());
         }
@@ -135,8 +133,39 @@ internal static class ContainerAnalysis
             .OrderBy(static p => p.Key.CanonicalString, StringComparer.Ordinal)
             .Select(static p => new LookupEntry(p.Key, p.Value.ToImmutableEquatableArray()))];
         ContainerPlan plan = new(container, plans.ToImmutableEquatableArray(), lookup.ToImmutableEquatableArray(), TopologicalOrder(plans));
-        return new(container.Type, plan, []);
+        return new(container.Type, plan, problems.ToImmutableEquatableArray());
     }
+
+    /// <summary>
+    /// The full check of the dependency graph, on the edges of the resolved arguments: a built-in service, also this
+    /// container class, is not a node. Each problem keeps its dependency site. The output does not report a problem
+    /// that the definite check already reported with the same ID at the same site (Analysis.Model.spec, "Two levels of
+    /// checks"), but the problem still stops the generation.
+    /// </summary>
+    private static void CheckGraph(ImmutableEquatableArray<ClosedDefinition> definitions, List<GraphEdge>[] edges, List<ContainerProblem> problems)
+    {
+        problems.AddRange(DependencyGraph.Cycles(definitions, edges)
+            .Concat(DependencyGraph.Captives(definitions, edges))
+            .Concat(DependencyGraph.HeldTransients(definitions, edges))
+            .Select(static p => new ContainerProblem(p.Id, p.Arguments, p.Implementation, p.Parameter)));
+
+        // Disposable Transient is only in the full check (Analysis.Model.spec, "Disposable Transient")
+        foreach(ClosedDefinition definition in definitions.Where(static d => d.Lifetime == Lifetime.Transient && d.Disposal != Disposal.None))
+        {
+            string kind = definition.Disposal switch
+            {
+                Disposal.Sync => "IDisposable",
+                Disposal.Async => "IAsyncDisposable",
+                _ => "IDisposable, IAsyncDisposable",
+            };
+            problems.Add(new ContainerProblem(Descriptors.DisposableTransient.Id, [definition.Implementation.SortName, kind]));
+        }
+    }
+
+    /// <summary>Whether a diagnostic is a Warning, which has no effect on generation.</summary>
+    /// <param name="id">The diagnostic ID.</param>
+    /// <returns>Whether the descriptor is a Warning or an Info.</returns>
+    public static bool IsWarning(string id) => Descriptors.ById[id].DefaultSeverity != DiagnosticSeverity.Error;
 
     /// <summary>The built-in services (Analysis.Model.spec, "Built-in services").</summary>
     private static ArgumentKind? BuiltIn(TypeRef type, NamedTypeRef container)
@@ -154,7 +183,7 @@ internal static class ContainerAnalysis
 
     /// <summary>
     /// Each dependency before the definitions that depend on it. Definitions without a relation follow the ordering.
-    /// A cycle (SGIOC301, a later slice) cannot make the walk endless, because each definition is visited once.
+    /// A cycle (SGIOC301) stops the generation before this walk. Each definition is visited once in any case.
     /// </summary>
     private static ImmutableEquatableArray<int> TopologicalOrder(List<DefinitionPlan> plans)
     {

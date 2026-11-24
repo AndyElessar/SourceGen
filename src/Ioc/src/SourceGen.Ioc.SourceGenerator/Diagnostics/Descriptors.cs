@@ -79,6 +79,41 @@ internal static class Descriptors
         "'{0}' does not give a valid name for the Add method: {1}",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC301: a cycle of dependencies that are not deferred.</summary>
+    public static readonly DiagnosticDescriptor CircularDependency = Create(
+        "SGIOC301",
+        "Circular dependency",
+        "Circular dependency: {0}",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC302: a Singleton depends on a Scoped service, also through Transient services.</summary>
+    public static readonly DiagnosticDescriptor CaptiveDependency = Create(
+        "SGIOC302",
+        "Captive dependency",
+        "Singleton '{0}' depends on scoped '{1}'{2}",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC403: a Transient closed definition is disposable, and the container does not track it.</summary>
+    public static readonly DiagnosticDescriptor DisposableTransient = Create(
+        "SGIOC403",
+        "Disposable Transient",
+        "Transient '{0}' is disposable ({1}); the container does not track transient services",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC502: a Singleton holds a Transient instance.</summary>
+    public static readonly DiagnosticDescriptor SingletonHoldsTransient = Create(
+        "SGIOC502",
+        "Singleton holds a transient service",
+        "Singleton '{0}' holds transient '{1}' for the lifetime of the container; depend on Func<{2}> to create instances on demand",
+        DiagnosticSeverity.Warning);
+
+    /// <summary>SGIOC503: a Scoped service holds a Transient instance.</summary>
+    public static readonly DiagnosticDescriptor ScopedHoldsTransient = Create(
+        "SGIOC503",
+        "Scoped service holds a transient service",
+        "Scoped '{0}' holds transient '{1}' for the lifetime of the scope; depend on Func<{2}> to create instances on demand",
+        DiagnosticSeverity.Warning);
+
     /// <summary>Gets the descriptors by ID.</summary>
     public static IReadOnlyDictionary<string, DiagnosticDescriptor> ById { get; } = new[]
     {
@@ -90,8 +125,13 @@ internal static class Descriptors
         AttributeOnPlainClass,
         UnsupportedOutputClass,
         InvalidServiceCollectionExtensionName,
+        CircularDependency,
+        CaptiveDependency,
         AmbiguousDependency,
         MissingDependency,
+        DisposableTransient,
+        SingletonHoldsTransient,
+        ScopedHoldsTransient,
     }.ToDictionary(static d => d.Id);
 
     /// <summary>

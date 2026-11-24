@@ -10,5 +10,10 @@ SGIOC006 | SourceGen.Ioc | Error | Wrapper type cannot be registered
 SGIOC025 | SourceGen.Ioc | Error | Attribute on a class that is neither module nor container
 SGIOC107 | SourceGen.Ioc | Error | Unsupported module or container class
 SGIOC108 | SourceGen.Ioc | Error | Invalid Add method name
+SGIOC301 | SourceGen.Ioc | Error | Circular dependency
+SGIOC302 | SourceGen.Ioc | Error | Captive dependency
 SGIOC401 | SourceGen.Ioc | Error | Ambiguous dependency
 SGIOC402 | SourceGen.Ioc | Error | Missing dependency
+SGIOC403 | SourceGen.Ioc | Error | Disposable Transient
+SGIOC502 | SourceGen.Ioc | Warning | Singleton holds a transient service
+SGIOC503 | SourceGen.Ioc | Warning | Scoped service holds a transient service

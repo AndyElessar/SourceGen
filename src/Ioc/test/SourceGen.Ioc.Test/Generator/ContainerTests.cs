@@ -29,7 +29,7 @@ public class ContainerTests
         }
 
         [IocRegister(ServiceLifetime.Scoped, ServiceTypes = [typeof(IOrderService)])]
-        internal sealed class OrderService(IClock clock, Formatter formatter) : IOrderService, IAsyncDisposable
+        internal sealed class OrderService(IClock clock, {|SGIOC503:Formatter formatter|}) : IOrderService, IAsyncDisposable
         {
             public ValueTask DisposeAsync() => default;
         }
@@ -40,6 +40,9 @@ public class ContainerTests
         [IocContainer(IntegrateServiceProvider = false)]
         public partial class AppContainer;
         """;
+
+    /// <summary><see cref="Services"/> without the markers of the expected diagnostics.</summary>
+    private static string CleanServices => DiagnosticMarkup.Parse(Services).Sources[0];
 
     private static async Task<GeneratorTestResult> RunAsync(params string[] sources)
     {
@@ -267,12 +270,12 @@ public class ContainerTests
     [Test]
     public async Task Container_SourcesInAnyOrder_GeneratesSameOutput()
         => await SourceGeneratorTestHelper.VerifyDeterministicAsync<IocSourceGenerator>(
-            [Services, Usings + "namespace App; [IocRegister(ServiceLifetime.Scoped)] internal sealed class Another : IDisposable { public void Dispose() { } }"]);
+            [CleanServices, Usings + "namespace App; [IocRegister(ServiceLifetime.Scoped)] internal sealed class Another : IDisposable { public void Dispose() { } }"]);
 
     [Test]
     public async Task Container_UnrelatedEdit_DoesNotRunAnalysisAgain()
     {
-        GeneratorTestResult first = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>([Services, "namespace App; public class Unrelated;"], new() { TrackSteps = true });
+        GeneratorTestResult first = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>([CleanServices, "namespace App; public class Unrelated;"], new() { TrackSteps = true });
 
         GeneratorTestResult second = IncrementalTestHelper.RunAgainWithEdit(first, 1, "namespace App; public class Unrelated { public int X; }");
 
