@@ -199,7 +199,7 @@ Diagnostic reporting MUST NOT break incremental caching.
 | 11 | An asynchronous service cannot be resolved synchronously. | Both |
 | 12 | The constructor must be unambiguous. The generator does not choose the longest constructor that it can satisfy. | Both |
 | 13 | A reference type annotated as nullable is an optional dependency. It gets `null` when no service is found. | Both |
-| 14 | `KeyedService.AnyKey` cannot be used to register. | Both |
+| 14 | A registration cannot use `KeyedService.AnyKey` as its key (`SGIOC007`). MS.DI uses such a registration as a catch-all for keys without an exact registration. Register a catch-all in the fallback provider instead. See [ADR 2026112502](adr/2026112502_NoAnyKeyRegistration.md). | Both |
 | 15 | Wrapper types cannot be registered as service types. | Both |
 | 16 | Only reference types can be registered as service types. | Both |
 | 17 | A dependency site that the generator sees at compile time matches keys by their compile-time identity. A lookup at run time by `Type` and key uses `Equals`, as MS.DI does. MS.DI uses `Equals` in both cases, so two keys with different identities that are equal at run time match in the service collection extension and do not match at a compile-time dependency site of the container. | Container |
