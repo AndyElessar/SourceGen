@@ -168,8 +168,31 @@ internal static class DeclarationReader
                 return;
             }
 
-            if(ReadParameters(constructor) is not { } parameters)
+            // A key on the constructor itself (SGIOC019), an invalid key of a parameter, or a required [ServiceKey]
+            // parameter on a registration without a key (SGIOC023) skips the declaration
+            if(SiteKeyReader.CheckMember(constructor.GetAttributes(), "constructor", syntax, cancellationToken) is { } memberError)
             {
+                diagnostics.Add(memberError);
+                AddError(implementationRef, key.Key, lifetime, serviceTypes);
+                return;
+            }
+
+            (ImmutableEquatableArray<ConstructorParameter>? parameters, bool keyErrors) = ReadParameters(constructor, syntax);
+            if(keyErrors)
+            {
+                AddError(implementationRef, key.Key, lifetime, serviceTypes);
+                return;
+            }
+
+            if(parameters is null)
+            {
+                return;
+            }
+
+            if(key.Key is null && parameters.FirstOrDefault(static p => p is { KeyMode: SiteKeyMode.ServiceKey, Optional: OptionalMode.Required }) is { } serviceKey)
+            {
+                Report(Descriptors.ServiceKeyWithoutKey.Id, syntax, serviceKey.Name, KeyNames.Definition(implementationRef, null));
+                AddError(implementationRef, key.Key, lifetime, serviceTypes);
                 return;
             }
 
@@ -322,18 +345,32 @@ internal static class DeclarationReader
         private static bool IsContainer(ITypeSymbol type)
             => type.GetAttributes().Any(static a => a.AttributeClass is { Name: "IocContainerAttribute" } c && c.ToDisplayString() == ContainerReader.Attribute);
 
-        /// <summary>The constructor parameters.</summary>
-        /// <returns>The types, or <see langword="null"/> when a parameter cannot take a generated argument.</returns>
-        private ImmutableEquatableArray<ConstructorParameter>? ReadParameters(IMethodSymbol constructor)
+        /// <summary>The constructor parameters, with the key of each one.</summary>
+        /// <param name="constructor">The constructor.</param>
+        /// <param name="syntax">The registration attribute, where a site from metadata is reported.</param>
+        /// <returns>
+        /// The parameters, or <see langword="null"/> when a parameter cannot take a generated argument. Whether a key of a
+        /// parameter is invalid: its diagnostics are already reported.
+        /// </returns>
+        private (ImmutableEquatableArray<ConstructorParameter>? Parameters, bool KeyErrors) ReadParameters(IMethodSymbol constructor, AttributeSyntax? syntax)
         {
             List<ConstructorParameter> parameters = [];
+            bool keyErrors = false;
             foreach(IParameterSymbol parameter in constructor.Parameters)
             {
                 // A ref or out parameter gives a compile error in the generated code. The compiler reports it
                 // (Constitution, "Diagnostic policy"). A type that the model cannot represent (a pointer) is skipped.
                 if(TypeRefFactory.Create(parameter.Type, compilation) is not { } parameterRef)
                 {
-                    return null;
+                    return (null, keyErrors);
+                }
+
+                SiteKey siteKey = SiteKeyReader.Read(parameter.GetAttributes(), parameter.Type, parameter.Name, syntax, compilation, cancellationToken);
+                if(siteKey.Errors.Count > 0)
+                {
+                    diagnostics.AddRange(siteKey.Errors);
+                    keyErrors = true;
+                    continue;
                 }
 
                 (OptionalMode optional, string? defaultValue) = OptionalDependency.Of(parameter);
@@ -343,10 +380,12 @@ internal static class DeclarationReader
                     parameter.RefKind is RefKind.In or RefKind.RefReadOnlyParameter,
                     optional,
                     defaultValue,
-                    parameter.Type.IsValueType));
+                    parameter.Type.IsValueType,
+                    siteKey.Mode,
+                    siteKey.Key));
             }
 
-            return parameters.ToImmutableEquatableArray();
+            return (parameters.ToImmutableEquatableArray(), keyErrors);
         }
 
         /// <summary>Selects the constructor (Annotations.spec, "Constructor selection").</summary>

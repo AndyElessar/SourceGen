@@ -20,6 +20,9 @@ internal enum ArgumentKind
     /// <summary>A missing optional dependency: the default value, or <see langword="null"/>.</summary>
     Default,
 
+    /// <summary><c>[ServiceKey]</c>: the key of the closed definition that owns the parameter.</summary>
+    ServiceKey,
+
     /// <summary>
     /// A missing dependency that the fallback provider resolves (of the root, or the fallback scope of a scope). An
     /// optional dependency uses its default value when the fallback provider returns <see langword="null"/>.
@@ -30,7 +33,17 @@ internal enum ArgumentKind
 /// <summary>The resolution result of one constructor parameter.</summary>
 /// <param name="Kind">How the argument is resolved.</param>
 /// <param name="Target">The index of the target closed definition, for <see cref="ArgumentKind.Resolved"/>.</param>
-internal sealed record ArgumentPlan(ArgumentKind Kind, int Target);
+/// <param name="Key">The key that the site asks for, after <c>InheritKey</c>. The fallback provider uses it.</param>
+internal sealed record ArgumentPlan(ArgumentKind Kind, int Target, KeyRef? Key = null);
+
+/// <summary>A service type of a skipped instance definition, with the canonical string of its key.</summary>
+/// <param name="Type">The service type or the implementation type.</param>
+/// <param name="Key">The canonical string of the key, the empty string, or <see cref="AnyKey"/>.</param>
+internal readonly record struct ErrorNode(TypeRef Type, string Key)
+{
+    /// <summary>The key of a declaration whose key is invalid: the key is unknown, so the node matches every key.</summary>
+    public const string AnyKey = "*";
+}
 
 /// <summary>The construction plan of one closed definition (Analysis.Model.spec, "Construction plan").</summary>
 /// <param name="Definition">The closed definition.</param>
@@ -86,17 +99,17 @@ internal static class ContainerAnalysis
     /// <summary>Analyzes one container.</summary>
     /// <param name="container">The container.</param>
     /// <param name="definitions">The closed definitions of the view, in their ordering.</param>
-    /// <param name="errorNodes">The implementation types and the known service types of the skipped instance definitions.</param>
+    /// <param name="errorNodes">The implementation types and the known service types of the skipped instance definitions, with their keys.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The plan and the problems.</returns>
     public static ContainerAnalysisResult Analyze(
         ContainerModel container,
         ImmutableEquatableArray<ClosedDefinition> definitions,
-        ImmutableEquatableArray<TypeRef> errorNodes,
+        ImmutableEquatableArray<ErrorNode> errorNodes,
         CancellationToken cancellationToken)
     {
         Dictionary<(TypeRef Type, string Key), List<int>> providers = DependencyGraph.Providers(definitions);
-        HashSet<TypeRef> skipped = [.. errorNodes];
+        HashSet<(TypeRef, string)> skipped = [.. errorNodes.Select(static n => (n.Type, n.Key))];
         List<ContainerProblem> problems = [];
         List<DefinitionPlan> plans = [];
         List<GraphEdge>[] edges = new List<GraphEdge>[definitions.Length];
@@ -110,7 +123,14 @@ internal static class ContainerAnalysis
             for(int p = 0; p < definition.ConstructorParameters.Length; p++)
             {
                 ConstructorParameter parameter = definition.ConstructorParameters[p];
-                if(Resolve(parameter.Type, parameter.Optional != OptionalMode.Required, definition.Implementation.SortName, parameter.Name) is { } argument)
+                if(parameter.KeyMode == SiteKeyMode.ServiceKey)
+                {
+                    // Without a key, only an optional parameter is left (SGIOC023 skips a required one)
+                    arguments.Add(new ArgumentPlan(definition.Key is null ? ArgumentKind.Default : ArgumentKind.ServiceKey, -1));
+                    continue;
+                }
+
+                if(Resolve(parameter.Type, parameter.KeyIn(definition), parameter.Optional != OptionalMode.Required, KeyNames.Definition(definition), parameter.Name) is { } argument)
                 {
                     arguments.Add(argument);
                     if(argument.Kind == ArgumentKind.Resolved)
@@ -127,7 +147,7 @@ internal static class ContainerAnalysis
         List<AccessorPlan> accessors = [];
         foreach(PartialAccessor accessor in container.Accessors)
         {
-            if(Resolve(accessor.Type, accessor.IsOptional, container.Type.SortName, accessor.Name) is { } argument)
+            if(Resolve(accessor.Type, accessor.Key, accessor.IsOptional, container.Type.SortName, accessor.Name) is { } argument)
             {
                 accessors.Add(new AccessorPlan(accessor, argument));
             }
@@ -150,19 +170,20 @@ internal static class ContainerAnalysis
         // The dependency site in a message is "{owner} → {member}" (Diagnostics.spec, "Names in messages").
         // With a fallback provider, a missing dependency goes to it, and only a required one is reported (SGIOC501).
         // Without one, a missing optional dependency uses its default value.
-        ArgumentPlan? Resolve(TypeRef type, bool optional, string owner, string member)
+        ArgumentPlan? Resolve(TypeRef type, KeyRef? key, bool optional, string owner, string member)
         {
-            if(BuiltIn(type, container.Type) is { } builtIn)
+            if(key is null && BuiltIn(type, container.Type) is { } builtIn)
             {
                 return new ArgumentPlan(builtIn, -1);
             }
 
-            // Keys of dependency sites come with the next part of this slice. Until then a site asks for no key
-            switch(providers.TryGetValue((type, string.Empty), out List<int>? candidates) ? candidates.Count : 0)
+            string canonical = KeyRef.CanonicalOf(key);
+            string requested = key is null ? TypeNames.Display(type) : $"{TypeNames.Display(type)} (Key: {KeyNames.Display(key)})";
+            switch(providers.TryGetValue((type, canonical), out List<int>? candidates) ? candidates.Count : 0)
             {
                 case 1:
-                    return new ArgumentPlan(ArgumentKind.Resolved, candidates![0]);
-                case 0 when skipped.Contains(type):
+                    return new ArgumentPlan(ArgumentKind.Resolved, candidates![0], key);
+                case 0 when skipped.Contains((type, canonical)) || skipped.Contains((type, ErrorNode.AnyKey)):
                     // An error node: the original error is already reported, and the build fails because of it
                     reachesErrorNode = true;
                     return null;
@@ -170,24 +191,24 @@ internal static class ContainerAnalysis
                     // Wrapper types and collections come in a later slice. The container must create them itself and
                     // must merge a collection with the fallback provider, so until then they stay missing, also when
                     // they are optional or the container has a fallback provider.
-                    problems.Add(new ContainerProblem(Descriptors.MissingDependency.Id, [$"{owner} → {member}", TypeNames.Display(type)]));
+                    problems.Add(new ContainerProblem(Descriptors.MissingDependency.Id, [$"{owner} → {member}", requested]));
                     return null;
                 case 0 when container.IntegrateServiceProvider:
                     if(!optional)
                     {
-                        problems.Add(new ContainerProblem(Descriptors.FallbackDependency.Id, [$"{owner} → {member}", TypeNames.Display(type)]));
+                        problems.Add(new ContainerProblem(Descriptors.FallbackDependency.Id, [$"{owner} → {member}", requested]));
                     }
 
-                    return new ArgumentPlan(ArgumentKind.Fallback, -1);
+                    return new ArgumentPlan(ArgumentKind.Fallback, -1, key);
                 case 0 when optional:
                     return new ArgumentPlan(ArgumentKind.Default, -1);
                 case 0:
-                    problems.Add(new ContainerProblem(Descriptors.MissingDependency.Id, [$"{owner} → {member}", TypeNames.Display(type)]));
+                    problems.Add(new ContainerProblem(Descriptors.MissingDependency.Id, [$"{owner} → {member}", requested]));
                     return null;
                 default:
                     problems.Add(new ContainerProblem(
                         Descriptors.AmbiguousDependency.Id,
-                        [$"{owner} → {member}", TypeNames.Display(type), candidates!.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), string.Join(", ", candidates.Select(c => KeyNames.Definition(definitions[c])))]));
+                        [$"{owner} → {member}", requested, candidates!.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), string.Join(", ", candidates.Select(c => KeyNames.Definition(definitions[c])))]));
                     return null;
             }
         }

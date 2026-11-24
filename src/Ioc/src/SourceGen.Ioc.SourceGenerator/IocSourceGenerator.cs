@@ -54,9 +54,11 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
             {
                 ImmutableEquatableArray<DeclarationResult> declared = input.Left.Left;
                 Dictionary<(NamedTypeRef, int), ParameterSite> sites = ParameterSites(declared);
+                // One site can belong to more than one declaration (one type with several keys): each diagnostic once
                 IEnumerable<DiagnosticInfo> diagnostics = declared.SelectMany(static r => r.Diagnostics)
                     .Concat(Definitions.CheckMerge(declared.SelectMany(static r => r.Sites)))
-                    .Concat(DefiniteDiagnostics(input.Left.Right, sites));
+                    .Concat(DefiniteDiagnostics(input.Left.Right, sites))
+                    .Distinct();
                 DiagnosticReporter.Report(spc, input.Right, diagnostics);
             });
 
@@ -151,24 +153,25 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                 static (ctx, ct) => ContainerReader.Read(ctx, ct));
 
         // The skipped instance definitions: a dependency on one of them, by the implementation type or by a known
-        // service type, is not a missing dependency
-        IncrementalValueProvider<ImmutableEquatableArray<TypeRef>> errorNodes = declarations
+        // service type with the same key, is not a missing dependency
+        IncrementalValueProvider<ImmutableEquatableArray<ErrorNode>> errorNodes = declarations
             .Combine(definitions)
             .Select(static (input, _) =>
             {
-                HashSet<NamedTypeRef> generated = [.. input.Right.Select(static d => d.Implementation)];
+                HashSet<(NamedTypeRef, KeyRef?)> generated = [.. input.Right.Select(static d => (d.Implementation, d.Key))];
                 return input.Left
-                    .Where(d => !generated.Contains(d.Implementation))
-                    .SelectMany(static d => d.ServiceTypes.Prepend(d.Implementation))
+                    .Where(d => !generated.Contains((d.Implementation, d.Key)))
+                    .SelectMany(static d => d.ServiceTypes.Prepend(d.Implementation).Select(t => new ErrorNode(t, d.Key is { IsInvalid: true } ? ErrorNode.AnyKey : KeyRef.CanonicalOf(d.Key))))
                     .Distinct()
-                    .OrderBy(static t => t.CanonicalString, StringComparer.Ordinal)
+                    .OrderBy(static n => n.Type.CanonicalString, StringComparer.Ordinal)
+                    .ThenBy(static n => n.Key, StringComparer.Ordinal)
                     .ToImmutableEquatableArray();
             });
 
-        // ExplicitOnly, IncludeTags, and keys come in later slices. Until then only a container without them is generated.
+        // ExplicitOnly and IncludeTags come in a later slice. Until then only a container without them is generated.
         IncrementalValuesProvider<ContainerAnalysisResult> analyses = containers
             .Select(static (r, _) => r.Container)
-            .Where(static c => c is { ExplicitOnly: false, HasIncludeTags: false } && !c.Accessors.Any(static a => a.HasKey))
+            .Where(static c => c is { ExplicitOnly: false, HasIncludeTags: false })
             .Combine(definitions.Combine(errorNodes))
             .WithTrackingName(TrackingNames.Views)
             .Select(static (input, ct) => ContainerAnalysis.Analyze(input.Left!, input.Right.Left, input.Right.Right, ct))
@@ -192,7 +195,7 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                 Dictionary<(NamedTypeRef, int), ParameterSite> parameterSites = ParameterSites(input.Left.Right.Left);
                 HashSet<(string, NamedTypeRef, int, ImmutableEquatableArray<string>)> reportedByDefiniteCheck = [.. Reported(input.Left.Right.Right, parameterSites)
                     .Select(static r => (r.Problem.Id, r.Problem.Implementation, r.Problem.Parameter, r.Problem.Arguments))];
-                List<DiagnosticInfo> diagnostics = [.. containerResults.Select(static r => r.Diagnostic).OfType<DiagnosticInfo>()];
+                List<DiagnosticInfo> diagnostics = [.. containerResults.SelectMany(static r => r.Diagnostics)];
                 Dictionary<NamedTypeRef, ContainerSite> sites = [];
                 foreach(ContainerSite site in containerResults.Select(static r => r.Site).OfType<ContainerSite>())
                 {

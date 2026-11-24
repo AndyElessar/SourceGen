@@ -1,0 +1,29 @@
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::App.IRepo Main
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return (global::App.IRepo)__Get_Repo_f09b9d5b();
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::App.IRepo Default
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return (global::App.IRepo)__Get_DefaultRepo_5a131b07();
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::App.IRepo? Missing
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return null;
+        }
+    }

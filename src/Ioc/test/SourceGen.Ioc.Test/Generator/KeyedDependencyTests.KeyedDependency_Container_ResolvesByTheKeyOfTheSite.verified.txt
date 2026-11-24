@@ -1,0 +1,16 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer __Get_Consumer_709c3515()
+    {
+        global::App.AppContainer c = this;
+        global::App.Consumer instance = new global::App.Consumer(
+            (global::App.IRepo)c.__Get_Repo_f09b9d5b(),
+            (global::App.IRepo)c.__Get_Repo_c4fdfc8f(),
+            (global::App.IRepo)c.__Get_Repo_c855a9f8(),
+            (global::App.IRepo)c.__Get_Repo_f09b9d5b(),
+            (global::App.IRepo)c.__Get_Repo_f09b9d5b(),
+            (global::App.IRepo)c.__Get_DefaultRepo_5a131b07(),
+            (global::App.IRepo)c.__Get_DefaultRepo_5a131b07(),
+            (global::App.IRepo)c.__Get_DefaultRepo_5a131b07(),
+            "a");
+        return instance;
+    }

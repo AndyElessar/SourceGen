@@ -78,6 +78,22 @@ internal enum OptionalMode
     Default,
 }
 
+/// <summary>The key specification of a dependency site (Annotations.spec, "Key specification").</summary>
+internal enum SiteKeyMode
+{
+    /// <summary>No key.</summary>
+    None,
+
+    /// <summary>The key that the site specifies.</summary>
+    Specified,
+
+    /// <summary>The key of the instance definition that owns the site: <c>InheritKey</c>. Resolved with the definition.</summary>
+    Inherit,
+
+    /// <summary><c>[ServiceKey]</c>: not a dependency. The parameter receives the key of the instance definition.</summary>
+    ServiceKey,
+}
+
 /// <summary>A parameter of the selected constructor.</summary>
 /// <param name="Type">The type of the parameter.</param>
 /// <param name="Name">The name of the parameter, for the messages of diagnostics.</param>
@@ -90,13 +106,28 @@ internal enum OptionalMode
 /// For <see cref="OptionalMode.Default"/>, the C# expression of the default value, without a cast to the parameter type.
 /// </param>
 /// <param name="IsValueType">Whether the type is a value type: the generic <c>GetService&lt;T&gt;()</c> cannot ask for it.</param>
+/// <param name="KeyMode">The key specification.</param>
+/// <param name="Key">The key, for <see cref="SiteKeyMode.Specified"/>.</param>
 internal sealed record ConstructorParameter(
     TypeRef Type,
     string Name,
     bool ByReference,
     OptionalMode Optional = OptionalMode.Required,
     string? DefaultValue = null,
-    bool IsValueType = false);
+    bool IsValueType = false,
+    SiteKeyMode KeyMode = SiteKeyMode.None,
+    KeyRef? Key = null)
+{
+    /// <summary>The key that the site asks for in <paramref name="owner"/>: <c>InheritKey</c> takes the key of the owner.</summary>
+    /// <param name="owner">The closed definition that owns the site.</param>
+    /// <returns>The key, or <see langword="null"/> for no key.</returns>
+    public KeyRef? KeyIn(ClosedDefinition owner) => KeyMode switch
+    {
+        SiteKeyMode.Specified => Key,
+        SiteKeyMode.Inherit => owner.Key,
+        _ => null,
+    };
+}
 
 /// <summary>The settings of the service collection extension, read from <c>IocServiceCollectionExtensionsAttribute</c>.</summary>
 /// <param name="Name">The <c>{Name}</c> part, already reduced to identifier characters.</param>

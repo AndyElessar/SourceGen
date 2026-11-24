@@ -219,19 +219,4 @@ public class PartialAccessorTests
         await Assert.That(Message(result, "SGIOC401")).StartsWith("'App.AppContainer → GetClock' requires a single 'App.IClock'");
         await Assert.That(result.GeneratedSources).IsEmpty();
     }
-
-    [Test]
-    public async Task PartialAccessor_WithKey_ContainerNotGeneratedYet()
-    {
-        GeneratorTestResult result = await RunAsync(Services + """
-            [IocContainer(IntegrateServiceProvider = false)]
-            public partial class AppContainer
-            {
-                [IocInject(Key = "main")]
-                public partial IClock Clock { get; }
-            }
-            """);
-
-        await Assert.That(result.GeneratedSources).IsEmpty();
-    }
 }

@@ -29,6 +29,31 @@ internal static class WrapperTypes
         _ => false,
     };
 
+    private static readonly HashSet<string> CollectionsAndDictionaries =
+    [
+        "System.Collections.Generic.IEnumerable`1",
+        "System.Collections.Generic.IReadOnlyCollection`1",
+        "System.Collections.Generic.ICollection`1",
+        "System.Collections.Generic.IReadOnlyList`1",
+        "System.Collections.Generic.IList`1",
+        "System.Collections.Generic.IDictionary`2",
+        "System.Collections.Generic.IReadOnlyDictionary`2",
+        "System.Collections.Generic.Dictionary`2",
+    ];
+
+    /// <summary>
+    /// Gets a value indicating whether <paramref name="type"/> is a collection or a dictionary of the grammar: the
+    /// requested types that a site can ask for with <c>KeyedService.AnyKey</c>.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <returns>Whether it is a collection or a dictionary. A one-dimensional array is a collection.</returns>
+    public static bool IsCollectionOrDictionary(ITypeSymbol type) => type switch
+    {
+        IArrayTypeSymbol array => array.Rank == 1,
+        INamedTypeSymbol { ContainingType: null, ContainingNamespace: { } ns } named => CollectionsAndDictionaries.Contains($"{ns.ToDisplayString()}.{named.MetadataName}"),
+        _ => false,
+    };
+
     /// <summary>Gets a value indicating whether <paramref name="type"/> is a wrapper type, by its original definition only.</summary>
     /// <param name="type">The type.</param>
     /// <returns>Whether it is a wrapper type. A one-dimensional array is a collection.</returns>

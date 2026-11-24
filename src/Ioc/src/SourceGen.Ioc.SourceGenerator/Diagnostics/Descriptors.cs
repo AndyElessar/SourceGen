@@ -47,8 +47,8 @@ internal static class Descriptors
     /// <summary>SGIOC007: <c>KeyedService.AnyKey</c> is used as a registration key.</summary>
     public static readonly DiagnosticDescriptor AnyKeyRegistration = Create(
         "SGIOC007",
-        "AnyKey cannot be used to register",
-        "KeyedService.AnyKey cannot be used as a registration key",
+        "AnyKey cannot be used here",
+        "KeyedService.AnyKey cannot be used {0}",
         DiagnosticSeverity.Error);
 
     /// <summary>SGIOC011: an argument that needs a symbol is not a <c>nameof()</c> expression of the right member.</summary>
@@ -58,11 +58,39 @@ internal static class Descriptors
         "{0} must be a nameof() expression that refers to {1}",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC017: <c>LookupMode</c> <c>InheritKey</c> or <c>NullKey</c> together with <c>Key</c>.</summary>
+    public static readonly DiagnosticDescriptor LookupModeWithKey = Create(
+        "SGIOC017",
+        "LookupMode conflicts with Key",
+        "LookupMode '{0}' cannot be combined with Key",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC018: two of <c>[IocInject]</c>, <c>[FromKeyedServices]</c>, and <c>[ServiceKey]</c> on the same position.</summary>
+    public static readonly DiagnosticDescriptor InjectAndFromKeyedServices = Create(
+        "SGIOC018",
+        "Conflicting key annotations",
+        "'{0}' has both {1} and {2}",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC019: <c>[IocInject]</c> on a constructor or an injection method sets <c>Key</c> or <c>LookupMode</c>.</summary>
+    public static readonly DiagnosticDescriptor KeyOnConstructorOrMethod = Create(
+        "SGIOC019",
+        "Key specified on constructor or method",
+        "[IocInject] on a {0} cannot specify Key or LookupMode; annotate the parameters instead",
+        DiagnosticSeverity.Error);
+
     /// <summary>SGIOC022: the type of a key value is not supported.</summary>
     public static readonly DiagnosticDescriptor UnsupportedKey = Create(
         "SGIOC022",
         "Unsupported key value",
         "A key of type '{0}' is not supported",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC023: a required <c>[ServiceKey]</c> parameter on a registration without a key.</summary>
+    public static readonly DiagnosticDescriptor ServiceKeyWithoutKey = Create(
+        "SGIOC023",
+        "ServiceKey on non-keyed registration",
+        "Parameter '{0}' has [ServiceKey] but '{1}' is registered without a key",
         DiagnosticSeverity.Error);
 
     /// <summary>SGIOC025: an assembly-or-class attribute is on a class that is neither a module nor a container.</summary>
@@ -152,7 +180,11 @@ internal static class Descriptors
         WrapperServiceType,
         AnyKeyRegistration,
         NameofTargetNotFound,
+        LookupModeWithKey,
+        InjectAndFromKeyedServices,
+        KeyOnConstructorOrMethod,
         UnsupportedKey,
+        ServiceKeyWithoutKey,
         AttributeOnPlainClass,
         UnsupportedOutputClass,
         InvalidServiceCollectionExtensionName,

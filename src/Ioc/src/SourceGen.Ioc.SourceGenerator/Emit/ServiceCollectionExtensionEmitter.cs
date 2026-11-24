@@ -130,7 +130,7 @@ internal static class ServiceCollectionExtensionEmitter
             {
                 if(parameters[i].ByReference)
                 {
-                    writer.WriteLine($"{TypeNames.CSharp(parameters[i].Type)} arg{i} = {Argument(parameters[i], i)};");
+                    writer.WriteLine($"{TypeNames.CSharp(parameters[i].Type)} arg{i} = {Argument(definition, parameters[i], i)};");
                 }
             }
 
@@ -151,7 +151,7 @@ internal static class ServiceCollectionExtensionEmitter
             }
             else
             {
-                writer.WriteLine($"{Argument(parameters[i], i)}{(i < parameters.Length - 1 ? "," : ");")}");
+                writer.WriteLine($"{Argument(definition, parameters[i], i)}{(i < parameters.Length - 1 ? "," : ");")}");
             }
         }
 
@@ -163,11 +163,23 @@ internal static class ServiceCollectionExtensionEmitter
     }
 
     /// <summary>The expression that resolves the argument of <paramref name="parameter"/> (ServiceCollection.Output.spec, "Dependency resolution").</summary>
+    /// <param name="owner">The closed definition that owns the parameter, for <c>InheritKey</c> and <c>[ServiceKey]</c>.</param>
     /// <param name="parameter">The parameter.</param>
     /// <param name="index">The index of the parameter, for the name of a pattern variable.</param>
-    private static string Argument(ConstructorParameter parameter, int index)
+    private static string Argument(ClosedDefinition owner, ConstructorParameter parameter, int index)
     {
         string type = TypeNames.CSharp(parameter.Type);
+        if(parameter.KeyMode == SiteKeyMode.ServiceKey)
+        {
+            return owner.Key is null ? $"({type})({ContainerEmitter.DefaultValue(parameter)})" : ContainerEmitter.ServiceKeyArgument(owner.Key);
+        }
+
+        // A keyed dependency uses the keyed methods of the provider, as the fallback provider of a container does
+        if(parameter.KeyIn(owner) is { } key)
+        {
+            return ContainerEmitter.FallbackArgument("sp", parameter, index, key);
+        }
+
         if(BuiltInServices.IsServiceProvider(parameter.Type))
         {
             return "sp";

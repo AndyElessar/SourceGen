@@ -123,6 +123,13 @@ public class ServiceCollectionExtensionTests
         await Assert.That(provider.GetRequiredKeyedService<IStore>(1L)).IsNotSameReferenceAs(a);
         await Assert.That(scope.ServiceProvider.GetKeyedServices<IStore>(KeyedService.AnyKey).Count()).IsEqualTo(5);
         await Assert.That(provider.GetService<IStore>()).IsNull();
+
+        StoreConsumer consumer = provider.GetRequiredKeyedService<StoreConsumer>("a");
+        await Assert.That(consumer.A).IsSameReferenceAs(a);
+        await Assert.That(consumer.Inherited).IsSameReferenceAs(a);
+        await Assert.That(consumer.Backup).IsSameReferenceAs(provider.GetRequiredKeyedService<IStore>(StoreKeys.Backup));
+        await Assert.That(consumer.Key).IsEqualTo("a");
+        await Assert.That(((Store)a).Key).IsEqualTo("a");
     }
 
     private sealed class Missing : IMissing;

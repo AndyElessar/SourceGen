@@ -16,12 +16,22 @@ internal static class KeyReader
 {
     private const string KeyedService = "Microsoft.Extensions.DependencyInjection.KeyedService";
 
+    /// <summary>The argument of SGIOC007 for a registration.</summary>
+    public const string RegistrationKey = "as a registration key";
+
+    /// <summary>The argument of SGIOC007 for a site that asks for one service.</summary>
+    public const string SingleService = "to resolve a single service";
+
     /// <summary>Reads the key of <paramref name="attribute"/>.</summary>
     /// <param name="attribute">The attribute.</param>
     /// <param name="syntax">The attribute syntax, to read a <c>nameof()</c> expression.</param>
     /// <param name="compilation">The compilation.</param>
+    /// <param name="anyKeyNotAllowed">
+    /// The argument of SGIOC007 when <c>KeyedService.AnyKey</c> is not allowed, or <see langword="null"/> when it is
+    /// allowed: a site that asks for a collection or a dictionary can query with it.
+    /// </param>
     /// <returns>The key, or the diagnostic.</returns>
-    public static KeyResult Read(AttributeData attribute, AttributeSyntax? syntax, Compilation compilation)
+    public static KeyResult Read(AttributeData attribute, AttributeSyntax? syntax, Compilation compilation, string? anyKeyNotAllowed = RegistrationKey)
     {
         TypedConstant key = default;
         bool csharp = false;
@@ -46,12 +56,21 @@ internal static class KeyReader
 
         ExpressionSyntax? keySyntax = syntax?.ArgumentList?.Arguments.FirstOrDefault(static a => a.NameEquals?.Name.Identifier.ValueText == "Key")?.Expression;
         SyntaxNode? location = keySyntax?.Parent ?? syntax;
-        return csharp ? ReadSymbol(keySyntax, location, compilation) : ReadValue(key, location, compilation);
+        return csharp ? ReadSymbol(keySyntax, location, compilation, anyKeyNotAllowed) : ReadValue(key, location, compilation);
     }
 
-    /// <summary>A value key from a constant of an attribute argument.</summary>
-    private static KeyResult ReadValue(TypedConstant key, SyntaxNode? location, Compilation compilation)
+    /// <summary>A value key from a constant of an attribute argument, for example the argument of <c>[FromKeyedServices]</c>.</summary>
+    /// <param name="key">The constant. A <see langword="null"/> constant is no key.</param>
+    /// <param name="location">Where SGIOC022 is reported.</param>
+    /// <param name="compilation">The compilation.</param>
+    /// <returns>The key, or the diagnostic.</returns>
+    public static KeyResult ReadValue(TypedConstant key, SyntaxNode? location, Compilation compilation)
     {
+        if(key.IsNull)
+        {
+            return new KeyResult(null);
+        }
+
         if(key.Kind is TypedConstantKind.Array or TypedConstantKind.Type || key.Type is null)
         {
             return Unsupported(key.Type, location);
@@ -67,7 +86,7 @@ internal static class KeyReader
     /// A key from a <c>nameof()</c> expression: a <c>const</c> is a value key, and another static field or property is a
     /// symbol key.
     /// </summary>
-    private static KeyResult ReadSymbol(ExpressionSyntax? keySyntax, SyntaxNode? location, Compilation compilation)
+    private static KeyResult ReadSymbol(ExpressionSyntax? keySyntax, SyntaxNode? location, Compilation compilation, string? anyKeyNotAllowed)
     {
         KeyResult notFound = new(null, Descriptors.NameofTargetNotFound.Id, location, ["Key", "a static field, property, or constant"]);
         if(keySyntax is not InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "nameof" }, ArgumentList.Arguments: [ArgumentSyntax operand] } invocation)
@@ -84,9 +103,9 @@ internal static class KeyReader
         }
 
         ISymbol? symbol = model.GetSymbolInfo(operand.Expression).Symbol;
-        if(symbol is IPropertySymbol { Name: "AnyKey", ContainingType: { } containing } && containing.ToDisplayString() == KeyedService)
+        if(anyKeyNotAllowed is not null && symbol is IPropertySymbol { Name: "AnyKey", ContainingType: { } containing } && containing.ToDisplayString() == KeyedService)
         {
-            return new KeyResult(null, Descriptors.AnyKeyRegistration.Id, location, []);
+            return new KeyResult(null, Descriptors.AnyKeyRegistration.Id, location, [anyKeyNotAllowed]);
         }
 
         switch(symbol)

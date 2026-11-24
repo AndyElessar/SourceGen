@@ -15,7 +15,7 @@ internal sealed record ContainingType(string Keyword, string Name);
 /// <param name="Modifiers">The modifiers of the declaration, which the implementation part repeats.</param>
 /// <param name="ReturnType">The return type as declared, with its nullable annotation.</param>
 /// <param name="Type">The requested type.</param>
-/// <param name="HasKey">Whether <c>[IocInject]</c> sets a key. Keys come in a later slice.</param>
+/// <param name="Key">The key that <c>[IocInject]</c> gives, or <see langword="null"/>. <c>InheritKey</c> counts as no key.</param>
 /// <param name="HasGeneratedCode">
 /// Whether the definition part already has <c>GeneratedCodeAttribute</c>. The attributes of the two parts merge, and the
 /// attribute does not allow more than one.
@@ -24,7 +24,7 @@ internal sealed record ContainingType(string Keyword, string Name);
 /// Whether the return type is a reference type annotated as nullable: an optional dependency. A nullable value type is
 /// a different type and stays required (Annotations.spec, "Partial accessor").
 /// </param>
-internal sealed record PartialAccessor(string Name, bool IsProperty, string Modifiers, string ReturnType, TypeRef Type, bool HasKey, bool HasGeneratedCode, bool IsOptional);
+internal sealed record PartialAccessor(string Name, bool IsProperty, string Modifiers, string ReturnType, TypeRef Type, KeyRef? Key, bool HasGeneratedCode, bool IsOptional);
 
 /// <summary>A class with <c>IocContainerAttribute</c>. It holds no position, so a move of code does not change it.</summary>
 /// <param name="Type">The container class.</param>
@@ -67,8 +67,8 @@ internal sealed record ContainerSite(NamedTypeRef Type, string FilePath, TextSpa
 /// <summary>What one class with <c>IocContainerAttribute</c> gives.</summary>
 /// <param name="Container">The container, or <see langword="null"/> when it is not valid.</param>
 /// <param name="Site">The site, or <see langword="null"/> when it is not valid.</param>
-/// <param name="Diagnostic">SGIOC107, when it is not valid.</param>
-internal sealed record ContainerResult(ContainerModel? Container, ContainerSite? Site, DiagnosticInfo? Diagnostic);
+/// <param name="Diagnostics">SGIOC107 when it is not valid, and the diagnostics of the keys of partial accessors.</param>
+internal sealed record ContainerResult(ContainerModel? Container, ContainerSite? Site, ImmutableEquatableArray<DiagnosticInfo> Diagnostics);
 
 /// <summary>Reads <c>IocContainerAttribute</c> (Container.Output.spec, "Container class").</summary>
 internal static class ContainerReader
@@ -95,9 +95,10 @@ internal static class ContainerReader
             DiagnosticInfo? diagnostic = reason is null || attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken) is not { } syntax
                 ? null
                 : DiagnosticInfo.Create(Descriptors.UnsupportedOutputClass.Id, syntax, type.ToDisplayString(), "container", reason);
-            return new(null, null, diagnostic);
+            return new(null, null, diagnostic is null ? [] : [diagnostic]);
         }
 
+        List<DiagnosticInfo> diagnostics = [];
         ContainerModel container = new(
             typeRef,
             type.ContainingNamespace is { IsGlobalNamespace: false } ns ? ns.ToDisplayString() : null,
@@ -108,10 +109,10 @@ internal static class ContainerReader
             Named(attribute, "IncludeTags") is { Kind: TypedConstantKind.Array, Values.Length: > 0 },
             Named(attribute, "ThreadSafeStrategy") is { Value: int strategy } ? strategy : 1,
             Named(attribute, "EagerResolveOptions") is { Value: int eager } ? eager : 1,
-            Accessors(type, context.SemanticModel.Compilation, cancellationToken),
+            Accessors(type, context.SemanticModel.Compilation, diagnostics, cancellationToken),
             context.SemanticModel.Compilation.GetTypeByMetadataName(ServiceProviderBuilder) is not null);
         ClassDeclarationSyntax declaration = (ClassDeclarationSyntax)context.TargetNode;
-        return new(container, new ContainerSite(typeRef, declaration.SyntaxTree.FilePath, declaration.Identifier.Span), null);
+        return new(container, new ContainerSite(typeRef, declaration.SyntaxTree.FilePath, declaration.Identifier.Span), diagnostics.ToImmutableEquatableArray());
     }
 
     private static readonly SymbolDisplayFormat ReturnTypeFormat = SymbolDisplayFormat.FullyQualifiedFormat
@@ -119,9 +120,10 @@ internal static class ContainerReader
 
     /// <summary>
     /// The partial members without an implementation part that have the shape of a partial accessor. Another partial
-    /// member is not implemented, and the compiler reports it (Annotations.spec, "Partial accessor").
+    /// member is not implemented, and the compiler reports it (Annotations.spec, "Partial accessor"). An accessor with an
+    /// invalid key is reported and not implemented.
     /// </summary>
-    private static ImmutableEquatableArray<PartialAccessor> Accessors(INamedTypeSymbol type, Compilation compilation, CancellationToken cancellationToken)
+    private static ImmutableEquatableArray<PartialAccessor> Accessors(INamedTypeSymbol type, Compilation compilation, List<DiagnosticInfo> diagnostics, CancellationToken cancellationToken)
     {
         List<PartialAccessor> accessors = [];
         foreach(ISymbol member in type.GetMembers())
@@ -143,19 +145,12 @@ internal static class ContainerReader
                 continue;
             }
 
-            bool hasKey = false;
-            bool hasGeneratedCode = false;
-            foreach(AttributeData attribute in member.GetAttributes())
+            bool hasGeneratedCode = member.GetAttributes().Any(static a => a.AttributeClass is { Name: "GeneratedCodeAttribute" } c && c.ToDisplayString() == "System.CodeDom.Compiler.GeneratedCodeAttribute");
+            SiteKey key = SiteKeyReader.Read(member.GetAttributes(), member is IPropertySymbol accessorProperty ? accessorProperty.Type : ((IMethodSymbol)member).ReturnType, member.Name, declaration, compilation, cancellationToken);
+            if(key.Errors.Count > 0)
             {
-                switch(attribute.AttributeClass)
-                {
-                    case { Name: "IocInjectAttribute" } c when c.ToDisplayString() == DeclarationReader.InjectAttribute:
-                        hasKey |= attribute.NamedArguments.Any(static n => n.Key == "Key");
-                        break;
-                    case { Name: "GeneratedCodeAttribute" } c when c.ToDisplayString() == "System.CodeDom.Compiler.GeneratedCodeAttribute":
-                        hasGeneratedCode = true;
-                        break;
-                }
+                diagnostics.AddRange(key.Errors);
+                continue;
             }
 
             accessors.Add(new PartialAccessor(
@@ -164,7 +159,7 @@ internal static class ContainerReader
                 string.Join(" ", declaration.Modifiers.Select(static m => m.Text)),
                 returnType.ToDisplayString(ReturnTypeFormat),
                 typeRef,
-                hasKey,
+                key.Mode == SiteKeyMode.Specified ? key.Key : null,
                 hasGeneratedCode,
                 OptionalDependency.IsNullableReference(returnType, annotation)));
         }

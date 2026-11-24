@@ -1,0 +1,23 @@
+﻿    private static global::App.Consumer __Create_Consumer_709c3515(global::System.IServiceProvider sp)
+        => new global::App.Consumer(
+            (global::App.IRepo)global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(sp, typeof(global::App.IRepo), "a"),
+            (global::App.IRepo)global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(sp, typeof(global::App.IRepo), (global::System.Int64)(1)),
+            (global::App.IRepo)global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(sp, typeof(global::App.IRepo), global::App.Keys.Backup),
+            (global::App.IRepo)global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(sp, typeof(global::App.IRepo), "a"),
+            (global::App.IRepo)global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(sp, typeof(global::App.IRepo), "a"),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IRepo>(sp),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IRepo>(sp),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IRepo>(sp),
+            "a");
+
+    private static global::App.Repo __Create_Repo_c855a9f8(global::System.IServiceProvider sp)
+        => new global::App.Repo(
+            global::App.Keys.Backup);
+
+    private static global::App.Repo __Create_Repo_c4fdfc8f(global::System.IServiceProvider sp)
+        => new global::App.Repo(
+            (global::System.Int64)(1));
+
+    private static global::App.Repo __Create_Repo_f09b9d5b(global::System.IServiceProvider sp)
+        => new global::App.Repo(
+            "a");

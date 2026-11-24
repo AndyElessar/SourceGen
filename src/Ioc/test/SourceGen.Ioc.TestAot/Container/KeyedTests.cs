@@ -105,4 +105,36 @@ public class KeyedTests
         // The Scoped StoreKind.Disk needs a scope
         await Assert.That(scope.GetKeyedServices<IStore>(KeyedService.AnyKey).Count()).IsEqualTo(7);
     }
+
+    [Test]
+    public async Task KeyedDependency_EachSite_GetsTheRegistrationOfItsKey()
+    {
+        using AppContainer root = new();
+
+        StoreConsumer consumer = root.GetRequiredKeyedService<StoreConsumer>("a");
+
+        await Assert.That(consumer.A).IsSameReferenceAs(root.GetRequiredKeyedService<IStore>("a"));
+        await Assert.That(consumer.One).IsSameReferenceAs(root.GetRequiredKeyedService<IStore>(1L));
+        await Assert.That(consumer.Backup).IsSameReferenceAs(root.GetRequiredKeyedService<IStore>(StoreKeys.Backup));
+        await Assert.That(consumer.Inherited).IsSameReferenceAs(consumer.A);
+        await Assert.That(consumer.Key).IsEqualTo("a");
+    }
+
+    [Test]
+    public async Task ServiceKey_EachKey_GetsItsOwnKey()
+    {
+        using AppContainer root = new();
+
+        await Assert.That(((Store)root.GetRequiredKeyedService<IStore>("a")).Key).IsEqualTo("a");
+        await Assert.That(((Store)root.GetRequiredKeyedService<IStore>(1L)).Key).IsEqualTo(1L);
+        await Assert.That(((Store)root.GetRequiredKeyedService<IStore>(StoreKeys.Backup)).Key).IsSameReferenceAs(StoreKeys.Backup);
+    }
+
+    [Test]
+    public async Task PartialAccessor_WithKey_ReturnsTheKeyedRegistration()
+    {
+        using AppContainer root = new();
+
+        await Assert.That(root.PrimaryStore).IsSameReferenceAs(root.GetRequiredKeyedService<IStore>(StoreKeys.Primary));
+    }
 }

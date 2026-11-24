@@ -70,7 +70,9 @@ internal static class DependencyGraph
             ImmutableEquatableArray<ConstructorParameter> parameters = definitions[i].ConstructorParameters;
             for(int p = 0; p < parameters.Length; p++)
             {
-                if(providers.TryGetValue((parameters[p].Type, string.Empty), out List<int>? candidates) && candidates.Count == 1)
+                if(parameters[p].KeyMode != SiteKeyMode.ServiceKey
+                    && providers.TryGetValue((parameters[p].Type, KeyRef.CanonicalOf(parameters[p].KeyIn(definitions[i]))), out List<int>? candidates)
+                    && candidates.Count == 1)
                 {
                     edges[i].Add(new GraphEdge(i, p, candidates[0]));
                 }

@@ -227,7 +227,30 @@ public static class StoreKeys
 [IocRegister(ServiceLifetime.Scoped, ServiceTypes = [typeof(IStore)], Key = StoreKind.Disk)]
 [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IStore)], KeyType = KeyType.Csharp, Key = nameof(StoreKeys.Primary))]
 [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IStore)], KeyType = KeyType.Csharp, Key = nameof(StoreKeys.Backup))]
-public sealed class Store : IStore;
+public sealed class Store([ServiceKey] object key) : IStore
+{
+    public object Key => key;
+}
+
+/// <summary>Keys at dependency sites: a specified key, InheritKey, and no key.</summary>
+[IocRegister(ServiceLifetime.Transient, Key = "a")]
+public sealed class StoreConsumer(
+    [IocInject(Key = "a")] IStore a,
+    [FromKeyedServices(1L)] IStore one,
+    [IocInject(KeyType = KeyType.Csharp, Key = nameof(StoreKeys.Backup))] IStore backup,
+    [FromKeyedServices] IStore inherited,
+    [ServiceKey] string key)
+{
+    public IStore A => a;
+
+    public IStore One => one;
+
+    public IStore Backup => backup;
+
+    public IStore Inherited => inherited;
+
+    public string Key => key;
+}
 
 /// <summary>A service that only the fallback provider supplies.</summary>
 public interface IExternal
@@ -288,6 +311,9 @@ public partial class AppContainer
     public partial IServiceProvider Provider { get; }
 
     public partial IMissing? Missing { get; }
+
+    [IocInject(KeyType = KeyType.Csharp, Key = nameof(StoreKeys.Primary))]
+    public partial IStore PrimaryStore { get; }
 }
 
 [IocContainer(IntegrateServiceProvider = false, EagerResolveOptions = EagerResolveOptions.None)]

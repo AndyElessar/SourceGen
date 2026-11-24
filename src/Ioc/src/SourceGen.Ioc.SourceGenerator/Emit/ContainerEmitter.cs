@@ -426,7 +426,8 @@ internal static class ContainerEmitter
             ArgumentKind.Self => $"({type})c",
             ArgumentKind.Root => $"({type})c.__singletons.Root",
             ArgumentKind.Default => $"({type})({DefaultValue(parameter)})",
-            ArgumentKind.Fallback => FallbackArgument("c.__Fallback()", parameter, index),
+            ArgumentKind.Fallback => FallbackArgument("c.__Fallback()", parameter, index, argument.Key),
+            ArgumentKind.ServiceKey => ServiceKeyArgument(definition.Definition.Key!),
             _ => $"({type})c.{Get(plan.Definitions[argument.Target].Definition)}()",
         };
     }
@@ -439,24 +440,35 @@ internal static class ContainerEmitter
     /// <param name="provider">The expression of the fallback provider.</param>
     /// <param name="parameter">The dependency.</param>
     /// <param name="index">The index of the dependency, for the name of a pattern variable.</param>
-    internal static string FallbackArgument(string provider, ConstructorParameter parameter, int index)
+    /// <param name="key">The key that the dependency asks for, or <see langword="null"/>.</param>
+    internal static string FallbackArgument(string provider, ConstructorParameter parameter, int index, KeyRef? key)
     {
         string type = TypeNames.CSharp(parameter.Type);
+        string keyed = $"{DependencyInjection}.ServiceProviderKeyedServiceExtensions";
         if(parameter.Optional == OptionalMode.Required)
         {
-            return $"({type}){DependencyInjection}.ServiceProviderServiceExtensions.GetRequiredService({provider}, typeof({type}))";
+            return key is null
+                ? $"({type}){DependencyInjection}.ServiceProviderServiceExtensions.GetRequiredService({provider}, typeof({type}))"
+                : $"({type}){keyed}.GetRequiredKeyedService({provider}, typeof({type}), {KeyNames.Expression(key)})";
         }
 
+        string get = key is null ? $"{provider}.GetService(typeof({type}))" : $"{keyed}.GetKeyedService({provider}, typeof({type}), {KeyNames.Expression(key)})";
         if(!parameter.IsValueType)
         {
             return parameter.Optional == OptionalMode.Nullable
-                ? $"({type}?){provider}.GetService(typeof({type}))"
-                : $"({type}?){provider}.GetService(typeof({type})) ?? ({type})({DefaultValue(parameter)})";
+                ? $"({type}?){get}"
+                : $"({type}?){get} ?? ({type})({DefaultValue(parameter)})";
         }
 
         string test = parameter.Type is NamedTypeRef { MetadataName: "System.Nullable`1", Arguments: [TypeRef underlying] } ? TypeNames.CSharp(underlying) : type;
-        return $"{provider}.GetService(typeof({type})) is {test} v{index} ? ({type})v{index} : ({type})({DefaultValue(parameter)})";
+        return $"{get} is {test} v{index} ? ({type})v{index} : ({type})({DefaultValue(parameter)})";
     }
+
+    /// <summary>
+    /// The argument of a <c>[ServiceKey]</c> parameter: the key expression of the closed definition, without a cast. When
+    /// the parameter type is not compatible with the key, the compiler reports it (Annotations.spec, "Key specification").
+    /// </summary>
+    internal static string ServiceKeyArgument(KeyRef key) => KeyNames.Expression(key);
 
     /// <summary>
     /// The default value of a missing optional dependency, before the cast to the parameter type. A <c>null</c> of a
@@ -506,7 +518,7 @@ internal static class ContainerEmitter
                     break;
                 case ArgumentKind.Fallback:
                     ConstructorParameter dependency = new(member.Type, member.Name, false, member.IsOptional ? OptionalMode.Nullable : OptionalMode.Required);
-                    writer.WriteLine($"return {FallbackArgument("__Fallback()", dependency, 0)};");
+                    writer.WriteLine($"return {FallbackArgument("__Fallback()", dependency, 0, accessor.Argument.Key)};");
                     break;
                 default:
                     writer.WriteLine($"return ({member.ReturnType}){Get(plan.Definitions[accessor.Argument.Target].Definition)}();");
