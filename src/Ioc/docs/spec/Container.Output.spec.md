@@ -162,7 +162,7 @@ A request by `Type` can ask for an `IEnumerable<T>` that the container does not 
 
 ### `IsService` and `IsKeyedService`
 
-When the lookup table has the `(type, key)`, the result is `true`. An ambiguous `(type, key)` counts too. Otherwise, when a fallback provider exists and supplies the related interface as a service (`GetService(typeof(IServiceProviderIsService))` or `GetService(typeof(IServiceProviderIsKeyedService))`), the container asks it. Otherwise the result is `false`. MS.DI supplies these interfaces as services, and its provider does not implement them (see [ADR 2026112501](../adr/2026112501_FallbackInterfacesAsServices.md)). For an asynchronous service `S` itself the result is `false`, and for `Task<S>` it is `true`. Without a fallback provider, the result for an unknown `IEnumerable<T>` is `false`. With one, the fallback provider decides.
+When the lookup table has the `(type, key)`, the result is `true`. An ambiguous `(type, key)` counts too. Otherwise, when a fallback provider exists and supplies the related interface as a service (`GetService(typeof(IServiceProviderIsService))` or `GetService(typeof(IServiceProviderIsKeyedService))`), the container asks it. Otherwise the result is `false`. MS.DI supplies these interfaces as services, and its provider does not implement them (see [ADR IocRewrite/0017](../adr/0001_IocRewrite/0017_FallbackInterfacesAsServices.md)). For an asynchronous service `S` itself the result is `false`, and for `Task<S>` it is `true`. Without a fallback provider, the result for an unknown `IEnumerable<T>` is `false`. With one, the fallback provider decides.
 
 ## Wrapper types
 

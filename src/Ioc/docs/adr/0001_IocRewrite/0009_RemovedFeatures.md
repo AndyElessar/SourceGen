@@ -7,7 +7,7 @@ date: 2026-11-23
 
 ## Context and problem statement
 
-The rewrite (see [Rewrite of SourceGen.Ioc](2026112301_IocRewrite.md)) does not keep compatibility with the previous version of SourceGen.Ioc. Each feature of the previous version was kept only when it fits the principles of the [constitution](../Constitution.md), most of all explicitness.
+The rewrite (see [Rewrite of SourceGen.Ioc](README.md)) does not keep compatibility with the previous version of SourceGen.Ioc. Each feature of the previous version was kept only when it fits the principles of the [constitution](../../Constitution.md), most of all explicitness.
 
 ## Decision outcome
 
@@ -18,24 +18,24 @@ The rewrite removes these features:
 | `IocRegisterDefaultsAttribute` | `IocRegisterBatchAttribute` |
 | `RegisterAllInterfaces`, `RegisterAllBaseClasses` | Service types are listed explicitly. |
 | MSBuild property `SourceGenIocDefaultLifetime` | The lifetime is a required setting. |
-| MSBuild property `SourceGenIocName` | `IocServiceCollectionExtensionsAttribute.Name`. See [Generation of the service collection extension](2026112308_ServiceCollectionExtensionGeneration.md). |
+| MSBuild property `SourceGenIocName` | `IocServiceCollectionExtensionsAttribute.Name`. See [Generation of the service collection extension](0007_ServiceCollectionExtensionGeneration.md). |
 | A factory given as a string | `nameof()` or the factory attributes |
 | A key that uses a type parameter | A key must be known at compile time. |
-| `UseSwitchStatement` | The container uses lookup tables only. See [Lifetime and thread safety](2026112306_LifetimeAndThreadSafety.md). |
+| `UseSwitchStatement` | The container uses lookup tables only. See [Lifetime and thread safety](0005_LifetimeAndThreadSafety.md). |
 | `IocGenericFactoryAttribute` and `GenericTypeMap` | A generic factory method |
 | Generic attributes (`IocRegister<T>` and others) | The non-generic attributes |
 | Third-party `[Inject]` attributes | `IocInjectAttribute` |
 | Registration of collection types by the user | The generator creates wrapper types. |
-| A module imported as an independent container (`IIocContainer<TContainer>.Resolvers`, merge at run time) | A module owns no instance. The composition root builds one dependency graph. See [Cross-assembly composition](2026112303_CrossAssemblyComposition.md). |
-| Separate analyzers (`RegisterAnalyzer`, `ContainerAnalyzer`) | The generator reports diagnostics. See [Diagnostics by the generator](2026112302_DiagnosticsByGenerator.md). |
+| A module imported as an independent container (`IIocContainer<TContainer>.Resolvers`, merge at run time) | A module owns no instance. The composition root builds one dependency graph. See [Cross-assembly composition](0002_CrossAssemblyComposition.md). |
+| Separate analyzers (`RegisterAnalyzer`, `ContainerAnalyzer`) | The generator reports diagnostics. See [Diagnostics by the generator](0001_DiagnosticsByGenerator.md). |
 | Decorators on factory registrations | Decorators apply only to registrations of an implementation type. |
-| `Task<T>` registrations in the service collection extension | `IocTask<S>`. See [Holders and asynchronous services](2026112309_HoldersAndAsyncServices.md). |
-| The open generic registration in the service collection extension | Only derived registrations are registered. See [Generics and constraints](2026112304_GenericsAndConstraints.md). |
+| `Task<T>` registrations in the service collection extension | `IocTask<S>`. See [Holders and asynchronous services](0008_HoldersAndAsyncServices.md). |
+| The open generic registration in the service collection extension | Only derived registrations are registered. See [Generics and constraints](0003_GenericsAndConstraints.md). |
 | One call of a service collection extension for each module | Only the method of the final assembly is called. |
 | `ThreadSafeStrategy.SemaphoreSlim`, `ThreadSafeStrategy.SpinLock` | `Lock` or `CompareExchange` |
 | The parameterless container constructor when `IntegrateServiceProvider` is `true` | Missing dependencies go to the fallback provider at compile time, so a container without one fails at run time. |
 | All diagnostics `SGIOC001` to `SGIOC046` | New IDs by category. The new numbers do not avoid the old numbers, so one ID can have a different meaning in the old and the new version. |
-| `AsyncInitHolder` | `IocHolder.OwnTask` and `IocTask<S>`. See [Holders and asynchronous services](2026112309_HoldersAndAsyncServices.md). |
+| `AsyncInitHolder` | `IocHolder.OwnTask` and `IocTask<S>`. See [Holders and asynchronous services](0008_HoldersAndAsyncServices.md). |
 
 ## Rejected options
 

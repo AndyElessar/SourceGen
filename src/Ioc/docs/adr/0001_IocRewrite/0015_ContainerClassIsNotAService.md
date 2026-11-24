@@ -7,7 +7,7 @@ date: 2026-11-24
 
 ## Context and problem statement
 
-A container class is a built-in service of its own container (see [Built-in services](../spec/Analysis.Model.spec.md#built-in-services)). A dependency on it gets the container instance that resolves it.
+A container class is a built-in service of its own container (see [Built-in services](../../spec/Analysis.Model.spec.md#built-in-services)). A dependency on it gets the container instance that resolves it.
 
 The specification did not say what happens when the user registers a container class, as the implementation type or as a service type. Such a registration gives a container class two meanings. In its own container, it is the built-in service. In another container, or in the service collection extension, it is an ordinary closed definition, and the resolution creates a new container instance. The checks of the dependency graph then have to know which container classes are not nodes.
 

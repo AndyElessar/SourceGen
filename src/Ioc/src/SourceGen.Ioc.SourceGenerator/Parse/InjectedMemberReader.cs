@@ -304,7 +304,7 @@ internal static class InjectedMemberReader
 
     /// <summary>
     /// Whether the member has an initializer that gives a default value. An initializer that only suppresses the nullable
-    /// warning (<c>null!</c>, <c>default!</c>, <c>default(T)!</c>) does not count (ADR 2026112503).
+    /// warning (<c>null!</c>, <c>default!</c>, <c>default(T)!</c>) does not count (ADR IocRewrite/0019).
     /// </summary>
     private static bool HasInitializer(SyntaxReference? site, CancellationToken cancellationToken)
     {

@@ -7,12 +7,12 @@ date: 2026-11-24
 
 ## Context and problem statement
 
-The section "Explicitness" of the [constitution](../Constitution.md#41-explicitness) lists the only cases in which the generator decides a result from types alone. Everything else needs an explicit setting.
+The section "Explicitness" of the [constitution](../../Constitution.md#41-explicitness) lists the only cases in which the generator decides a result from types alone. Everything else needs an explicit setting.
 
 The specifications had two rules that were not in that list:
 
-- An injected field or property with an initializer is an optional dependency. When no service is found, the generator does not assign it, and the initial value stays (see [Semantics](../spec/Semantics.spec.md#dependency-resolution)).
-- A dictionary, a `KeyValuePair<TKey, T>`, or a collection of `KeyValuePair<TKey, T>` with `TKey` equal to `object` contains all keyed registrations. With any other `TKey`, only the registrations whose key type is exactly `TKey` match (see [Analysis model](../spec/Analysis.Model.spec.md#grammar-of-wrapper-types)).
+- An injected field or property with an initializer is an optional dependency. When no service is found, the generator does not assign it, and the initial value stays (see [Semantics](../../spec/Semantics.spec.md#dependency-resolution)).
+- A dictionary, a `KeyValuePair<TKey, T>`, or a collection of `KeyValuePair<TKey, T>` with `TKey` equal to `object` contains all keyed registrations. With any other `TKey`, only the registrations whose key type is exactly `TKey` match (see [Analysis model](../../spec/Analysis.Model.spec.md#grammar-of-wrapper-types)).
 
 Thus the specifications contradicted the constitution.
 

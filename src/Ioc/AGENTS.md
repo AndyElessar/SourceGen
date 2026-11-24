@@ -30,7 +30,7 @@ dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -
 | --- | --- |
 | [Constitution](docs/Constitution.md) | Principles, scope and limits, terms, documented differences from MS.DI. Read it first. It wins over a spec; when they disagree, tell the user. A change needs a new ADR. |
 | [Specifications](docs/spec/SPEC.spec.md) | Index of the specs. The source of truth for current behavior. |
-| [ADRs](docs/adr/) | Why a decision was made, the rejected alternatives, and the tested facts with versions. |
+| [ADRs](docs/adr/) | Why a decision was made, the rejected alternatives, and the tested facts with versions. One folder for each set. The decisions of the rewrite are in [0001_IocRewrite](docs/adr/0001_IocRewrite/README.md), referred to as `IocRewrite/NNNN`. |
 
 Design documents are in English, in the style of the `ste80-humanizer` skill. See the `sourcegen-spec-writing` skill.
 

@@ -7,7 +7,7 @@ date: 2026-11-24
 
 ## Context and problem statement
 
-The [analysis model](../spec/Analysis.Model.spec.md#circular-dependencies) said that the generator reports `SGIOC301` one time for each cycle. A group of closed definitions that depend on each other can contain many elementary cycles. Their number can grow exponentially with the size of the group. All of them describe the same problem: the group cannot be created.
+The [analysis model](../../spec/Analysis.Model.spec.md#circular-dependencies) said that the generator reports `SGIOC301` one time for each cycle. A group of closed definitions that depend on each other can contain many elementary cycles. Their number can grow exponentially with the size of the group. All of them describe the same problem: the group cannot be created.
 
 The specification also did not say where the definite check reports a cycle. A cycle has one dependency site for each edge.
 

@@ -1,11 +1,11 @@
 ---
-status: accepted
+status: open
 date: 2026-11-23
 ---
 
 # Rewrite of SourceGen.Ioc
 
-This ADR is the entry point of the set `20261123NN`. It gives the background and the goal that all ADRs of the set share, and it links to each of them.
+This document is the entry point of the ADR set of the rewrite, the folder `0001_IocRewrite`. It gives the background and the goal that all ADRs of the set share, and it links to each of them. Other documents refer to an ADR of the set as `IocRewrite/NNNN`, for example `IocRewrite/0020`. The set is open while the rewrite goes on, so its ADRs are edited in place when a decision changes (see [IocRewrite/0010](0010_DesignDocumentLayout.md)).
 
 ## Context and problem statement
 
@@ -39,44 +39,44 @@ The goal of the rewrite is to:
 3. Record the differences from MS.DI.
 4. Avoid the confusion and the maintenance problems of the previous design.
 
-The [constitution](../Constitution.md) holds the principles, the scope and limits, and the documented differences that follow from this goal. The [specifications](../spec/SPEC.spec.md) hold the behavior.
+The [constitution](../../Constitution.md) holds the principles, the scope and limits, and the documented differences that follow from this goal. The [specifications](../../spec/SPEC.spec.md) hold the behavior.
 
 ### Decisions of this set
 
 | ADR | Topic |
 | --- | --- |
-| [2026112302](2026112302_DiagnosticsByGenerator.md) | The generator reports diagnostics. Levels and numbering of diagnostics. |
-| [2026112303](2026112303_CrossAssemblyComposition.md) | Modules, module info, entries, and the JSON reader and writer. |
-| [2026112304](2026112304_GenericsAndConstraints.md) | Open generics and the check of generic constraints. |
-| [2026112305](2026112305_RegistrationRules.md) | Constructor selection, the inner parameter of a decorator, and registrations that are refused. |
-| [2026112306](2026112306_LifetimeAndThreadSafety.md) | Rules between lifetimes, thread safety strategies, root and scope. |
-| [2026112307](2026112307_ContainerDisposalAndFallback.md) | Disposal in the container and the fallback provider. |
-| [2026112308](2026112308_ServiceCollectionExtensionGeneration.md) | Generation of the service collection extension. |
-| [2026112309](2026112309_HoldersAndAsyncServices.md) | Holders, asynchronous services, and failure during creation in the service collection extension and the container. |
-| [2026112310](2026112310_RemovedFeatures.md) | Features of the previous version that the rewrite removes. |
-| [2026112311](2026112311_DesignDocumentLayout.md) | Layout and rules of the design documents. |
+| [0001](0001_DiagnosticsByGenerator.md) | The generator reports diagnostics. Levels and numbering of diagnostics. |
+| [0002](0002_CrossAssemblyComposition.md) | Modules, module info, entries, and the JSON reader and writer. |
+| [0003](0003_GenericsAndConstraints.md) | Open generics and the check of generic constraints. |
+| [0004](0004_RegistrationRules.md) | Constructor selection, the inner parameter of a decorator, and registrations that are refused. |
+| [0005](0005_LifetimeAndThreadSafety.md) | Rules between lifetimes, thread safety strategies, root and scope. |
+| [0006](0006_ContainerDisposalAndFallback.md) | Disposal in the container and the fallback provider. |
+| [0007](0007_ServiceCollectionExtensionGeneration.md) | Generation of the service collection extension. |
+| [0008](0008_HoldersAndAsyncServices.md) | Holders, asynchronous services, and failure during creation in the service collection extension and the container. |
+| [0009](0009_RemovedFeatures.md) | Features of the previous version that the rewrite removes. |
+| [0010](0010_DesignDocumentLayout.md) | Layout and rules of the design documents. |
 
 Later decisions of the rewrite:
 
 | ADR | Topic |
 | --- | --- |
-| [2026112401](2026112401_ImplicitRulesInConstitution.md) | Initializers and the `object` key type in the list of implicit rules of the constitution. |
-| [2026112402](2026112402_ServiceCollectionExtensionWrapperWithoutCandidate.md) | A wrapper of a service that the service collection extension does not register. |
-| [2026112403](2026112403_CompositionRootAndServiceCollectionExtension.md) | The terms "composition root" and "service collection extension". |
-| [2026112404](2026112404_CycleReportForEachComponent.md) | One report of a circular dependency for each strongly connected component. |
-| [2026112405](2026112405_ContainerClassIsNotAService.md) | A container class cannot be registered as a service. |
-| [2026112406](2026112406_OptionalDependencyByNullableType.md) | A nullable value type (on a parameter or a partial accessor) and `[Optional]` without a default value are required dependencies. |
-| [2026112501](2026112501_FallbackInterfacesAsServices.md) | The container gets `IServiceProviderIsService` and `IServiceProviderIsKeyedService` from the fallback provider as services. |
-| [2026112502](2026112502_NoAnyKeyRegistration.md) | A registration cannot use `KeyedService.AnyKey` as its key. A documented difference of the constitution. |
-| [2026112503](2026112503_NullForgivingInitializerIsRequired.md) | An initializer such as `null!` does not make an injected member optional. Changes the list of implicit rules of the constitution. |
-| [2026112504](2026112504_NullableReferenceIsNotOptional.md) | A nullable reference type does not make a parameter or an injected member optional. Only a partial accessor keeps this rule. |
+| [0011](0011_ImplicitRulesInConstitution.md) | Initializers and the `object` key type in the list of implicit rules of the constitution. |
+| [0012](0012_ServiceCollectionExtensionWrapperWithoutCandidate.md) | A wrapper of a service that the service collection extension does not register. |
+| [0013](0013_CompositionRootAndServiceCollectionExtension.md) | The terms "composition root" and "service collection extension". |
+| [0014](0014_CycleReportForEachComponent.md) | One report of a circular dependency for each strongly connected component. |
+| [0015](0015_ContainerClassIsNotAService.md) | A container class cannot be registered as a service. |
+| [0016](0016_OptionalDependencyByNullableType.md) | A nullable value type (on a parameter or a partial accessor) and `[Optional]` without a default value are required dependencies. |
+| [0017](0017_FallbackInterfacesAsServices.md) | The container gets `IServiceProviderIsService` and `IServiceProviderIsKeyedService` from the fallback provider as services. |
+| [0018](0018_NoAnyKeyRegistration.md) | A registration cannot use `KeyedService.AnyKey` as its key. A documented difference of the constitution. |
+| [0019](0019_NullForgivingInitializerIsRequired.md) | An initializer such as `null!` does not make an injected member optional. Changes the list of implicit rules of the constitution. |
+| [0020](0020_NullableReferenceIsNotOptional.md) | A nullable reference type does not make a parameter or an injected member optional. Only a partial accessor keeps this rule. |
 
 ### Consequences
 
 - Good: one analysis gives both the generated code and the diagnostics.
 - Good: a registration states its lifetime, its service types, and its kind (implementation type, factory, or instance) directly.
 - Bad: users of the previous version must change their code. The attributes, the diagnostics, and the generated API are different.
-- Bad: some features of the previous version do not exist in the rewrite. See [2026112310](2026112310_RemovedFeatures.md).
+- Bad: some features of the previous version do not exist in the rewrite. See [0009](0009_RemovedFeatures.md).
 
 ## Rejected options
 

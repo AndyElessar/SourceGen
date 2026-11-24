@@ -351,7 +351,7 @@ The user gives the implementation type with `typeof()` or as the class that has 
 | --- | --- |
 | It is not a class, or it is an abstract type, a static type, or a delegate type | `SGIOC003` |
 | It uses a `file` type: the type, one of its outer types, or one of its type arguments is a `file` type | `SGIOC003` (see the note below) |
-| It is a container class: it has `IocContainerAttribute`. This includes a container class of a referenced assembly when its metadata keeps the attribute (the assembly was built with `SOURCEGEN`) | `SGIOC003` (see [ADR 2026112405](../adr/2026112405_ContainerClassIsNotAService.md)) |
+| It is a container class: it has `IocContainerAttribute`. This includes a container class of a referenced assembly when its metadata keeps the attribute (the assembly was built with `SOURCEGEN`) | `SGIOC003` (see [ADR IocRewrite/0015](../adr/0001_IocRewrite/0015_ContainerClassIsNotAService.md)) |
 | It is a nested open generic (`Outer<>.Inner<>`: a containing type has type parameters that are not specified) | `SGIOC005` |
 
 A type argument that is not a concrete type (`typeof(Handler<T>)`) cannot be written in an attribute, so the generator does not handle it.

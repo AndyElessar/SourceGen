@@ -19,7 +19,7 @@ The design documents used two terms that readers found hard to understand.
 - The constitution now states who owns the instances. A module owns none. Only the composition root builds the dependency graph. A container owns its instances. With the service collection extension, MS.DI owns them.
 - The table of documented differences in the constitution labeled the service collection extension "Registration" in the column of the output that a difference applies to. The label is now "Service collection extension", because "registration" has other meanings.
 - "Container" stays the term for the generated container. The text uses "composition root" only where a rule applies to both outputs, for example in the module output, which does not know which output uses it.
-- The specification `Register.Output.spec.md` is renamed to `ServiceCollection.Output.spec.md`. ADRs 2026112308 and 2026112402 get new file names and titles with the new term. All ADRs use the new terms, so that a reader does not need a table of old names.
+- The specification `Register.Output.spec.md` is renamed to `ServiceCollection.Output.spec.md`. ADRs [IocRewrite/0007](0007_ServiceCollectionExtensionGeneration.md) and [IocRewrite/0012](0012_ServiceCollectionExtensionWrapperWithoutCandidate.md) get new file names and titles with the new term. All ADRs use the new terms, so that a reader does not need a table of old names.
 
 The diagnostic messages of `SGIOC108` and `SGIOC504` and the run-time message of `IocRegistrationMarker` still say "Add method". These messages name one concrete method, so this decision does not change them.
 

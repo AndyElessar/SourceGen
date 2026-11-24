@@ -278,7 +278,7 @@ public partial class MemberInjectionTests
     [Arguments("= ((default))!;")]
     public async Task SGIOC402_NullForgivingInitializer_MemberIsRequired(string initializer)
     {
-        // Such an initializer only suppresses the nullable warning (ADR 2026112503)
+        // Such an initializer only suppresses the nullable warning (ADR IocRewrite/0019)
         GeneratorTestResult result = await RunAsync(Usings + $$"""
             public interface IClock;
 
@@ -299,7 +299,7 @@ public partial class MemberInjectionTests
     [Test]
     public async Task SGIOC402_NullableMemberWithoutInitializer_Required()
     {
-        // A nullable annotation does not make a member optional (ADR 2026112504)
+        // A nullable annotation does not make a member optional (ADR IocRewrite/0020)
         GeneratorTestResult result = await RunAsync(Usings + """
             public interface IClock;
 

@@ -21,7 +21,7 @@ These decisions define how the generator reads a registration: which constructor
    - A parameter with an explicit key, and a `[ServiceKey]` parameter, are excluded first. The other parameters are judged by type only.
    - The generator decides the inner parameter once, at the level of the definition. It does not decide again after an open generic is closed.
    - Decorators apply only to registrations of an implementation type. They do not apply to factory registrations.
-3. **No value-type service types.** A factory or instance member whose type is a value type is an error. The generated `KeyValuePair<TKey, T>` is the exception. A dependency of a value type that has no registration goes to the fallback provider. See [Container disposal and fallback](2026112307_ContainerDisposalAndFallback.md).
+3. **No value-type service types.** A factory or instance member whose type is a value type is an error. The generated `KeyValuePair<TKey, T>` is the exception. A dependency of a value type that has no registration goes to the fallback provider. See [Container disposal and fallback](0006_ContainerDisposalAndFallback.md).
 4. **No registration with `KeyedService.AnyKey`.** It is an error. A query with `AnyKey` is supported.
 5. **No `IsDisposable` setting on attributes.** The generator decides at compile time whether a type is disposable, from the interfaces that it can see.
 

@@ -51,7 +51,7 @@ The findings about locks come from behavior. The MS.DI source code was not read.
 - With the root provider used as a scope, scoped services are locked for each call site.
 - MS.DI itself does not check whether a singleton or scoped service depends on a transient service. `ValidateScopes` reports only a singleton that depends on a scoped service.
 
-A hand-written minimal container with a scoped field, double-checked `System.Threading.Lock`, and singletons in a shared state object was used for the tests in [Holders and asynchronous services](2026112309_HoldersAndAsyncServices.md).
+A hand-written minimal container with a scoped field, double-checked `System.Threading.Lock`, and singletons in a shared state object was used for the tests in [Holders and asynchronous services](0008_HoldersAndAsyncServices.md).
 
 - A measurement of the previous implementation: with explicit types in place of target-typed `new`, the binding time of the compiler for 3,803 lookup table entries went from 12.9 seconds to 1.45 seconds.
 

@@ -7,13 +7,13 @@ date: 2026-11-25
 
 ## Context and problem statement
 
-The list of implicit rules in the [constitution](../Constitution.md#41-explicitness) made a reference type annotated as nullable an optional dependency. A parameter `IRepo? repo` and an injected property `IRepo? Repo { get; set; }` got `null` when no service was found. MS.DI looks only at the default value of a parameter, so the constitution listed this rule as a documented difference from MS.DI.
+The list of implicit rules in the [constitution](../../Constitution.md#41-explicitness) made a reference type annotated as nullable an optional dependency. A parameter `IRepo? repo` and an injected property `IRepo? Repo { get; set; }` got `null` when no service was found. MS.DI looks only at the default value of a parameter, so the constitution listed this rule as a documented difference from MS.DI.
 
 The rule made the decision depend on the type, and it needed several exceptions:
 
-- A nullable value type (`int?`) is a different type, so it stays required ([ADR 2026112406](2026112406_OptionalDependencyByNullableType.md)).
+- A nullable value type (`int?`) is a different type, so it stays required ([ADR IocRewrite/0016](0016_OptionalDependencyByNullableType.md)).
 - Code without nullable annotations (`#nullable disable`) is always required.
-- An initializer such as `= null!` only suppresses the nullable warning and does not count ([ADR 2026112503](2026112503_NullForgivingInitializerIsRequired.md)).
+- An initializer such as `= null!` only suppresses the nullable warning and does not count ([ADR IocRewrite/0019](0019_NullForgivingInitializerIsRequired.md)).
 
 The same class also behaved differently in the container and in MS.DI. A parameter `IRepo? repo` was optional in the container and required in MS.DI.
 
@@ -28,13 +28,13 @@ A dependency is optional only when the user writes the default value:
 
 A nullable annotation alone does not make a parameter or an injected member optional. This applies to reference types and value types in the same way.
 
-The partial accessor is the only exception. A partial accessor whose return type is a reference type annotated as nullable is optional. A partial accessor has no place for a default value. It belongs to the container class, and MS.DI has no partial accessor, so it does not cause a difference from MS.DI. The `?` on its return type has the same role as the choice between `GetService` and `GetRequiredService`. A nullable value type stays required, as ADR 2026112406 states.
+The partial accessor is the only exception. A partial accessor whose return type is a reference type annotated as nullable is optional. A partial accessor has no place for a default value. It belongs to the container class, and MS.DI has no partial accessor, so it does not cause a difference from MS.DI. The `?` on its return type has the same role as the choice between `GetService` and `GetRequiredService`. A nullable value type stays required, as [ADR IocRewrite/0016](0016_OptionalDependencyByNullableType.md) states.
 
-The difference "A reference type annotated as nullable is an optional dependency" is removed from the [documented differences](../Constitution.md#8-documented-differences-from-msdi) of the constitution. The other differences get new numbers.
+The difference "A reference type annotated as nullable is an optional dependency" is removed from the [documented differences](../../Constitution.md#8-documented-differences-from-msdi) of the constitution. The other differences get new numbers.
 
 The specifications, the ADRs and the code no longer refer to a documented difference, an item of a list, or a section of another document by its number. They describe it in words and link to the section by its title. The constitution also refers to its own sections by title. Only the constitution numbers its differences, its implicit rules and its sections. The `sourcegen-spec-writing` skill states this rule.
 
-This decision replaces one consequence of ADR 2026112503. That ADR said that a user who wants `null` as the default value writes the member as nullable. The user now writes the initializer `= null`.
+This decision replaces one consequence of [ADR IocRewrite/0019](0019_NullForgivingInitializerIsRequired.md). That ADR said that a user who wants `null` as the default value writes the member as nullable. The user now writes the initializer `= null`.
 
 ### Consequences
 
@@ -59,6 +59,6 @@ The source of `src/Components/Components/src/DefaultComponentPropertyActivator.c
 - It reads only `InjectAttribute.Key`. It does not read nullable annotations.
 - It resolves each property with `GetService` or `GetKeyedService`. When the result is `null`, it throws `InvalidOperationException` ("Cannot provide a value for property ..."). It has no optional path.
 
-For the behavior of MS.DI with nullable parameters, see the Evidence of [ADR 2026112406](2026112406_OptionalDependencyByNullableType.md).
+For the behavior of MS.DI with nullable parameters, see the Evidence of [ADR IocRewrite/0016](0016_OptionalDependencyByNullableType.md).
 
 Not tested: the Blazor activator at run time. The facts above come from its source only. The helper types `MemberAssignment` and `PropertySetter`, which it calls, were not read.

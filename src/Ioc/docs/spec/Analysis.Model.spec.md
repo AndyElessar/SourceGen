@@ -476,7 +476,7 @@ The nodes of the graph are the closed definitions. An edge is "closed definition
 - An inner parameter is not an edge.
 - Built-in services and the fallback provider are not nodes.
 
-When the graph has a cycle that consists only of edges that are not deferred, the generator reports `SGIOC301`. It reports one time for each strongly connected component that has a cycle (see [ADR 2026112404](../adr/2026112404_CycleReportForEachComponent.md)). The message lists the closed definitions of the shortest cycle through the first closed definition of the component in the ordering. The cycle starts and ends at that closed definition.
+When the graph has a cycle that consists only of edges that are not deferred, the generator reports `SGIOC301`. It reports one time for each strongly connected component that has a cycle (see [ADR IocRewrite/0014](../adr/0001_IocRewrite/0014_CycleReportForEachComponent.md)). The message lists the closed definitions of the shortest cycle through the first closed definition of the component in the ordering. The cycle starts and ends at that closed definition.
 
 An implementation type that asks for a collection of a service type that it provides itself (`Composite : IFoo` depends on `IEnumerable<IFoo>`) is a cycle.
 

@@ -12,7 +12,7 @@ MS.DI uses `KeyedService.AnyKey` in two ways:
 - **Query.** `GetKeyedServices<T>(KeyedService.AnyKey)` returns all registrations of `T` that have a key.
 - **Registration.** `AddKeyedSingleton<T>(KeyedService.AnyKey, (sp, key) => ...)` registers a catch-all. A request for one service with a key that has no exact registration gets this registration, and the factory or the `[ServiceKey]` parameter receives the requested key. The keys do not have to be known in advance, for example the tenants of a multi-tenant application.
 
-The generator supports the query (see [Lookup rules](../spec/Container.Output.spec.md#lookup-rules)). A registration attribute with `AnyKey` reports `SGIOC007`. This ADR records why the generator does not support the catch-all registration.
+The generator supports the query (see [Lookup rules](../../spec/Container.Output.spec.md#lookup-rules)). A registration attribute with `AnyKey` reports `SGIOC007`. This ADR records why the generator does not support the catch-all registration.
 
 ## Decision outcome
 

@@ -5,11 +5,11 @@ date: 2026-11-25
 
 # An initializer that only suppresses the nullable warning does not make a member optional
 
-> Partly replaced by [ADR 2026112504](2026112504_NullableReferenceIsNotOptional.md): a nullable reference type no longer makes a parameter or an injected member optional. The text below is kept as it was.
+> Partly replaced by [ADR IocRewrite/0020](0020_NullableReferenceIsNotOptional.md): a nullable reference type no longer makes a parameter or an injected member optional. The text below is kept as it was.
 
 ## Context and problem statement
 
-The list of implicit rules in the [constitution](../Constitution.md#41-explicitness) makes an injected field or property optional when it has an initializer and can be assigned after construction. The initial value stays when no service is found. [ADR 2026112401](2026112401_ImplicitRulesInConstitution.md) added this rule. It treats an initializer as a default value that the user writes.
+The list of implicit rules in the [constitution](../../Constitution.md#41-explicitness) makes an injected field or property optional when it has an initializer and can be assigned after construction. The initial value stays when no service is found. [ADR IocRewrite/0011](0011_ImplicitRulesInConstitution.md) added this rule. It treats an initializer as a default value that the user writes.
 
 With nullable reference types, a non-nullable field or property without an initializer causes warning CS8618. Users often write `= null!` to suppress this warning on a member that the container sets:
 

@@ -51,6 +51,6 @@ Tested with `Microsoft.Extensions.DependencyInjection` 10.0.15 on .NET 10.0.15, 
 - MS.DI tracks only objects that a factory delegate or its own activation returns. It does not dispose an object that was registered as an instance.
 - `Array.CreateInstance(elementType, 0)` works under NativeAOT for an element type that is a reference type.
 - Under NativeAOT, MS.DI refuses to build an `IEnumerable<T>` whose element is a value type.
-- For a value type `T` without a registration, `GetService(typeof(T))` returns `null` and the generic `GetService<T>()` throws `NullReferenceException`. See [Registration rules](2026112305_RegistrationRules.md).
+- For a value type `T` without a registration, `GetService(typeof(T))` returns `null` and the generic `GetService<T>()` throws `NullReferenceException`. See [Registration rules](0004_RegistrationRules.md).
 
 Not tested: a fallback provider that is not MS.DI. The concurrent creation and disposal of a fallback scope has no probe yet.

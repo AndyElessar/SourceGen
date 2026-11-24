@@ -7,7 +7,7 @@ date: 2026-11-25
 
 ## Context and problem statement
 
-A container with a fallback provider asks the fallback provider when it does not have a service itself (see [Fallback provider](../spec/Container.Output.spec.md#fallback-provider)). Some requests need an interface of the fallback provider:
+A container with a fallback provider asks the fallback provider when it does not have a service itself (see [Fallback provider](../../spec/Container.Output.spec.md#fallback-provider)). Some requests need an interface of the fallback provider:
 
 - `IsService` and `IsKeyedService` need `IServiceProviderIsService` and `IServiceProviderIsKeyedService`.
 - A keyed request needs `IKeyedServiceProvider`.
