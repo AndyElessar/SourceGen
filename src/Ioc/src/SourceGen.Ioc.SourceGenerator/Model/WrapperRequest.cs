@@ -72,6 +72,22 @@ internal sealed record WrapperRequest(
     /// <summary>Gets a value indicating whether the request is a collection whose element is the service itself.</summary>
     public bool IsPlainCollection => Shape == RequestShape.Collection && !KeyValuePair && Deferred == DeferredKind.None && !IsTask;
 
+    /// <summary>
+    /// Gets a value indicating whether the element is the service itself, or the service in <c>Lazy</c>, <c>Func</c>
+    /// without arguments, <c>Task</c>, or a nested combination of them. <c>KeyValuePair</c> and <c>Func&lt;A..., T&gt;</c>
+    /// come in later slices.
+    /// </summary>
+    public bool HasSimpleElement => !KeyValuePair && FuncArguments.Length == 0;
+
+    /// <summary>Gets a value indicating whether the request is one service in <c>Lazy</c>, <c>Func</c> or <c>Task</c> (see <see cref="HasSimpleElement"/>).</summary>
+    public bool IsSingleWrapper => Shape == RequestShape.Single && HasSimpleElement && !IsPlain;
+
+    /// <summary>Gets a value indicating whether the request is a collection whose element is the service itself or a wrapper of it (see <see cref="HasSimpleElement"/>).</summary>
+    public bool IsSimpleCollection => Shape == RequestShape.Collection && HasSimpleElement;
+
+    /// <summary>Gets a value indicating whether the element is the service in <c>Lazy</c>, <c>Func</c> or <c>Task</c>.</summary>
+    public bool IsWrappedElement => Deferred != DeferredKind.None || IsTask;
+
     /// <summary>Takes <paramref name="type"/> apart by the grammar.</summary>
     /// <param name="type">The requested type.</param>
     /// <returns>The request, or <see langword="null"/> when the combination of wrapper types is invalid (<c>SGIOC304</c>).</returns>

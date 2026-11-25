@@ -1,0 +1,64 @@
+﻿    public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddApp(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.ReadOnlySpan<string> tags)
+    {
+        global::SourceGen.Ioc.IocRegistrationMarker.Enter(services, "App.AppServiceCollectionExtensions.AddApp", "TestAssembly");
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::App.Consumer>(services, static sp => __Create_Consumer_fd0ac76a(sp));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::SourceGen.Ioc.IocHolder<global::App.FirstHandler>>(services, __k_FirstHandler_1db4b03e, static (sp, _) => global::SourceGen.Ioc.IocHolder.Own(__Create_FirstHandler_1db4b03e(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::App.FirstHandler>(services, static sp => __Get_FirstHandler_1db4b03e(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::App.IHandler>(services, static sp => (global::App.IHandler)__Get_FirstHandler_1db4b03e(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::System.Func<global::App.IHandler>>(services, static sp => new global::System.Func<global::App.IHandler>(() => (global::App.IHandler)__Get_FirstHandler_1db4b03e(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::System.Lazy<global::System.Threading.Tasks.Task<global::App.IHandler>>>(services, static sp => new global::System.Lazy<global::System.Threading.Tasks.Task<global::App.IHandler>>(() => global::System.Threading.Tasks.Task.FromResult<global::App.IHandler>((global::App.IHandler)__Get_FirstHandler_1db4b03e(sp)), global::System.Threading.LazyThreadSafetyMode.PublicationOnly));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::System.Lazy<global::App.IHandler>>(services, static sp => new global::System.Lazy<global::App.IHandler>(() => (global::App.IHandler)__Get_FirstHandler_1db4b03e(sp), global::System.Threading.LazyThreadSafetyMode.PublicationOnly));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::App.Holder>(services, static sp => __Create_Holder_ac16c1ec(sp));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::SourceGen.Ioc.IocHolder<global::App.KeyedHandler>>(services, __k_KeyedHandler_53dcc257, static (sp, _) => global::SourceGen.Ioc.IocHolder.Own(__Create_KeyedHandler_53dcc257(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::App.KeyedHandler>(services, "k", static (sp, _) => __Get_KeyedHandler_53dcc257(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::App.IHandler>(services, "k", static (sp, _) => (global::App.IHandler)__Get_KeyedHandler_53dcc257(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::System.Func<global::App.IHandler>>(services, "k", static (sp, _) => new global::System.Func<global::App.IHandler>(() => (global::App.IHandler)__Get_KeyedHandler_53dcc257(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::System.Lazy<global::App.IHandler>>(services, "k", static (sp, _) => new global::System.Lazy<global::App.IHandler>(() => (global::App.IHandler)__Get_KeyedHandler_53dcc257(sp), global::System.Threading.LazyThreadSafetyMode.PublicationOnly));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::App.SecondHandler>(services, static sp => __Create_SecondHandler_4a21d994(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::App.IHandler>(services, static sp => (global::App.IHandler)__Create_SecondHandler_4a21d994(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::System.Func<global::App.IHandler>>(services, static sp => new global::System.Func<global::App.IHandler>(() => (global::App.IHandler)__Create_SecondHandler_4a21d994(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::System.Lazy<global::System.Threading.Tasks.Task<global::App.IHandler>>>(services, static sp => new global::System.Lazy<global::System.Threading.Tasks.Task<global::App.IHandler>>(() => global::System.Threading.Tasks.Task.FromResult<global::App.IHandler>((global::App.IHandler)__Create_SecondHandler_4a21d994(sp)), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::System.Lazy<global::App.IHandler>>(services, static sp => new global::System.Lazy<global::App.IHandler>(() => (global::App.IHandler)__Create_SecondHandler_4a21d994(sp), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedScoped<global::SourceGen.Ioc.IocHolder<global::App.Session>>(services, __k_Session_24b3f38a, static (sp, _) => global::SourceGen.Ioc.IocHolder.Own(__Create_Session_24b3f38a(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::App.Session>(services, static sp => __Get_Session_24b3f38a(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::System.Func<global::App.Session>>(services, static sp => new global::System.Func<global::App.Session>(() => (global::App.Session)__Get_Session_24b3f38a(sp)));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::System.Collections.Generic.IEnumerable<global::System.Threading.Tasks.Task<global::App.IHandler>>>(services, static sp => global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetServices<global::App.IHandler>(sp), static s => global::System.Threading.Tasks.Task.FromResult(s))));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedTransient<global::System.Collections.Generic.IEnumerable<global::System.Threading.Tasks.Task<global::App.IHandler>>>(services, "k", static (sp, key) => global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetKeyedServices<global::App.IHandler>(sp, key), static s => global::System.Threading.Tasks.Task.FromResult(s))));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::System.Collections.Generic.IReadOnlyList<global::System.Threading.Tasks.Task<global::App.IHandler>>>(services, static sp => global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetServices<global::App.IHandler>(sp), static s => global::System.Threading.Tasks.Task.FromResult(s))));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::System.Func<global::App.IHandler>[]>(services, static sp => global::System.Linq.Enumerable.ToArray(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetServices<global::System.Func<global::App.IHandler>>(sp)));
+        return services;
+    }
+
+    private static global::App.Consumer __Create_Consumer_fd0ac76a(global::System.IServiceProvider sp)
+        => new global::App.Consumer(
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetServices<global::System.Lazy<global::App.IHandler>>(sp),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::System.Func<global::App.IHandler>[]>(sp),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::System.Collections.Generic.IReadOnlyList<global::System.Threading.Tasks.Task<global::App.IHandler>>>(sp),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetKeyedServices<global::System.Lazy<global::App.IHandler>>(sp, "k"),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetKeyedServices<global::System.Func<global::App.IHandler>>(sp, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey));
+
+    private static global::App.Holder __Create_Holder_ac16c1ec(global::System.IServiceProvider sp)
+    {
+        global::App.Holder instance = new global::App.Holder(
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::System.Lazy<global::App.IHandler>>(sp),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::System.Func<global::App.Session>>(sp),
+            global::System.Threading.Tasks.Task.FromResult<global::App.Session>(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.Session>(sp)),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::System.Lazy<global::System.Threading.Tasks.Task<global::App.IHandler>>>(sp),
+            (global::System.Func<global::App.IHandler>)global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(sp, typeof(global::System.Func<global::App.IHandler>), "k"),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::System.Lazy<global::App.IMissing>>(sp) ?? new global::System.Lazy<global::App.IMissing>(() => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IMissing>(sp), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::System.Collections.Generic.IEnumerable<global::System.Threading.Tasks.Task<global::App.IHandler>>>(sp),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService<global::System.Collections.Generic.IEnumerable<global::System.Threading.Tasks.Task<global::App.IHandler>>>(sp, "k"),
+            global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetKeyedServices<global::App.IHandler>(sp, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static s => global::System.Threading.Tasks.Task.FromResult(s))),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::System.Func<global::App.IMissing>>(sp) ?? new global::System.Func<global::App.IMissing>(() => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IMissing>(sp)!),
+            global::System.Threading.Tasks.Task.FromResult<global::App.IMissing>(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IMissing>(sp)!));
+        instance.MissingMember = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::System.Lazy<global::App.IMissing>>(sp) ?? new global::System.Lazy<global::App.IMissing>(() => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::App.IMissing>(sp)!, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        if(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::System.Lazy<global::App.IHandler>>(sp) is { } v12) instance.HandlerMember = v12;
+        return instance;
+    }

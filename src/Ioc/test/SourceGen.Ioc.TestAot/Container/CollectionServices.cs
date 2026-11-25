@@ -25,6 +25,13 @@ public sealed class StoreAliasConsumer([IocInject(KeyType = KeyType.Csharp, Key 
     public IReadOnlyList<IStore> Stores => stores;
 }
 
+/// <summary>A keyed collection of wrappers whose key is equal at run time to a registered key.</summary>
+[IocRegister(ServiceLifetime.Transient)]
+public sealed class StoreWrapperAliasConsumer([IocInject(KeyType = KeyType.Csharp, Key = nameof(StoreAliases.A))] IEnumerable<Lazy<IStore>> stores)
+{
+    public IEnumerable<Lazy<IStore>> Stores => stores;
+}
+
 /// <summary>Collections whose element is the service itself: each collection type, a key, and all keyed registrations.</summary>
 [IocRegister(ServiceLifetime.Scoped)]
 public sealed class PluginHost(

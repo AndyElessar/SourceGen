@@ -44,11 +44,12 @@ internal static class ServiceCollectionExtensionEmitter
             writer.WriteLine();
         }
 
+        Dictionary<(TypeRef Type, string Key), List<int>> providers = Analysis.DependencyGraph.Providers(model.Definitions);
         WriteMethod(writer, model);
         foreach(ClosedDefinition definition in model.Definitions)
         {
             writer.WriteLine();
-            WriteCreate(writer, definition);
+            WriteCreate(writer, definition, providers);
             if(HasHolder(definition))
             {
                 WriteGet(writer, definition);
@@ -76,9 +77,11 @@ internal static class ServiceCollectionExtensionEmitter
         writer.Indentation++;
         writer.WriteLine($"global::SourceGen.Ioc.IocRegistrationMarker.Enter(services, \"{settings.Namespace}.{settings.Name}ServiceCollectionExtensions.Add{settings.Name}\", \"{settings.AssemblyName}\");");
 
+        Dictionary<string, List<(TypeRef Wrapper, KeyRef? Key)>> wrappers = WrapperDemands(model);
         foreach(ClosedDefinition definition in model.Definitions)
         {
             WriteRegistrations(writer, definition);
+            WriteWrapperRegistrations(writer, definition, wrappers);
         }
 
         WriteCollectionRegistrations(writer, model);
@@ -115,24 +118,129 @@ internal static class ServiceCollectionExtensionEmitter
     }
 
     /// <summary>
+    /// The <c>Lazy</c> and <c>Func</c> wrapper types that the dependency sites ask for, alone or as the element of a
+    /// collection, by the canonical string of the service, with the key of each demand. A <c>Task&lt;S&gt;</c> alone is
+    /// not registered (ServiceCollection.Output.spec, "Wrapper types and collections").
+    /// </summary>
+    private static Dictionary<string, List<(TypeRef Wrapper, KeyRef? Key)>> WrapperDemands(ServiceCollectionExtensionModel model)
+    {
+        Dictionary<string, List<(TypeRef, KeyRef?)>> demands = new(StringComparer.Ordinal);
+        foreach(ClosedDefinition definition in model.Definitions)
+        {
+            foreach(Dependency dependency in definition.Dependencies.Where(static d => d.KeyMode != SiteKeyMode.ServiceKey))
+            {
+                if(WrapperRequest.Parse(dependency.Type) is not { Deferred: not DeferredKind.None } request)
+                {
+                    continue;
+                }
+
+                KeyRef? key = dependency.KeyIn(definition);
+                TypeRef? wrapper = request.IsSingleWrapper ? dependency.Type : request.IsSimpleCollection ? WrapperRequest.ElementOf(dependency.Type) : null;
+                if(wrapper is not null)
+                {
+                    if(!demands.TryGetValue(request.Core.CanonicalString, out List<(TypeRef, KeyRef?)>? list))
+                    {
+                        demands[request.Core.CanonicalString] = list = [];
+                    }
+
+                    list.Add((wrapper, key));
+                }
+            }
+        }
+
+        return demands;
+    }
+
+    /// <summary>
+    /// One registration of each wrapper type that a dependency site asks for, for each service type of the closed
+    /// definition, with the key of the definition. It points to that closed definition, so the last registration wins
+    /// and MS.DI collects them in the order of the definitions. <c>Lazy</c> has the lifetime of the definition. <c>Func</c>
+    /// is Singleton for a Singleton, and Transient otherwise (ServiceCollection.Output.spec, "Wrapper types and collections").
+    /// A demand matches the definition when the keys have the same identity, when it asks for all keyed registrations,
+    /// or when the keys can be equal at run time: MS.DI then compares them with <c>Equals</c>, as for the service itself.
+    /// </summary>
+    private static void WriteWrapperRegistrations(SourceWriter writer, ClosedDefinition definition, Dictionary<string, List<(TypeRef Wrapper, KeyRef? Key)>> demands)
+    {
+        string source = HasHolder(definition) ? GeneratedNames.For("__Get_", definition) : GeneratedNames.For("__Create_", definition);
+        foreach(TypeRef serviceType in definition.ServiceTypes)
+        {
+            if(!demands.TryGetValue(serviceType.CanonicalString, out List<(TypeRef Wrapper, KeyRef? Key)>? list))
+            {
+                continue;
+            }
+
+            SortedDictionary<string, TypeRef> types = new(StringComparer.Ordinal);
+            foreach((TypeRef wrapper, _) in list.Where(d => Matches(d.Key, definition.Key)))
+            {
+                types[wrapper.CanonicalString] = wrapper;
+            }
+
+            foreach(TypeRef type in types.Values)
+            {
+                WrapperRequest request = WrapperRequest.Parse(type)!;
+                Lifetime lifetime = request.Deferred == DeferredKind.Func && definition.Lifetime != Lifetime.Singleton ? Lifetime.Transient : definition.Lifetime;
+                string value = WrapperExpression(request, $"({TypeNames.CSharp(serviceType)}){source}(sp)", cached: lifetime != Lifetime.Transient);
+                string wrapper = TypeNames.CSharp(type);
+                if(definition.Key is { } registered)
+                {
+                    writer.WriteLine($"{Services}.AddKeyed{lifetime}<{wrapper}>(services, {KeyNames.Expression(registered)}, static (sp, _) => {value});");
+                }
+                else
+                {
+                    writer.WriteLine($"{Services}.Add{lifetime}<{wrapper}>(services, static sp => {value});");
+                }
+            }
+        }
+    }
+
+    /// <summary>Whether a demand with the key <paramref name="demand"/> can ask for a registration with the key <paramref name="registered"/>.</summary>
+    private static bool Matches(KeyRef? demand, KeyRef? registered) => (demand, registered) switch
+    {
+        (null, null) => true,
+        ({ IsAnyKey: true }, not null) => true,
+        (not null, not null) => demand.Equals(registered) || Analysis.ContainerAnalysis.MayBeEqual(demand, registered),
+        _ => false,
+    };
+
+    /// <summary>
+    /// The expression that creates a wrapper around <paramref name="service"/>, from the inside to the outside. A
+    /// synchronous service in <c>Task&lt;T&gt;</c> is a completed task. A cached <c>Lazy</c> does not keep an exception, as
+    /// in the container (Container.Output.spec, "Wrapper types").
+    /// </summary>
+    private static string WrapperExpression(WrapperRequest request, string service, bool cached)
+    {
+        string core = TypeNames.CSharp(request.Core);
+        string value = request.IsTask ? $"global::System.Threading.Tasks.Task.FromResult<{core}>({service})" : service;
+        string result = request.IsTask ? $"global::System.Threading.Tasks.Task<{core}>" : core;
+        return request.Deferred switch
+        {
+            DeferredKind.Lazy when cached => $"new global::System.Lazy<{result}>(() => {value}, global::System.Threading.LazyThreadSafetyMode.PublicationOnly)",
+            DeferredKind.Lazy => $"new global::System.Lazy<{result}>(() => {value}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)",
+            DeferredKind.Func => $"new global::System.Func<{result}>(() => {value})",
+            _ => value,
+        };
+    }
+
+    /// <summary>
     /// The collection types other than <c>IEnumerable&lt;T&gt;</c> that a dependency site asks for: each one is registered
     /// as one Transient service, an array of the services that MS.DI collects (ServiceCollection.Output.spec, "Wrapper
-    /// types and collections"). A dependency site with <c>AnyKey</c> builds its array itself: MS.DI cannot resolve a
-    /// single service with <c>AnyKey</c>.
+    /// types and collections"). A collection of <c>Task&lt;S&gt;</c> is registered also as <c>IEnumerable</c>, because
+    /// <c>Task&lt;S&gt;</c> has no registration. A dependency site with <c>AnyKey</c> builds its array itself: MS.DI cannot
+    /// resolve a single service with <c>AnyKey</c>.
     /// </summary>
     private static void WriteCollectionRegistrations(SourceWriter writer, ServiceCollectionExtensionModel model)
     {
-        SortedDictionary<string, (TypeRef Type, TypeRef Element, KeyRef? Key)> demands = new(StringComparer.Ordinal);
+        SortedDictionary<string, (TypeRef Type, WrapperRequest Request, KeyRef? Key)> demands = new(StringComparer.Ordinal);
         foreach(ClosedDefinition definition in model.Definitions)
         {
             foreach(Dependency dependency in definition.Dependencies.Where(static d => d.KeyMode != SiteKeyMode.ServiceKey))
             {
                 KeyRef? key = dependency.KeyIn(definition);
-                if(CollectionElement(dependency.Type) is { } element
-                    && dependency.Type is not NamedTypeRef { MetadataName: WrapperRequest.Enumerable }
+                if(Collection(dependency.Type) is { } request
+                    && (dependency.Type is not NamedTypeRef { MetadataName: WrapperRequest.Enumerable } || IsTaskElement(request))
                     && key is not { IsAnyKey: true })
                 {
-                    demands[$"{dependency.Type.CanonicalString}|{KeyRef.CanonicalOf(key)}"] = (dependency.Type, element, key);
+                    demands[$"{dependency.Type.CanonicalString}|{KeyRef.CanonicalOf(key)}"] = (dependency.Type, request, key);
                 }
             }
         }
@@ -142,32 +250,51 @@ internal static class ServiceCollectionExtensionEmitter
             writer.WriteLine();
         }
 
-        foreach((TypeRef type, TypeRef element, KeyRef? key) in demands.Values)
+        foreach((TypeRef type, WrapperRequest request, KeyRef? key) in demands.Values)
         {
             string collection = TypeNames.CSharp(type);
-            string service = TypeNames.CSharp(element);
             if(key is null)
             {
-                writer.WriteLine($"{Services}.AddTransient<{collection}>(services, static sp => global::System.Linq.Enumerable.ToArray({Provider}.GetServices<{service}>(sp)));");
+                writer.WriteLine($"{Services}.AddTransient<{collection}>(services, static sp => {Elements(type, request, null)});");
             }
             else
             {
-                writer.WriteLine($"{Services}.AddKeyedTransient<{collection}>(services, {KeyNames.Expression(key)}, static (sp, key) => global::System.Linq.Enumerable.ToArray({KeyedProvider}.GetKeyedServices<{service}>(sp, key)));");
+                writer.WriteLine($"{Services}.AddKeyedTransient<{collection}>(services, {KeyNames.Expression(key)}, static (sp, key) => {Elements(type, request, "key")});");
             }
         }
     }
 
-    /// <summary>The element of a requested collection whose element is the service itself, or <see langword="null"/>.</summary>
-    private static TypeRef? CollectionElement(TypeRef type) => WrapperRequest.Parse(type) is { IsPlainCollection: true } request ? request.Core : null;
+    /// <summary>
+    /// The array of the elements that MS.DI collects. A <c>Task&lt;S&gt;</c> wraps each service <c>S</c>.
+    /// </summary>
+    /// <param name="type">The collection type.</param>
+    /// <param name="request">The collection type, taken apart by the grammar.</param>
+    /// <param name="key">The expression of the key, or <see langword="null"/>.</param>
+    private static string Elements(TypeRef type, WrapperRequest request, string? key)
+    {
+        TypeRef element = IsTaskElement(request) ? request.Core : WrapperRequest.ElementOf(type)!;
+        string all = key is null
+            ? $"{Provider}.GetServices<{TypeNames.CSharp(element)}>(sp)"
+            : $"{KeyedProvider}.GetKeyedServices<{TypeNames.CSharp(element)}>(sp, {key})";
+        return IsTaskElement(request)
+            ? $"global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select({all}, static s => global::System.Threading.Tasks.Task.FromResult(s)))"
+            : $"global::System.Linq.Enumerable.ToArray({all})";
+    }
+
+    /// <summary>A requested collection whose element is the service itself or a wrapper of it, or <see langword="null"/>.</summary>
+    private static WrapperRequest? Collection(TypeRef type) => WrapperRequest.Parse(type) is { IsSimpleCollection: true } request ? request : null;
+
+    /// <summary>Whether the element of a collection is <c>Task&lt;S&gt;</c>, which has no registration.</summary>
+    private static bool IsTaskElement(WrapperRequest request) => request is { IsTask: true, Deferred: DeferredKind.None };
 
     /// <summary>
-    /// The expression of a collection whose element is the service itself. It is never missing, so an optional one is
-    /// resolved the same way (Analysis.Model.spec, "Multiple services").
+    /// The expression of a collection. It is never missing, so an optional one is resolved the same way (Analysis.Model.spec,
+    /// "Multiple services").
     /// </summary>
-    private static string CollectionArgument(TypeRef type, TypeRef element, KeyRef? key)
+    private static string CollectionArgument(TypeRef type, WrapperRequest request, KeyRef? key)
     {
-        string service = TypeNames.CSharp(element);
-        if(type is NamedTypeRef { MetadataName: WrapperRequest.Enumerable })
+        string service = TypeNames.CSharp(WrapperRequest.ElementOf(type)!);
+        if(type is NamedTypeRef { MetadataName: WrapperRequest.Enumerable } && !IsTaskElement(request))
         {
             return key is null ? $"{Provider}.GetServices<{service}>(sp)" : $"{KeyedProvider}.GetKeyedServices<{service}>(sp, {KeyNames.Expression(key)})";
         }
@@ -175,13 +302,53 @@ internal static class ServiceCollectionExtensionEmitter
         string collection = TypeNames.CSharp(type);
         if(key is { IsAnyKey: true })
         {
-            return $"global::System.Linq.Enumerable.ToArray({KeyedProvider}.GetKeyedServices<{service}>(sp, {KeyNames.Expression(key)}))";
+            return Elements(type, request, KeyNames.Expression(key));
         }
 
         return key is null ? $"{Provider}.GetRequiredService<{collection}>(sp)" : $"{KeyedProvider}.GetRequiredKeyedService<{collection}>(sp, {KeyNames.Expression(key)})";
     }
 
-    private static void WriteCreate(SourceWriter writer, ClosedDefinition definition)
+    /// <summary>
+    /// The expression of a <c>Lazy</c>, <c>Func</c> or <c>Task</c> that the dependency site creates itself, or
+    /// <see langword="null"/> when it resolves a registered wrapper. A <c>Task&lt;S&gt;</c> is never registered. A
+    /// <c>Lazy&lt;S&gt;</c> or <c>Func&lt;S&gt;</c> whose <c>S</c> has no candidate in the assembly view is created when no
+    /// registration of it exists (ServiceCollection.Output.spec, "Dependency resolution"; ADR IocRewrite/0012). Inside the
+    /// wrapper, an optional site resolves <c>S</c> with <c>GetService</c>, so the value can be <see langword="null"/>.
+    /// </summary>
+    private static string? WrapperArgument(ClosedDefinition owner, Dependency parameter, Dictionary<(TypeRef Type, string Key), List<int>> providers)
+    {
+        if(WrapperRequest.Parse(parameter.Type) is not { IsSingleWrapper: true } request)
+        {
+            return null;
+        }
+
+        KeyRef? key = parameter.KeyIn(owner);
+        if(request.Deferred != DeferredKind.None && providers.ContainsKey((request.Core, KeyRef.CanonicalOf(key))))
+        {
+            return null;
+        }
+
+        string core = TypeNames.CSharp(request.Core);
+        string service = (key, parameter.Optional) switch
+        {
+            (null, OptionalMode.Required) => $"{Provider}.GetRequiredService<{core}>(sp)",
+            (null, _) => $"{Provider}.GetService<{core}>(sp)!",
+            (_, OptionalMode.Required) => $"{KeyedProvider}.GetRequiredKeyedService<{core}>(sp, {KeyNames.Expression(key)})",
+            _ => $"{KeyedProvider}.GetKeyedService<{core}>(sp, {KeyNames.Expression(key)})!",
+        };
+        string created = WrapperExpression(request, service, cached: false);
+        if(request.Deferred == DeferredKind.None)
+        {
+            return created;
+        }
+
+        string type = TypeNames.CSharp(parameter.Type);
+        return key is null
+            ? $"{Provider}.GetService<{type}>(sp) ?? {created}"
+            : $"{KeyedProvider}.GetKeyedService<{type}>(sp, {KeyNames.Expression(key)}) ?? {created}";
+    }
+
+    private static void WriteCreate(SourceWriter writer, ClosedDefinition definition, Dictionary<(TypeRef Type, string Key), List<int>> providers)
     {
         string implementation = TypeNames.CSharp(definition.Implementation);
         writer.WriteLine($"private static {implementation} {GeneratedNames.For("__Create_", definition)}(global::System.IServiceProvider sp)");
@@ -194,8 +361,8 @@ internal static class ServiceCollectionExtensionEmitter
                 writer,
                 definition,
                 declare: true,
-                i => Argument(definition, definition.Dependencies[i], i),
-                (i, member) => Assignment(definition, i, member),
+                i => Argument(definition, definition.Dependencies[i], i, providers),
+                (i, member) => Assignment(definition, i, member, providers),
                 definition.Disposal != Disposal.None);
             writer.WriteLine("return instance;");
             writer.Indentation--;
@@ -221,7 +388,7 @@ internal static class ServiceCollectionExtensionEmitter
             {
                 if(parameters[i].ByReference)
                 {
-                    writer.WriteLine($"{TypeNames.CSharp(parameters[i].Type)} arg{i} = {Argument(definition, parameters[i], i)};");
+                    writer.WriteLine($"{TypeNames.CSharp(parameters[i].Type)} arg{i} = {Argument(definition, parameters[i], i, providers)};");
                 }
             }
 
@@ -242,7 +409,7 @@ internal static class ServiceCollectionExtensionEmitter
             }
             else
             {
-                writer.WriteLine($"{Argument(definition, parameters[i], i)}{(i < parameters.Length - 1 ? "," : ");")}");
+                writer.WriteLine($"{Argument(definition, parameters[i], i, providers)}{(i < parameters.Length - 1 ? "," : ");")}");
             }
         }
 
@@ -255,14 +422,20 @@ internal static class ServiceCollectionExtensionEmitter
 
     /// <summary>
     /// The assignment of an injected field or property. A member that keeps its initializer is assigned only when the
-    /// provider returns a service (ServiceCollection.Output.spec, "Dependency resolution").
+    /// provider returns a service (ServiceCollection.Output.spec, "Dependency resolution"). A collection and a wrapper that
+    /// the site creates itself are always assigned.
     /// </summary>
-    private static string Assignment(ClosedDefinition owner, int index, string member)
+    private static string Assignment(ClosedDefinition owner, int index, string member, Dictionary<(TypeRef Type, string Key), List<int>> providers)
     {
         Dependency dependency = owner.Dependencies[index];
-        if(dependency.Optional != OptionalMode.KeepInitializer || CollectionElement(dependency.Type) is not null)
+        if(dependency.Optional != OptionalMode.KeepInitializer || Collection(dependency.Type) is not null)
         {
-            return $"instance.{member} = {Argument(owner, dependency, index)};";
+            return $"instance.{member} = {Argument(owner, dependency, index, providers)};";
+        }
+
+        if(WrapperArgument(owner, dependency, providers) is { } wrapper)
+        {
+            return $"instance.{member} = {wrapper};";
         }
 
         KeyRef? key = dependency.KeyIn(owner);
@@ -275,7 +448,8 @@ internal static class ServiceCollectionExtensionEmitter
     /// <param name="owner">The closed definition that owns the parameter, for <c>InheritKey</c> and <c>[ServiceKey]</c>.</param>
     /// <param name="parameter">The parameter.</param>
     /// <param name="index">The index of the parameter, for the name of a pattern variable.</param>
-    private static string Argument(ClosedDefinition owner, Dependency parameter, int index)
+    /// <param name="providers">The providers of each service type in the assembly view.</param>
+    private static string Argument(ClosedDefinition owner, Dependency parameter, int index, Dictionary<(TypeRef Type, string Key), List<int>> providers)
     {
         string type = TypeNames.CSharp(parameter.Type);
         if(parameter.KeyMode == SiteKeyMode.ServiceKey)
@@ -283,9 +457,14 @@ internal static class ServiceCollectionExtensionEmitter
             return owner.Key is null ? $"({type})({ContainerEmitter.DefaultValue(parameter)})" : ContainerEmitter.ServiceKeyArgument(owner.Key);
         }
 
-        if(CollectionElement(parameter.Type) is { } element)
+        if(Collection(parameter.Type) is { } collection)
         {
-            return CollectionArgument(parameter.Type, element, parameter.KeyIn(owner));
+            return CollectionArgument(parameter.Type, collection, parameter.KeyIn(owner));
+        }
+
+        if(WrapperArgument(owner, parameter, providers) is { } wrapper)
+        {
+            return wrapper;
         }
 
         // A keyed dependency uses the keyed methods of the provider, as the fallback provider of a container does

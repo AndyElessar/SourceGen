@@ -173,10 +173,12 @@ internal static class ContainerEmitter
     private static void WriteCollection(SourceWriter writer, ContainerPlan plan, CollectionPlan collection)
     {
         string element = TypeNames.CSharp(collection.Element);
-        string elements = Elements(plan, collection.Candidates, element, "");
+        string elements = collection.ElementWrappers is { } wrappers
+            ? WrapperElements(plan, wrappers, element)
+            : Elements(plan, collection.Candidates, element, "");
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-        if(plan.Container.IntegrateServiceProvider)
+        if(plan.Container.IntegrateServiceProvider && collection.Wrapper is null)
         {
             if(collection.AnyKey)
             {
@@ -745,7 +747,7 @@ internal static class ContainerEmitter
         LookupEntry[] keyed = [.. plan.Lookup.Where(static e => e.Key is not null)];
         CollectionPlan[] keyedCollections = [.. plan.Collections.Where(static c => c.Key is not null)];
         CollectionPlan[] demandOnly = [.. keyedCollections.Where(c => !keyed.Any(e => e.ServiceType.Equals(c.Element) && e.Key!.Equals(c.Key)))];
-        WrapperPlan[] keyedWrappers = [.. LookupWrappers(plan).Where(static w => w.Key is not null)];
+        (WrapperPlan Wrapper, string Expression)[] keyedWrappers = [.. LookupWrappers(plan).Where(static w => w.Wrapper.Key is not null)];
 
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
@@ -779,16 +781,17 @@ internal static class ContainerEmitter
         }
 
         // The wrappers that a dependency site asks for (Container.Output.spec, "Contents of the table")
-        foreach(WrapperPlan wrapper in LookupWrappers(plan).Where(static w => w.Key is null))
+        foreach((WrapperPlan wrapper, string expression) in LookupWrappers(plan).Where(static w => w.Wrapper.Key is null))
         {
-            writer.WriteLine($"{{ typeof({TypeNames.CSharp(wrapper.Type)}), static c => c.{Wrap(wrapper)}() }},");
+            writer.WriteLine($"{{ typeof({TypeNames.CSharp(wrapper.Type)}), static c => {expression} }},");
         }
 
         writer.Indentation--;
         writer.WriteLine("});");
         writer.Indentation--;
 
-        // A known collection type with a key that has no registration: an empty collection, merged with the fallback provider
+        // A known collection type with a key that has no registration: an empty collection, merged with the fallback
+        // provider. A collection of wrappers does not merge
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
         writer.WriteLine($"private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, {keyedFunction}> __collections =");
@@ -801,7 +804,7 @@ internal static class ContainerEmitter
             string service = TypeNames.CSharp(group.Key);
             foreach(string type in group.SelectMany(CollectionTypes).Distinct())
             {
-                if(fallback)
+                if(fallback && group.First().Wrapper is null)
                 {
                     writer.WriteLine($"{{ typeof({type}), static (c, key) => __MergeKeyed(c.__Fallback(), key, global::System.Array.Empty<{service}>()) }},");
                 }
@@ -832,7 +835,7 @@ internal static class ContainerEmitter
 
             // Each key is read one time
             Dictionary<string, string> variables = [];
-            foreach(KeyRef key in keyed.Select(static e => e.Key!).Concat(keyedCollections.Select(static c => c.Key!)).Concat(keyedWrappers.Select(static w => w.Key!)))
+            foreach(KeyRef key in keyed.Select(static e => e.Key!).Concat(keyedCollections.Select(static c => c.Key!)).Concat(keyedWrappers.Select(static w => w.Wrapper.Key!)))
             {
                 if(!variables.ContainsKey(key.Canonical))
                 {
@@ -866,9 +869,9 @@ internal static class ContainerEmitter
 
             // A keyed wrapper of a registration has its key, and registered keys are not equal at run time. A key of a
             // wrapper of the fallback provider that is equal to a key of the table uses that entry
-            foreach(WrapperPlan wrapper in keyedWrappers)
+            foreach((WrapperPlan wrapper, string expression) in keyedWrappers)
             {
-                writer.WriteLine($"table.TryAdd((typeof({TypeNames.CSharp(wrapper.Type)}), {variables[wrapper.Key!.Canonical]}), static (c, _) => c.{Wrap(wrapper)}());");
+                writer.WriteLine($"table.TryAdd((typeof({TypeNames.CSharp(wrapper.Type)}), {variables[wrapper.Key!.Canonical]}), static (c, _) => {expression});");
             }
 
             // AnyKey: all registrations of the type that have a key, in the ordering. One service with AnyKey throws, as in MS.DI
@@ -932,14 +935,35 @@ internal static class ContainerEmitter
     }
 
     /// <summary>
-    /// The wrappers in the lookup table: one for each wrapper type and key. When a wrapper of a service of the fallback
-    /// provider has a required and an optional dependency site, the table uses the required one, which throws when the
-    /// fallback provider does not have the service.
+    /// The wrappers in the lookup table, one for each wrapper type and key, with the expression of the entry
+    /// (Container.Output.spec, "Contents of the table"). When a wrapper of a service of the fallback provider has a
+    /// required and an optional dependency site, the table uses the required one, which throws when the fallback
+    /// provider does not have the service. A wrapper that only the element of a collection asks for follows the rule of
+    /// a single service: with more than one candidate, the entry throws.
     /// </summary>
-    private static IEnumerable<WrapperPlan> LookupWrappers(ContainerPlan plan)
-        => plan.Wrappers
-            .GroupBy(static w => (w.Type.CanonicalString, KeyRef.CanonicalOf(w.Key)))
-            .Select(static g => g.FirstOrDefault(static w => w.Required) ?? g.First());
+    private static IEnumerable<(WrapperPlan Wrapper, string Expression)> LookupWrappers(ContainerPlan plan)
+    {
+        foreach(IGrouping<(string, string), WrapperPlan> group in plan.Wrappers.GroupBy(static w => (w.Type.CanonicalString, KeyRef.CanonicalOf(w.Key))))
+        {
+            WrapperPlan[] sites = [.. group.Where(static w => w.Site)];
+            WrapperPlan first = sites.FirstOrDefault(static w => w.Required) ?? sites.FirstOrDefault() ?? group.First();
+            if(sites.Length > 0 || group.Count() == 1)
+            {
+                yield return (first, $"c.{Wrap(first)}()");
+                continue;
+            }
+
+            yield return (first, Ambiguous(plan, first.Type, first.Key, group.Select(static w => w.Target)));
+        }
+    }
+
+    /// <summary>The expression that throws for a type and key that more than one candidate provides.</summary>
+    private static string Ambiguous(ContainerPlan plan, TypeRef type, KeyRef? key, IEnumerable<int> candidates)
+    {
+        string names = string.Join(", ", candidates.Select(i => KeyNames.Definition(plan.Definitions[i].Definition)));
+        string display = key is null ? TypeNames.Display(type) : $"{TypeNames.Display(type)} (Key: {KeyNames.Display(key)})";
+        return $"throw new {InvalidOperation}({SymbolDisplay.FormatLiteral($"More than one registration provides '{display}': {names}.", quote: true)})";
+    }
 
     /// <summary>The collection types that the lookup table gives for a collection: <c>IEnumerable&lt;T&gt;</c> first.</summary>
     private static IEnumerable<string> CollectionTypes(CollectionPlan collection)
@@ -948,15 +972,16 @@ internal static class ContainerEmitter
     /// <summary>The expression of one service: the candidate, or an exception when more than one candidate stays.</summary>
     private static string Single(ContainerPlan plan, LookupEntry entry, string service)
     {
-        if(entry.Candidates.Length == 1)
-        {
-            return $"({service})c.{Get(plan.Definitions[entry.Candidates[0]].Definition)}()";
-        }
-
-        string names = string.Join(", ", entry.Candidates.Select(i => KeyNames.Definition(plan.Definitions[i].Definition)));
-        string display = entry.Key is null ? TypeNames.Display(entry.ServiceType) : $"{TypeNames.Display(entry.ServiceType)} (Key: {KeyNames.Display(entry.Key)})";
-        return $"throw new {InvalidOperation}({SymbolDisplay.FormatLiteral($"More than one registration provides '{display}': {names}.", quote: true)})";
+        return entry.Candidates.Length == 1
+            ? $"({service})c.{Get(plan.Definitions[entry.Candidates[0]].Definition)}()"
+            : Ambiguous(plan, entry.ServiceType, entry.Key, entry.Candidates);
     }
+
+    /// <summary>The array of the wrappers of the candidates, in their ordering.</summary>
+    private static string WrapperElements(ContainerPlan plan, ImmutableEquatableArray<int> wrappers, string element)
+        => wrappers.Length > 0
+            ? $"new {element}[] {{ {string.Join(", ", wrappers.Select(i => $"{Wrap(plan.Wrappers[i])}()"))} }}"
+            : $"global::System.Array.Empty<{element}>()";
 
     /// <summary>The array of the candidates, in their ordering, each resolved on <paramref name="owner"/>.</summary>
     private static string Elements(ContainerPlan plan, IEnumerable<int> candidates, string service, string owner)

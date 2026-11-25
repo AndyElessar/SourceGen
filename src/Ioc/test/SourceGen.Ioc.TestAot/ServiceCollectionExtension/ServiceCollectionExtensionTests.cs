@@ -192,5 +192,77 @@ public class ServiceCollectionExtensionTests
         await Assert.That(scope.ServiceProvider.GetRequiredService<IReadOnlyList<IPlugin>>().Count).IsEqualTo(2);
     }
 
+    [Test]
+    public async Task AddTestAot_LazyFuncAndTask_PointToTheRegistrationOfTheService()
+    {
+        using ServiceProvider provider = Build();
+        using IServiceScope scope = provider.CreateScope();
+
+        WrapperHost host = scope.ServiceProvider.GetRequiredService<WrapperHost>();
+
+        await Assert.That(host.Session.IsValueCreated).IsFalse();
+        await Assert.That(host.Session.Value).IsSameReferenceAs(scope.ServiceProvider.GetRequiredService<Session>());
+        await Assert.That(host.Sessions()).IsSameReferenceAs(host.Session.Value);
+        await Assert.That(host.Jobs()).IsNotSameReferenceAs(host.Jobs());
+        await Assert.That(host.Clock.Value).IsSameReferenceAs(provider.GetRequiredService<IClock>());
+        IClock clock = host.ClockTask.Result;
+        await Assert.That(clock).IsSameReferenceAs(provider.GetRequiredService<IClock>());
+        await Assert.That(host.Store.Value).IsSameReferenceAs(provider.GetRequiredKeyedService<IStore>("a"));
+    }
+
+    [Test]
+    public async Task AddTestAot_WrapperOfAServiceWithoutCandidate_TheSiteCreatesItAndResolvesTheServiceOfTheUser()
+    {
+        // ADR IocRewrite/0012: the user can register the service after the call
+        FallbackTests.External external = new();
+        ServiceCollection services = new();
+        services.AddTestAot();
+        services.AddSingleton<IExternal>(external);
+        using ServiceProvider provider = services.BuildServiceProvider();
+        using ServiceProvider without = Build();
+        using IServiceScope scope = provider.CreateScope();
+        using IServiceScope withoutScope = without.CreateScope();
+
+        await Assert.That(scope.ServiceProvider.GetRequiredService<WrapperHost>().External!.Value).IsSameReferenceAs(external);
+        await Assert.That(withoutScope.ServiceProvider.GetRequiredService<WrapperHost>().External!.Value).IsNull();
+    }
+
+    [Test]
+    public async Task AddTestAot_CollectionOfWrappers_OneForEachRegistrationInTheirOrder()
+    {
+        using ServiceProvider provider = Build();
+        using IServiceScope scope = provider.CreateScope();
+
+        PluginWrapperHost host = scope.ServiceProvider.GetRequiredService<PluginWrapperHost>();
+        Lazy<IPlugin>[] lazy = [.. host.Lazy];
+
+        await Assert.That(lazy.Length).IsEqualTo(2);
+        await Assert.That(lazy[0].Value).IsSameReferenceAs(scope.ServiceProvider.GetRequiredService<FirstPlugin>());
+        await Assert.That(lazy[1].Value).IsSameReferenceAs(scope.ServiceProvider.GetRequiredService<SecondPlugin>());
+        await Assert.That(host.Funcs.Length).IsEqualTo(2);
+        IPlugin second = host.Tasks[1].Result;
+        await Assert.That(second).IsSameReferenceAs(scope.ServiceProvider.GetRequiredService<SecondPlugin>());
+
+        // A collection of Task<S> is registered as one service, also as IEnumerable, because Task<S> has no registration
+        Task<IPlugin>[] tasks = [.. scope.ServiceProvider.GetRequiredService<IEnumerable<Task<IPlugin>>>()];
+        await Assert.That(tasks.Length).IsEqualTo(2);
+        await Assert.That(tasks[1].IsCompletedSuccessfully).IsTrue();
+        IPlugin last = tasks[1].Result;
+        await Assert.That(last).IsSameReferenceAs(scope.ServiceProvider.GetRequiredService<SecondPlugin>());
+    }
+
+    [Test]
+    public async Task AddTestAot_CollectionOfWrappersWithAKeyEqualOnlyAtRunTime_GetsTheRegistrationOfThatKey()
+    {
+        // MS.DI compares the keys with Equals. The container matches by compile-time identity (SGIOC505)
+        using ServiceProvider provider = Build();
+        using AppContainer container = new();
+
+        Lazy<IStore> store = provider.GetRequiredService<StoreWrapperAliasConsumer>().Stores.Single();
+
+        await Assert.That(store.Value).IsSameReferenceAs(provider.GetRequiredKeyedService<IStore>("a"));
+        await Assert.That(container.GetRequiredService<StoreWrapperAliasConsumer>().Stores.Count()).IsEqualTo(0);
+    }
+
     private sealed class Missing : IMissing;
 }

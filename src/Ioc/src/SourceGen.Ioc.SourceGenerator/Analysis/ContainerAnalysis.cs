@@ -85,10 +85,11 @@ internal enum CollectionCache
 }
 
 /// <summary>
-/// The resolver of a collection whose element is the service itself (Analysis.Model.spec, "Multiple services"). The
-/// container supplies all collection types of the grammar as an array of the element.
+/// The resolver of a collection whose element is the service itself, or the service in <c>Lazy</c>, <c>Func</c> or
+/// <c>Task</c> (Analysis.Model.spec, "Multiple services"). The container supplies all collection types of the grammar as
+/// an array of the element.
 /// </summary>
-/// <param name="Element">The service type of the elements.</param>
+/// <param name="Element">The type of the elements: the service type, or the wrapper type of the service.</param>
 /// <param name="Key">The key, or <see langword="null"/> for no key and for <paramref name="AnyKey"/>.</param>
 /// <param name="AnyKey">Whether it holds all keyed registrations (<c>KeyedService.AnyKey</c>).</param>
 /// <param name="Candidates">The indexes of the closed definitions, in their ordering.</param>
@@ -97,13 +98,20 @@ internal enum CollectionCache
 /// lookup table gives <c>IEnumerable&lt;T&gt;</c> and these.
 /// </param>
 /// <param name="Cache">Where the container caches it.</param>
+/// <param name="Wrapper">
+/// The element taken apart by the grammar, when the element is a wrapper of the service. Such a collection does not
+/// merge with the fallback provider (Container.Output.spec, "Behavior for each request").
+/// </param>
+/// <param name="ElementWrappers">For a collection of wrappers: the index of the wrapper of each candidate in <see cref="ContainerPlan.Wrappers"/>.</param>
 internal sealed record CollectionPlan(
     TypeRef Element,
     KeyRef? Key,
     bool AnyKey,
     ImmutableEquatableArray<int> Candidates,
     ImmutableEquatableArray<TypeRef> Types,
-    CollectionCache Cache)
+    CollectionCache Cache,
+    WrapperRequest? Wrapper = null,
+    ImmutableEquatableArray<int>? ElementWrappers = null)
 {
     /// <summary>The identity of the key in names: the empty string for no key, <c>*</c> for all keyed.</summary>
     public string KeyIdentity => AnyKey ? ErrorNode.AnyKey : KeyRef.CanonicalOf(Key);
@@ -140,6 +148,10 @@ internal enum WrapperCache
 /// <param name="Required">For the fallback provider: whether a missing <c>T</c> throws. Otherwise <c>T</c> is <see langword="null"/>.</param>
 /// <param name="Cache">Where the container caches it.</param>
 /// <param name="Identity">The identity of the wrapper in names and in the order of the wrappers.</param>
+/// <param name="Site">
+/// Whether a dependency site asks for it. Otherwise it is only the element of a collection. The candidates of a
+/// collection can have the same wrapper type and key, so its entry in the lookup table follows the rule of a single service.
+/// </param>
 internal sealed record WrapperPlan(
     TypeRef Type,
     WrapperRequest Request,
@@ -148,7 +160,8 @@ internal sealed record WrapperPlan(
     KeyRef? Key,
     bool Required,
     WrapperCache Cache,
-    string Identity);
+    string Identity,
+    bool Site);
 
 /// <summary>Everything that the code of a container needs.</summary>
 /// <param name="Container">The container class.</param>
@@ -210,6 +223,20 @@ internal static class ContainerAnalysis
         List<WrapperPlan> wrappers = [];
         Dictionary<string, int> wrapperIndexes = new(StringComparer.Ordinal);
         bool reachesErrorNode = false;
+
+        // The element of a collection of wrappers is the wrapper of each candidate, with the cache of that candidate
+        for(int c = 0; c < collections.Count; c++)
+        {
+            if(collections[c] is { Wrapper: { } element } collection)
+            {
+                collections[c] = collection with
+                {
+                    ElementWrappers = collection.Candidates
+                        .Select(i => Wrap(collection.Element, element, new ArgumentPlan(ArgumentKind.Resolved, i), definitions[i].Key, false, site: false).Target)
+                        .ToImmutableEquatableArray(),
+                };
+            }
+        }
         for(int index = 0; index < definitions.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -235,8 +262,10 @@ internal static class ContainerAnalysis
                     }
                     else if(argument.Kind == ArgumentKind.Collection)
                     {
-                        // One edge for each candidate (Analysis.Model.spec, "Circular dependencies")
-                        edges[index].AddRange(collections[argument.Target].Candidates.Select(c => new GraphEdge(index, p, c)));
+                        // One edge for each candidate (Analysis.Model.spec, "Circular dependencies"), deferred for Lazy and Func
+                        CollectionPlan collection = collections[argument.Target];
+                        DeferredKind deferred = collection.Wrapper?.Deferred ?? DeferredKind.None;
+                        edges[index].AddRange(collection.Candidates.Select(c => new GraphEdge(index, p, c, deferred)));
                     }
                     else if(argument.Kind == ArgumentKind.Wrapper && wrappers[argument.Target] is { Source: ArgumentKind.Resolved } wrapper)
                     {
@@ -303,7 +332,7 @@ internal static class ContainerAnalysis
             string requested = key is null ? TypeNames.Display(type) : $"{TypeNames.Display(type)} (Key: {KeyNames.Display(key)})";
             // An error node with this key already has its own error
             if(key is { IsAnyKey: false }
-                && (request.IsPlain || request.IsPlainCollection || IsSingleWrapper(request))
+                && (request.IsPlain || request.IsSimpleCollection || request.IsSingleWrapper)
                 && !providers.ContainsKey((request.Core, canonical))
                 && !skipped.Contains((request.Core, canonical))
                 && !skipped.Contains((request.Core, ErrorNode.AnyKey)))
@@ -311,12 +340,12 @@ internal static class ContainerAnalysis
                 CheckRunTimeKey(request.Core, key, $"{owner} → {member}", requested);
             }
 
-            if(request.IsPlainCollection)
+            if(request.IsSimpleCollection)
             {
-                return ResolveCollection(request.Core, key);
+                return ResolveCollection(WrapperRequest.ElementOf(type)!, request.Core, key);
             }
 
-            if(IsSingleWrapper(request))
+            if(request.IsSingleWrapper)
             {
                 // T itself, then the wrapper around it
                 if((key is null && BuiltIn(request.Core, container.Type) is { } builtInCore
@@ -373,9 +402,9 @@ internal static class ContainerAnalysis
 
         // A collection is never missing: without candidates it is empty (Analysis.Model.spec, "Multiple services").
         // A candidate that is an error node makes it incomplete, so the container is not generated.
-        ArgumentPlan? ResolveCollection(TypeRef element, KeyRef? key)
+        ArgumentPlan? ResolveCollection(TypeRef element, TypeRef service, KeyRef? key)
         {
-            if(skipped.Any(n => n.Item1.Equals(element) && (key is { IsAnyKey: true } ? n.Item2.Length > 0 : n.Item2 == KeyRef.CanonicalOf(key) || n.Item2 == ErrorNode.AnyKey)))
+            if(skipped.Any(n => n.Item1.Equals(service) && (key is { IsAnyKey: true } ? n.Item2.Length > 0 : n.Item2 == KeyRef.CanonicalOf(key) || n.Item2 == ErrorNode.AnyKey)))
             {
                 reachesErrorNode = true;
                 return null;
@@ -385,8 +414,9 @@ internal static class ContainerAnalysis
         }
 
         // The wrapper around T (Container.Output.spec, "Wrapper types"). Its cache follows the lifetime of T. A service of
-        // the fallback provider and a built-in service count as Transient. Sites that ask for the same wrapper share it
-        ArgumentPlan Wrap(TypeRef type, WrapperRequest request, ArgumentPlan core, KeyRef? key, bool optional)
+        // the fallback provider and a built-in service count as Transient. Sites and collections that ask for the same
+        // wrapper share it
+        ArgumentPlan Wrap(TypeRef type, WrapperRequest request, ArgumentPlan core, KeyRef? key, bool optional, bool site = true)
         {
             Lifetime lifetime = core.Kind == ArgumentKind.Resolved ? definitions[core.Target].Lifetime : Lifetime.Transient;
             WrapperCache cache = lifetime switch
@@ -406,7 +436,11 @@ internal static class ContainerAnalysis
             {
                 index = wrappers.Count;
                 wrapperIndexes[identity] = index;
-                wrappers.Add(new WrapperPlan(type, request, core.Kind, core.Target, key, required, cache, identity));
+                wrappers.Add(new WrapperPlan(type, request, core.Kind, core.Target, key, required, cache, identity, site));
+            }
+            else if(site && !wrappers[index].Site)
+            {
+                wrappers[index] = wrappers[index] with { Site = true };
             }
 
             return new ArgumentPlan(ArgumentKind.Wrapper, index, key);
@@ -432,40 +466,34 @@ internal static class ContainerAnalysis
     /// Whether two keys with different compile-time identities can be equal at run time: at least one of them is a
     /// symbol, and their key types are the same or one of them is <c>object</c>. Two different values are never equal.
     /// </summary>
-    private static bool MayBeEqual(KeyRef site, KeyRef registered)
+    internal static bool MayBeEqual(KeyRef site, KeyRef registered)
         => (site.Kind == KeyKind.Symbol || registered.Kind == KeyKind.Symbol)
             && (site.ValueType.Equals(registered.ValueType) || IsObject(site.ValueType) || IsObject(registered.ValueType));
 
     private static bool IsObject(TypeRef type) => type is NamedTypeRef { MetadataName: "System.Object" };
-
-    /// <summary>
-    /// Whether the request is one service in <c>Lazy</c>, <c>Func</c> without arguments, <c>Task</c>, or a nested
-    /// combination of them. <c>Func&lt;A..., T&gt;</c> comes in a later slice.
-    /// </summary>
-    private static bool IsSingleWrapper(WrapperRequest request)
-        => request is { Shape: RequestShape.Single, KeyValuePair: false, FuncArguments.Length: 0 } && (request.Deferred != DeferredKind.None || request.IsTask);
 
     /// <summary>The identity of the key of a collection: the empty string for no key, <c>*</c> for <c>AnyKey</c>.</summary>
     private static string CollectionKey(KeyRef? key) => key is { IsAnyKey: true } ? ErrorNode.AnyKey : KeyRef.CanonicalOf(key);
 
     /// <summary>
     /// The collections of the view: <c>IEnumerable&lt;S&gt;</c> of each registered service type <c>S</c> (no key, each
-    /// key, and all keyed), and each collection that a dependency site asks for (Container.Output.spec, "Contents of the
-    /// table"). They are ordered by the canonical string of the element, then of the key.
+    /// key, and all keyed), and each collection that a dependency site asks for, also of a wrapper of <c>S</c>
+    /// (Container.Output.spec, "Contents of the table"). They are ordered by the canonical string of the element, then
+    /// of the key. The wrappers of the elements are added later.
     /// </summary>
     private static (List<CollectionPlan>, Dictionary<(TypeRef, string), int>) Collections(
         ContainerModel container,
         ImmutableEquatableArray<ClosedDefinition> definitions,
         Dictionary<(TypeRef Type, string Key), List<int>> providers)
     {
-        Dictionary<(TypeRef Element, string Key), (KeyRef? Key, SortedDictionary<string, TypeRef> Types)> found = [];
+        Dictionary<(TypeRef Element, string Key), (KeyRef? Key, SortedDictionary<string, TypeRef> Types, WrapperRequest? Wrapper)> found = [];
         foreach((TypeRef type, string key) in providers.Keys)
         {
-            Add(type, null, null);
+            Add(type, null, null, null);
             if(key.Length > 0)
             {
-                Add(type, null, definitions[providers[(type, key)][0]].Key);
-                Add(type, null, null, anyKey: true);
+                Add(type, null, definitions[providers[(type, key)][0]].Key, null);
+                Add(type, null, null, null, anyKey: true);
             }
         }
 
@@ -484,35 +512,49 @@ internal static class ContainerAnalysis
 
         List<CollectionPlan> collections = [];
         Dictionary<(TypeRef, string), int> indexes = [];
-        foreach(KeyValuePair<(TypeRef Element, string Key), (KeyRef? Key, SortedDictionary<string, TypeRef> Types)> item in found
+        foreach(KeyValuePair<(TypeRef Element, string Key), (KeyRef? Key, SortedDictionary<string, TypeRef> Types, WrapperRequest? Wrapper)> item in found
             .OrderBy(static c => c.Key.Element.CanonicalString, StringComparer.Ordinal)
             .ThenBy(static c => c.Key.Key, StringComparer.Ordinal))
         {
             (TypeRef element, string identity) = item.Key;
+            WrapperRequest? wrapper = item.Value.Wrapper;
+            TypeRef service = wrapper?.Core ?? element;
             bool anyKey = identity == ErrorNode.AnyKey;
             int[] candidates = anyKey
-                ? [.. providers.Where(p => p.Key.Type.Equals(element) && p.Key.Key.Length > 0).SelectMany(static p => p.Value).OrderBy(static i => i)]
-                : providers.TryGetValue((element, identity), out List<int>? list) ? [.. list] : [];
+                ? [.. providers.Where(p => p.Key.Type.Equals(service) && p.Key.Key.Length > 0).SelectMany(static p => p.Value).OrderBy(static i => i)]
+                : providers.TryGetValue((service, identity), out List<int>? list) ? [.. list] : [];
             indexes[item.Key] = collections.Count;
-            collections.Add(new CollectionPlan(element, item.Value.Key, anyKey, candidates.ToImmutableEquatableArray(), item.Value.Types.Values.ToImmutableEquatableArray(), Cache(candidates)));
+            collections.Add(new CollectionPlan(
+                element,
+                item.Value.Key,
+                anyKey,
+                candidates.ToImmutableEquatableArray(),
+                item.Value.Types.Values.ToImmutableEquatableArray(),
+                Cache(candidates, merges: wrapper is null && container.IntegrateServiceProvider),
+                wrapper));
         }
 
         return (collections, indexes);
 
         void AddDemand(TypeRef type, KeyRef? key)
         {
-            if(WrapperRequest.Parse(type) is { IsPlainCollection: true } request)
+            if(WrapperRequest.Parse(type) is { IsSimpleCollection: true } request)
             {
-                Add(request.Core, type is NamedTypeRef { MetadataName: WrapperRequest.Enumerable } ? null : type, key is { IsAnyKey: true } ? null : key, key is { IsAnyKey: true });
+                Add(
+                    WrapperRequest.ElementOf(type)!,
+                    type is NamedTypeRef { MetadataName: WrapperRequest.Enumerable } ? null : type,
+                    key is { IsAnyKey: true } ? null : key,
+                    request.IsWrappedElement ? request : null,
+                    key is { IsAnyKey: true });
             }
         }
 
-        void Add(TypeRef element, TypeRef? type, KeyRef? key, bool anyKey = false)
+        void Add(TypeRef element, TypeRef? type, KeyRef? key, WrapperRequest? wrapper, bool anyKey = false)
         {
             (TypeRef, string) identity = (element, anyKey ? ErrorNode.AnyKey : KeyRef.CanonicalOf(key));
-            if(!found.TryGetValue(identity, out (KeyRef?, SortedDictionary<string, TypeRef> Types) value))
+            if(!found.TryGetValue(identity, out (KeyRef?, SortedDictionary<string, TypeRef> Types, WrapperRequest?) value))
             {
-                found[identity] = value = (key, new SortedDictionary<string, TypeRef>(StringComparer.Ordinal));
+                found[identity] = value = (key, new SortedDictionary<string, TypeRef>(StringComparer.Ordinal), wrapper);
             }
 
             if(type is not null)
@@ -521,10 +563,11 @@ internal static class ContainerAnalysis
             }
         }
 
-        // A merge with the fallback provider and a Transient element need a new collection for each request
-        CollectionCache Cache(int[] candidates)
+        // A merge with the fallback provider and a Transient element need a new collection for each request. A
+        // collection of wrappers does not merge
+        CollectionCache Cache(int[] candidates, bool merges)
         {
-            if(container.IntegrateServiceProvider || candidates.Length == 0 || candidates.Any(c => definitions[c].Lifetime == Lifetime.Transient))
+            if(merges || candidates.Length == 0 || candidates.Any(c => definitions[c].Lifetime == Lifetime.Transient))
             {
                 return CollectionCache.None;
             }

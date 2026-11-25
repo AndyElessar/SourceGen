@@ -36,6 +36,19 @@ public sealed class WrapperHost(
     public Lazy<IExternal>? External => external;
 }
 
+/// <summary>Collections whose element is a wrapper of the service. They do not merge with the fallback provider.</summary>
+[IocRegister(ServiceLifetime.Scoped)]
+public sealed class PluginWrapperHost(IEnumerable<Lazy<IPlugin>> lazy, Func<IPlugin>[] funcs, IReadOnlyList<Task<IPlugin>> tasks, IEnumerable<Task<IPlugin>> allTasks)
+{
+    public IEnumerable<Task<IPlugin>> AllTasks => allTasks;
+
+    public IEnumerable<Lazy<IPlugin>> Lazy => lazy;
+
+    public Func<IPlugin>[] Funcs => funcs;
+
+    public IReadOnlyList<Task<IPlugin>> Tasks => tasks;
+}
+
 /// <summary>A Singleton whose constructor throws one time on this thread when the test asks for it.</summary>
 [IocRegister(ServiceLifetime.Singleton)]
 public sealed class FlakyService

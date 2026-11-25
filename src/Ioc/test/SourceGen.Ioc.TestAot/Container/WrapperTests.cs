@@ -111,6 +111,30 @@ public class WrapperTests
     }
 
     [Test]
+    public async Task WrapperCollection_EachCandidateWrappedWithoutTheServicesOfTheFallbackProvider()
+    {
+        ServiceCollection services = new();
+        services.AddSingleton<IPlugin>(new CollectionTests.ExternalPlugin());
+        using ServiceProvider provider = services.BuildServiceProvider();
+        using FallbackContainer root = new(provider);
+        using FallbackContainer scope = root.CreateScope();
+
+        PluginWrapperHost host = scope.GetRequiredService<PluginWrapperHost>();
+        Lazy<IPlugin>[] lazy = [.. host.Lazy];
+
+        await Assert.That(lazy.Length).IsEqualTo(2);
+        await Assert.That(lazy[0].IsValueCreated).IsFalse();
+        await Assert.That(lazy[0].Value).IsSameReferenceAs(scope.GetRequiredService<FirstPlugin>());
+        await Assert.That(lazy[1].Value).IsSameReferenceAs(scope.GetRequiredService<SecondPlugin>());
+        await Assert.That(host.Funcs[1]()).IsSameReferenceAs(scope.GetRequiredService<SecondPlugin>());
+        IPlugin first = host.Tasks[0].Result;
+        await Assert.That(first).IsSameReferenceAs(scope.GetRequiredService<FirstPlugin>());
+
+        // The element is a demand for Lazy<IPlugin> too: two candidates are an ambiguity, as for IPlugin
+        await Assert.That(() => scope.GetService(typeof(Lazy<IPlugin>))).ThrowsExactly<InvalidOperationException>();
+    }
+
+    [Test]
     public async Task Lazy_DeferredEdge_TwoSingletonsThatDependOnEachOther()
     {
         using AppContainer root = new();

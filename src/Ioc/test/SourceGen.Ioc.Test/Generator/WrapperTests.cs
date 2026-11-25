@@ -239,6 +239,215 @@ public class WrapperTests
         await Assert.That(Message(result, "SGIOC505")).StartsWith("'App.Consumer → clock' requires 'System.Lazy<App.IClock> (Key: App.Keys.Utc)'");
     }
 
+    private const string Handlers = Usings + """
+        using System.Collections.Generic;
+
+        public interface IHandler;
+
+        [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)])]
+        public sealed class FirstHandler : IHandler;
+
+        [IocRegister(ServiceLifetime.Transient, ServiceTypes = [typeof(IHandler)])]
+        public sealed class SecondHandler : IHandler;
+
+        [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "k")]
+        public sealed class KeyedHandler : IHandler;
+
+        [IocRegister(ServiceLifetime.Transient)]
+        public sealed class Consumer(
+            IEnumerable<Lazy<IHandler>> lazy,
+            Func<IHandler>[] funcs,
+            IReadOnlyList<Task<IHandler>> tasks,
+            [IocInject(Key = "k")] IEnumerable<Lazy<IHandler>> keyed,
+            [IocInject(KeyType = KeyType.Csharp, Key = nameof(KeyedService.AnyKey))] IEnumerable<Func<IHandler>> any);
+
+        """;
+
+    [Test]
+    public async Task WrapperCollection_ContainerWithFallbackProvider_WrapsEachCandidateWithoutAMerge()
+    {
+        GeneratorTestResult result = await RunAsync(Handlers + """
+            [IocContainer]
+            public partial class AppContainer
+            {
+                public partial IEnumerable<Lazy<IHandler>> Handlers { get; }
+            }
+            """);
+
+        await result.VerifyCompilableAsync();
+        string source = result.GetGeneratedSource("AppContainer.g.cs")!;
+        await Verify(SnapshotHelper.MembersByPrefix(source, ["Handlers", "__lookup", "__collections", "__BuildKeyedLookup"], "__Get_Consumer_", "__All_Lazy", "__All_Func", "__All_Task"));
+    }
+
+    [Test]
+    public async Task WrapperCollection_TwoCandidatesWithOneKey_TheKeyedEntryOfTheWrapperThrows()
+    {
+        GeneratorTestResult result = await RunAsync(Usings + """
+            using System.Collections.Generic;
+
+            public interface IHandler;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "k")]
+            public sealed class FirstHandler : IHandler;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IHandler)], Key = "k")]
+            public sealed class SecondHandler : IHandler;
+
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer([IocInject(Key = "k")] IEnumerable<Lazy<IHandler>> handlers);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class AppContainer;
+            """);
+
+        await result.VerifyCompilableAsync();
+        await Assert.That(result.GetGeneratedSource("AppContainer.g.cs")).Contains(
+            "table.TryAdd((typeof(global::System.Lazy<global::App.IHandler>), k0), static (c, _) => throw new global::System.InvalidOperationException(\"More than one registration provides 'System.Lazy<App.IHandler> (Key: \\\"k\\\")': App.FirstHandler (Key: \\\"k\\\"), App.SecondHandler (Key: \\\"k\\\").\"));");
+    }
+
+    [Test]
+    public async Task Cycle_ThroughACollectionOfLazy_NotReported()
+    {
+        GeneratorTestResult result = await RunAsync(Usings + """
+            using System.Collections.Generic;
+
+            public interface IFoo;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IFoo)])]
+            public sealed class Composite(IEnumerable<Lazy<IFoo>> all) : IFoo;
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class AppContainer;
+            """);
+
+        await result.VerifyCompilableAsync();
+    }
+
+    [Test]
+    public async Task Cycle_ThroughACollectionOfTask_ReportedByTheFullCheck()
+    {
+        GeneratorTestResult result = await RunAsync(Usings + """
+            using System.Collections.Generic;
+
+            public interface IFoo;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IFoo)])]
+            public sealed class Composite(IEnumerable<Task<IFoo>> all) : IFoo;
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class {|SGIOC301:AppContainer|};
+            """);
+
+        await Assert.That(Message(result, "SGIOC301")).IsEqualTo("Circular dependency: App.Composite → App.Composite");
+    }
+
+    [Test]
+    public async Task SGIOC502_CollectionOfFuncOfTransient_NotReported()
+    {
+        GeneratorTestResult result = await RunAsync(Usings + """
+            using System.Collections.Generic;
+
+            public interface IJob;
+
+            [IocRegister(ServiceLifetime.Transient, ServiceTypes = [typeof(IJob)])]
+            public sealed class Job : IJob;
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public sealed class Scheduler(IEnumerable<Func<IJob>> jobs);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class AppContainer;
+            """);
+
+        await result.VerifyCompilableAsync();
+    }
+
+    [Test]
+    public async Task Wrapper_ServiceCollectionExtension_RegistersTheWrappersOfEachCandidate()
+    {
+        GeneratorTestResult result = await RunAsync(
+            Handlers + """
+                public interface IMissing;
+
+                [IocRegister(ServiceLifetime.Scoped)]
+                public sealed class Session;
+
+                [IocRegister(ServiceLifetime.Transient)]
+                public sealed class Holder(
+                    Lazy<IHandler> handler,
+                    Func<Session> sessions,
+                    Task<Session> session,
+                    Lazy<Task<IHandler>> lazyTask,
+                    [IocInject(Key = "k")] Func<IHandler> keyed,
+                    Lazy<IMissing> missing,
+                    IEnumerable<Task<IHandler>> tasks,
+                    [IocInject(Key = "k")] IEnumerable<Task<IHandler>> keyedTasks,
+                    [IocInject(KeyType = KeyType.Csharp, Key = nameof(KeyedService.AnyKey))] IEnumerable<Task<IHandler>> anyTasks,
+                    Func<IMissing>? optional = null,
+                    Task<IMissing>? task = null)
+                {
+                    // A member that keeps its initializer: a wrapper that the site creates is always assigned
+                    [IocInject]
+                    public Lazy<IMissing> MissingMember { get; set; } = new(() => null!);
+
+                    [IocInject]
+                    public Lazy<IHandler> HandlerMember { get; set; } = new(() => null!);
+                }
+                """,
+            "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]");
+
+        await result.VerifyCompilableAsync();
+        string source = result.GetGeneratedSource("AppServiceCollectionExtensions.g.cs")!;
+        await Verify(SnapshotHelper.MembersByPrefix(source, ["AddApp"], "__Create_Consumer_", "__Create_Holder_"));
+    }
+
+    [Test]
+    public async Task WrapperCollection_ServiceCollectionExtensionWithAKeyEqualOnlyAtRunTime_RegistersTheWrapperOfThatKey()
+    {
+        // MS.DI compares the keys with Equals, so the wrapper of each key that can be equal is registered with its own key
+        GeneratorTestResult result = await RunAsync(
+            Usings + """
+                using System.Collections.Generic;
+
+                public static class Keys
+                {
+                    public static readonly string A = "a";
+                    public static readonly int Number = 1;
+                }
+
+                public interface IStore;
+
+                [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IStore)], Key = "a")]
+                public sealed class Store : IStore;
+
+                [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IStore)], Key = "b")]
+                public sealed class OtherStore : IStore;
+
+                [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IStore)], KeyType = KeyType.Csharp, Key = nameof(Keys.A))]
+                public sealed class SymbolStore : IStore;
+
+                [IocRegister(ServiceLifetime.Transient)]
+                public sealed class Consumer(
+                    [IocInject(KeyType = KeyType.Csharp, Key = nameof(Keys.A))] IEnumerable<Lazy<IStore>> stores,
+                    [IocInject(Key = "c")] IEnumerable<Task<IStore>> values,
+                    [IocInject(Key = "c")] IEnumerable<Lazy<Task<IStore>>> lazyValues,
+                    [IocInject(KeyType = KeyType.Csharp, Key = nameof(Keys.Number))] IEnumerable<Func<IStore>> numbers);
+                """,
+            "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]");
+
+        await result.VerifyCompilableAsync();
+        string source = result.GetGeneratedSource("AppServiceCollectionExtensions.g.cs")!;
+        await Assert.That(source).Contains("AddKeyedSingleton<global::System.Lazy<global::App.IStore>>(services, \"a\",");
+        await Assert.That(source).Contains("AddKeyedSingleton<global::System.Lazy<global::App.IStore>>(services, \"b\",");
+
+        // A value demand ("c") can be equal to a symbol registration, but not to another value
+        await Assert.That(source).Contains("AddKeyedSingleton<global::System.Lazy<global::System.Threading.Tasks.Task<global::App.IStore>>>(services, global::App.Keys.A,");
+        await Assert.That(source).DoesNotContain("AddKeyedSingleton<global::System.Lazy<global::System.Threading.Tasks.Task<global::App.IStore>>>(services, \"a\",");
+
+        // An int key cannot be equal to a string key
+        await Assert.That(source).DoesNotContain("global::System.Func<global::App.IStore>>(services");
+    }
+
     [Test]
     public async Task Wrapper_ContainerAndServiceCollectionExtension_Deterministic()
         => await SourceGeneratorTestHelper.VerifyDeterministicAsync<IocSourceGenerator>(
