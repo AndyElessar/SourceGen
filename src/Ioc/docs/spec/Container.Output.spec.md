@@ -130,6 +130,8 @@ All service types of one closed definition share the same underlying instance, e
 | `IEnumerable<S>` | No key, each key that occurs, `AnyKey` | Each registered service type `S`. When a candidate is asynchronous, the entry is `IEnumerable<Task<S>>` instead. |
 | Other wrapper types | As the demand needs | The view has a demand (see "Sources of demands" in [Analysis model](Analysis.Model.spec.md#sources-of-demands)) |
 
+A wrapper type in the table includes a wrapper whose `T` only the fallback provider has. The container creates that wrapper, the same as at the dependency site (see [Behavior for each request](#behavior-for-each-request)). When a required and an optional dependency site ask for the same wrapper type and key, the entry resolves `T` as the required site does.
+
 For an inaccessible type, the container gets the `Type` from the type entry of the module (see "Type entry and wrapper entry" in [Module output](Module.Output.spec.md#type-entry-and-wrapper-entry)).
 
 ### Lookup rules
@@ -179,7 +181,7 @@ The generator generates wrapper types from demands (see "Sources of demands" in 
 | `KeyValuePair<TKey, T>` | Created each time (value type) | Created each time (value type) | Created each time (value type) |
 
 - A `Func` captures the instance (root or scope) that resolved it. Each later call resolves `T` on that instance.
-- The thread safety mode of `Lazy<T>` is `ExecutionAndPublication`.
+- A `Lazy<T>` that the root or a scope caches uses `LazyThreadSafetyMode.PublicationOnly`. It does not keep an exception, so after a failure the next `Value` creates `T` again, the same as a resolution of `T` (see [Resolution of a closed definition](#resolution-of-a-closed-definition)). The resolver of `T` still creates only one instance. A `Lazy<T>` that each injection creates uses `ExecutionAndPublication`.
 - `Func<A..., T>` creates `T` from the mapping (see "Mapping of `Func<..., T>`" in [Analysis model](Analysis.Model.spec.md#mapping-of-func-t)). A mapped constructor parameter takes the argument of the caller. The captured instance resolves the other parameters.
 - A nested combination applies the same rules from the inside to the outside. The cache location of an outer layer follows the shortest lifetime among the inner layers.
 
@@ -236,6 +238,7 @@ The subsections below give the details.
 - The container always creates the wrapper types. It does not ask the fallback provider for `Lazy<T>` or `Func<T>`. These types are reserved for automatic generation (the [limits](../Constitution.md#52-limits) of the constitution do not let the user register them), and MS.DI itself does not supply them. `KeyValuePair<TKey, T>` is the exception. When the container has no related registration, it cannot build the pair. It asks the fallback provider for the type unchanged (see the table above).
 - The generator does not check the lifetime of a dependency that the fallback provider resolves. It reports `SGIOC501` (Info) at compile time.
 - An optional dependency tries the container, then the fallback provider, then the default value. When the fallback provider returns `null`, the container uses the default value.
+- An optional `Lazy<T>`, `Func<T>` or `Task<T>` whose `T` has no registration in the container is the exception, because the wrapper must not resolve `T` before it is used. With a fallback provider, the container creates the wrapper, and the wrapper asks the fallback provider for `T` with `GetService`: the value is `null` when the fallback provider does not have `T`. A required one uses `GetRequiredService` and throws. Without a fallback provider, the dependency site gets its default value.
 - A value-type dependency is a `KeyValuePair<TKey, T>` or any value type for which the container cannot have a registration. When the fallback provider resolves it, the rules are the same as for a reference type, with one more step that unboxes the result. For a required dependency, the container throws `InvalidOperationException` when the fallback provider returns `null`. An optional dependency uses the default value. MS.DI does not prevent a non-generic registration of a value-type service.
 
 ## Eager resolution

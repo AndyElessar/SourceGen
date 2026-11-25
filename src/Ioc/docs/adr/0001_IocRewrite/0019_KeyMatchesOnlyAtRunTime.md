@@ -15,7 +15,7 @@ So a site with `static readonly string A = "a"` does not match a registration wi
 
 ## Decision outcome
 
-The container keeps the match by compile-time identity. Its full check reports `SGIOC505` (Warning) when a site key has no registration of the same identity, but the key of a registration of the same service type can be equal to it at run time. The check covers a site of one service and a site of a collection. The other wrapper types are added to the check with their own slice of the rewrite. The rule is in [Semantics: Keyed services](../../spec/Semantics.spec.md#keyed-services).
+The container keeps the match by compile-time identity. Its full check reports `SGIOC505` (Warning) when a site key has no registration of the same identity, but the key of a registration of the same service type can be equal to it at run time. The check covers a site of one service (also in `Lazy<T>`, `Func<T>` or `Task<T>`) and a site of a collection. The other wrapper types are added to the check with their own slice of the rewrite. The rule is in [Semantics: Keyed services](../../spec/Semantics.spec.md#keyed-services).
 
 - Two keys can be equal when at least one of them is a symbol and their key types are the same, or one of them is `object`. The check does not look at other combinations, for example `int?` and `int`.
 - The service collection extension does not report it, because MS.DI uses `Equals`.
