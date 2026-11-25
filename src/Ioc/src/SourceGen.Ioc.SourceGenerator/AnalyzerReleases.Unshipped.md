@@ -31,3 +31,4 @@ SGIOC403 | SourceGen.Ioc | Error | Disposable Transient
 SGIOC501 | SourceGen.Ioc | Info | Dependency resolved from the fallback provider
 SGIOC502 | SourceGen.Ioc | Warning | Singleton holds a transient service
 SGIOC503 | SourceGen.Ioc | Warning | Scoped service holds a transient service
+SGIOC505 | SourceGen.Ioc | Warning | Key can match only at run time

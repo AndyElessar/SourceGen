@@ -63,6 +63,7 @@ The [constitution](../../Constitution.md) holds the principles, the scope and li
 | [0016](0016_OptionalDependencies.md) | Which dependencies are optional: only an explicit default value or a real initializer, not a nullable annotation. A partial accessor is the exception. |
 | [0017](0017_FallbackInterfacesAsServices.md) | The container gets `IServiceProviderIsService` and `IServiceProviderIsKeyedService` from the fallback provider as services. |
 | [0018](0018_NoAnyKeyRegistration.md) | A registration cannot use `KeyedService.AnyKey` as its key. A documented difference of the constitution. |
+| [0019](0019_KeyMatchesOnlyAtRunTime.md) | A key of a dependency site that can be equal to a registered key only at run time is a warning (`SGIOC505`). The container keeps the match by compile-time identity. |
 
 ### Consequences
 

@@ -116,7 +116,7 @@ public partial class KeyedDependencyTests
     {
         GeneratorTestResult result = await RunAsync(Services + """
             [IocContainer(IntegrateServiceProvider = false)]
-            public partial class AppContainer
+            public partial class {|SGIOC505:AppContainer|}
             {
                 [IocInject(Key = "a")]
                 public partial IRepo Main { get; }

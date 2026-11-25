@@ -25,7 +25,7 @@ The numbers are in ranges by category and start at `SGIOC0xx`. Each range has on
 | `SGIOC2xx` | Import problems | Do not generate the outputs that depend on the import | The importer |
 | `SGIOC3xx` | Errors of the dependency graph (both levels of checks find them) | Do not generate the output | Definite check: each assembly. Full check: the container |
 | `SGIOC4xx` | Errors that only the composition root can find | Do not generate the output | `SGIOC401` to `SGIOC404`: the class that has `IocContainerAttribute`. `SGIOC405`: the assembly of the composition root |
-| `SGIOC5xx` | Diagnostics that do not affect generation (Warning and Info) | None | `SGIOC501`: the class that has `IocContainerAttribute`. `SGIOC502` and `SGIOC503`: each assembly for the definite check, and the container for the full check. `SGIOC504`: the assembly that generates the service collection extension |
+| `SGIOC5xx` | Diagnostics that do not affect generation (Warning and Info) | None | `SGIOC501` and `SGIOC505`: the class that has `IocContainerAttribute`. `SGIOC502` and `SGIOC503`: each assembly for the definite check, and the container for the full check. `SGIOC504`: the assembly that generates the service collection extension |
 
 ### Levels
 
@@ -191,13 +191,14 @@ Generation is not affected. Reported on the container class, and only for a cont
 
 ### Warning
 
-Generation is not affected. The user can change the level (see [Levels](#levels)). For `SGIOC502` and `SGIOC503`, the definite check reports at the location of the dependency site (parameter or member), and the full check reports on the container class. The two do not report the same problem twice. See [Analysis model: Two levels of checks](Analysis.Model.spec.md#two-levels-of-checks). `SGIOC504` is reported only in an assembly that generates a service collection extension.
+Generation is not affected. The user can change the level (see [Levels](#levels)). For `SGIOC502` and `SGIOC503`, the definite check reports at the location of the dependency site (parameter or member), and the full check reports on the container class. The two do not report the same problem twice. See [Analysis model: Two levels of checks](Analysis.Model.spec.md#two-levels-of-checks). `SGIOC504` is reported only in an assembly that generates a service collection extension. `SGIOC505` is reported only by the full check, on the container class.
 
 | ID | Title | Message | Rule |
 | --- | --- | --- | --- |
 | `SGIOC502` | Singleton holds a transient service | `Singleton '{0}' holds transient '{1}' for the lifetime of the container; depend on Func<{2}> to create instances on demand` | [Analysis model: Warning for a held Transient](Analysis.Model.spec.md#warning-for-a-held-transient) |
 | `SGIOC503` | Scoped service holds a transient service | `Scoped '{0}' holds transient '{1}' for the lifetime of the scope; depend on Func<{2}> to create instances on demand` | [Analysis model: Warning for a held Transient](Analysis.Model.spec.md#warning-for-a-held-transient) |
 | `SGIOC504` | Ambiguous registrations in Add method | `'{0}' requires a single '{1}' but {2} untagged registrations provide it: {3}; {4} resolves '{5}'` (`{4}`: the method name. `{5}`: the candidate that wins when no tag is given) | [Service collection extension output: Definite ambiguity](ServiceCollection.Output.spec.md#definite-ambiguity) |
+| `SGIOC505` | Key can match only at run time | `'{0}' requires '{1}', and no registration has this key at compile time; at run time it can be equal to the key of these registrations, which the container does not match: {2}; use the same key member or a const key` (`{2}`: the closed definitions with such a key, joined with `, `) | [Semantics: Keyed services](Semantics.spec.md#keyed-services) |
 
 ## Diagnostics by problem
 
@@ -246,6 +247,7 @@ Generation is not affected. The user can change the level (see [Levels](#levels)
 | Missing dependency (with a fallback provider) | `SGIOC501` |
 | Singleton depends on Transient / Scoped depends on Transient | `SGIOC502`, `SGIOC503` |
 | Definite ambiguity in the service collection extension | `SGIOC504` |
+| The key of a dependency site matches no registration at compile time, but can be equal to a registered key at run time | `SGIOC505` |
 
 ## Tests
 

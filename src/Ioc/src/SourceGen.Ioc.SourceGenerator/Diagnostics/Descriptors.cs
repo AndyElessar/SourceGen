@@ -212,6 +212,16 @@ internal static class Descriptors
         "Scoped '{0}' holds transient '{1}' for the lifetime of the scope; depend on Func<{2}> to create instances on demand",
         DiagnosticSeverity.Warning);
 
+    /// <summary>
+    /// SGIOC505: no registration has the key of a dependency site at compile time, but a registered key of the same
+    /// service type can be equal to it at run time. The container matches by compile-time identity, so it does not match.
+    /// </summary>
+    public static readonly DiagnosticDescriptor KeyMatchesOnlyAtRunTime = Create(
+        "SGIOC505",
+        "Key can match only at run time",
+        "'{0}' requires '{1}', and no registration has this key at compile time; at run time it can be equal to the key of these registrations, which the container does not match: {2}; use the same key member or a const key",
+        DiagnosticSeverity.Warning);
+
     /// <summary>Gets the descriptors by ID.</summary>
     public static IReadOnlyDictionary<string, DiagnosticDescriptor> ById { get; } = new[]
     {
@@ -244,6 +254,7 @@ internal static class Descriptors
         FallbackDependency,
         SingletonHoldsTransient,
         ScopedHoldsTransient,
+        KeyMatchesOnlyAtRunTime,
     }.ToDictionary(static d => d.Id);
 
     /// <summary>

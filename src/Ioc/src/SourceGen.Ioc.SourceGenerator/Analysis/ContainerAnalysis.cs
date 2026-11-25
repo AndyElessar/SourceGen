@@ -239,13 +239,23 @@ internal static class ContainerAnalysis
                 return null;
             }
 
+            string canonical = KeyRef.CanonicalOf(key);
+            string requested = key is null ? TypeNames.Display(type) : $"{TypeNames.Display(type)} (Key: {KeyNames.Display(key)})";
+            // An error node with this key already has its own error
+            if(key is { IsAnyKey: false }
+                && (request.IsPlain || request.IsPlainCollection)
+                && !providers.ContainsKey((request.Core, canonical))
+                && !skipped.Contains((request.Core, canonical))
+                && !skipped.Contains((request.Core, ErrorNode.AnyKey)))
+            {
+                CheckRunTimeKey(request.Core, key, $"{owner} → {member}", requested);
+            }
+
             if(request.IsPlainCollection)
             {
                 return ResolveCollection(request.Core, key);
             }
 
-            string canonical = KeyRef.CanonicalOf(key);
-            string requested = key is null ? TypeNames.Display(type) : $"{TypeNames.Display(type)} (Key: {KeyNames.Display(key)})";
             switch(providers.TryGetValue((type, canonical), out List<int>? candidates) ? candidates.Count : 0)
             {
                 case 1:
@@ -291,7 +301,32 @@ internal static class ContainerAnalysis
 
             return new ArgumentPlan(ArgumentKind.Collection, collectionIndexes[(element, CollectionKey(key))], key);
         }
+
+        // SGIOC505: the key of the site has no registration of the same compile-time identity, but the key of a
+        // registration of the same service type can be equal to it at run time (Semantics.spec, "Keyed services")
+        void CheckRunTimeKey(TypeRef service, KeyRef key, string site, string requested)
+        {
+            string[] registrations = [.. providers
+                .Where(p => p.Key.Type.Equals(service) && p.Key.Key.Length > 0 && MayBeEqual(key, definitions[p.Value[0]].Key!))
+                .SelectMany(static p => p.Value)
+                .OrderBy(static i => i)
+                .Select(i => KeyNames.Definition(definitions[i]))];
+            if(registrations.Length > 0)
+            {
+                problems.Add(new ContainerProblem(Descriptors.KeyMatchesOnlyAtRunTime.Id, [site, requested, string.Join(", ", registrations)]));
+            }
+        }
     }
+
+    /// <summary>
+    /// Whether two keys with different compile-time identities can be equal at run time: at least one of them is a
+    /// symbol, and their key types are the same or one of them is <c>object</c>. Two different values are never equal.
+    /// </summary>
+    private static bool MayBeEqual(KeyRef site, KeyRef registered)
+        => (site.Kind == KeyKind.Symbol || registered.Kind == KeyKind.Symbol)
+            && (site.ValueType.Equals(registered.ValueType) || IsObject(site.ValueType) || IsObject(registered.ValueType));
+
+    private static bool IsObject(TypeRef type) => type is NamedTypeRef { MetadataName: "System.Object" };
 
     /// <summary>The identity of the key of a collection: the empty string for no key, <c>*</c> for <c>AnyKey</c>.</summary>
     private static string CollectionKey(KeyRef? key) => key is { IsAnyKey: true } ? ErrorNode.AnyKey : KeyRef.CanonicalOf(key);

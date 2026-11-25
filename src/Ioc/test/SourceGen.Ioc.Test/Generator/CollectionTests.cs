@@ -185,7 +185,7 @@ public class CollectionTests
             public sealed class Consumer([IocInject(KeyType = KeyType.Csharp, Key = nameof(Keys.A))] IEnumerable<IRepo> repos);
 
             [IocContainer(IntegrateServiceProvider = false)]
-            public partial class AppContainer;
+            public partial class {|SGIOC505:AppContainer|};
             """);
 
         await result.VerifyCompilableAsync();

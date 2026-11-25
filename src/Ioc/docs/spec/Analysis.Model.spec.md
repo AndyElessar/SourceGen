@@ -459,6 +459,7 @@ The definite check is the check of the assembly view. It uses only definite edge
 | Singleton depends on Transient (Warning) | `SGIOC502` | Definite edges | All |
 | Scoped depends on Transient (Warning) | `SGIOC503` | Definite edges | All |
 | Definite ambiguity in the service collection extension (Warning) | `SGIOC504` | Only in an assembly that generates the service collection extension. See [Definite ambiguity](ServiceCollection.Output.spec.md#definite-ambiguity) | No |
+| Key that can match only at run time (Warning) | `SGIOC505` | No | Yes. See [Semantics: Keyed services](Semantics.spec.md#keyed-services) |
 
 Reporting rules:
 
