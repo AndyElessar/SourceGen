@@ -365,7 +365,15 @@ internal static class ContainerEmitter
         if(strategy == StrategyLock)
         {
             writer.WriteLine($"{implementation} instance;");
-            writer.WriteLine(singleton ? $"lock(s.{LockField(definition)})" : "lock(__scopedLock)");
+            if(singleton)
+            {
+                writer.WriteLine($"lock(s.{LockField(definition)})");
+            }
+            else
+            {
+                writer.WriteLine("lock(__scopedLock)");
+            }
+
             writer.WriteLine('{');
             writer.Indentation++;
             WriteExisting(writer, field);
@@ -439,7 +447,7 @@ internal static class ContainerEmitter
 
     /// <summary>Writes the local <c>c</c>: the container that resolves the dependencies. A Singleton uses the root.</summary>
     private static void WriteContext(SourceWriter writer, bool singleton, string self)
-        => writer.WriteLine(singleton ? $"{self} c = s.Root;" : $"{self} c = this;");
+        => writer.WriteLine($"{self} c = {(singleton ? "s.Root" : "this")};");
 
     /// <summary>
     /// Writes <c>instance = new ...</c> and the injection steps with each argument resolved on <c>c</c>. A Transient has
