@@ -1,0 +1,30 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::App.ILogger>? __w_FuncILogger_de32e6cb;
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer __Get_Consumer_fd0ac76a()
+    {
+        global::App.AppContainer c = this;
+        global::App.Consumer instance = new global::App.Consumer(
+            c.__Wrap_LazyILogger_7f202274(),
+            c.__Wrap_FuncILogger_de32e6cb(),
+            c.__Wrap_TaskILogger_44a31300());
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Lazy<global::App.ILogger> __Wrap_LazyILogger_7f202274() => new global::System.Lazy<global::App.ILogger>(() => (global::App.ILogger)global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(this.__Fallback(), typeof(global::App.ILogger)), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::App.ILogger> __Wrap_FuncILogger_de32e6cb() => __w_FuncILogger_de32e6cb ?? __CreateWrap_FuncILogger_de32e6cb();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::App.ILogger> __CreateWrap_FuncILogger_de32e6cb()
+    {
+        global::App.AppContainer o = this;
+        global::System.Func<global::App.ILogger> created = new global::System.Func<global::App.ILogger>(() => (global::App.ILogger)o.__Fallback().GetService(typeof(global::App.ILogger))!);
+        return global::System.Threading.Interlocked.CompareExchange(ref __w_FuncILogger_de32e6cb, created, null) ?? created;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Threading.Tasks.Task<global::App.ILogger> __Wrap_TaskILogger_44a31300() => global::System.Threading.Tasks.Task.FromResult<global::App.ILogger>((global::App.ILogger)this.__Fallback().GetService(typeof(global::App.ILogger))!);

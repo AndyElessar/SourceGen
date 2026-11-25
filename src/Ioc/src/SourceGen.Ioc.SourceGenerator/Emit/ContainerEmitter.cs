@@ -64,6 +64,11 @@ internal static class ContainerEmitter
             WriteCollection(writer, plan, collection);
         }
 
+        foreach(WrapperPlan wrapper in plan.Wrappers)
+        {
+            WriteWrapper(writer, plan, wrapper, self);
+        }
+
         WriteAccessors(writer, plan);
         WriteLookup(writer, plan, self);
         WriteServiceProvider(writer, self, plan.Container.IntegrateServiceProvider);
@@ -90,6 +95,75 @@ internal static class ContainerEmitter
     private static string Create(ClosedDefinition definition) => GeneratedNames.For("__Create_", definition);
 
     private static string All(CollectionPlan collection) => GeneratedNames.For("__All_", collection);
+
+    private static string Wrap(WrapperPlan wrapper) => GeneratedNames.For("__Wrap_", wrapper);
+
+    private static string WrapField(WrapperPlan wrapper) => GeneratedNames.For("__w_", wrapper);
+
+    /// <summary>
+    /// The resolver of a wrapper (Container.Output.spec, "Wrapper types"). A cached wrapper is stored on the instance
+    /// that caches it, and it captures that instance. Concurrent first resolutions keep one wrapper. A wrapper that is
+    /// not cached captures the instance that resolves it.
+    /// </summary>
+    private static void WriteWrapper(SourceWriter writer, ContainerPlan plan, WrapperPlan wrapper, string self)
+    {
+        string type = TypeNames.CSharp(wrapper.Type);
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        if(wrapper.Cache == WrapperCache.None)
+        {
+            writer.WriteLine($"private {type} {Wrap(wrapper)}() => {WrapperValue(plan, wrapper, "this")};");
+            return;
+        }
+
+        string field = $"{(wrapper.Cache == WrapperCache.Root ? "__singletons." : string.Empty)}{WrapField(wrapper)}";
+        string create = GeneratedNames.For("__CreateWrap_", wrapper);
+        writer.WriteLine($"private {type} {Wrap(wrapper)}() => {field} ?? {create}();");
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private {type} {create}()");
+        writer.WriteLine('{');
+        writer.WriteLine($"    {self} o = {(wrapper.Cache == WrapperCache.Root ? "__singletons.Root" : "this")};");
+        writer.WriteLine($"    {type} created = {WrapperValue(plan, wrapper, "o")};");
+        writer.WriteLine($"    return {Interlocked}.CompareExchange(ref {field}, created, null) ?? created;");
+        writer.WriteLine('}');
+    }
+
+    /// <summary>
+    /// The expression that creates a wrapper: <c>T</c> resolved on <paramref name="owner"/>, wrapped from the inside to
+    /// the outside. A synchronous service in <c>Task&lt;T&gt;</c> is a completed task. A service of the fallback provider
+    /// is <see langword="null"/> when it is missing and the site is optional.
+    /// </summary>
+    private static string WrapperValue(ContainerPlan plan, WrapperPlan wrapper, string owner)
+    {
+        WrapperRequest request = wrapper.Request;
+        string core = TypeNames.CSharp(request.Core);
+        string value = wrapper.Source switch
+        {
+            ArgumentKind.Resolved => $"({core}){owner}.{Get(plan.Definitions[wrapper.Target].Definition)}()",
+            ArgumentKind.Self => $"({core}){owner}",
+            ArgumentKind.Root => $"({core}){owner}.__singletons.Root",
+            _ when wrapper.Required => FallbackArgument($"{owner}.__Fallback()", new Dependency(request.Core, string.Empty, false), 0, wrapper.Key),
+            _ => $"({core}){FallbackGet($"{owner}.__Fallback()", new Dependency(request.Core, string.Empty, false), wrapper.Key)}!",
+        };
+        string result = core;
+        if(request.IsTask)
+        {
+            value = $"global::System.Threading.Tasks.Task.FromResult<{core}>({value})";
+            result = $"global::System.Threading.Tasks.Task<{core}>";
+        }
+
+        // A cached Lazy does not keep an exception: the resolver of T already creates one instance, and it creates it
+        // again after a failure. A Lazy for each injection runs its factory one time
+        return request.Deferred switch
+        {
+            DeferredKind.Lazy when wrapper.Cache is WrapperCache.Root or WrapperCache.Scope
+                => $"new global::System.Lazy<{result}>(() => {value}, global::System.Threading.LazyThreadSafetyMode.PublicationOnly)",
+            DeferredKind.Lazy => $"new global::System.Lazy<{result}>(() => {value}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)",
+            DeferredKind.Func => $"new global::System.Func<{result}>(() => {value})",
+            _ => value,
+        };
+    }
 
     /// <summary>
     /// The resolver of a collection: an array of the candidates in their ordering, merged with the services of the fallback
@@ -169,6 +243,11 @@ internal static class ContainerEmitter
             writer.WriteLine($"public {TypeNames.CSharp(collection.Element)}[]? {GeneratedNames.For("__all_", collection)};");
         }
 
+        foreach(WrapperPlan wrapper in plan.Wrappers.Where(static w => w.Cache == WrapperCache.Root))
+        {
+            writer.WriteLine($"public {TypeNames.CSharp(wrapper.Type)}? {WrapField(wrapper)};");
+        }
+
         writer.Indentation--;
         writer.WriteLine('}');
         writer.WriteLine();
@@ -200,6 +279,12 @@ internal static class ContainerEmitter
         {
             writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
             writer.WriteLine($"private {TypeNames.CSharp(collection.Element)}[]? {GeneratedNames.For("__all_", collection)};");
+        }
+
+        foreach(WrapperPlan wrapper in plan.Wrappers.Where(static w => w.Cache is WrapperCache.Scope or WrapperCache.Instance))
+        {
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine($"private {TypeNames.CSharp(wrapper.Type)}? {WrapField(wrapper)};");
         }
     }
 
@@ -507,6 +592,7 @@ internal static class ContainerEmitter
             ArgumentKind.Fallback => FallbackArgument("c.__Fallback()", parameter, index, argument.Key),
             ArgumentKind.ServiceKey => ServiceKeyArgument(definition.Definition.Key!),
             ArgumentKind.Collection => $"({type})c.{All(plan.Collections[argument.Target])}()",
+            ArgumentKind.Wrapper => $"c.{Wrap(plan.Wrappers[argument.Target])}()",
             _ => $"({type})c.{Get(plan.Definitions[argument.Target].Definition)}()",
         };
     }
@@ -620,6 +706,9 @@ internal static class ContainerEmitter
                 case ArgumentKind.Collection:
                     writer.WriteLine($"return ({member.ReturnType}){All(plan.Collections[accessor.Argument.Target])}();");
                     break;
+                case ArgumentKind.Wrapper:
+                    writer.WriteLine($"return {Wrap(plan.Wrappers[accessor.Argument.Target])}();");
+                    break;
                 case ArgumentKind.Fallback:
                     Dependency dependency = new(member.Type, member.Name, false, member.IsOptional ? OptionalMode.Nullable : OptionalMode.Required);
                     writer.WriteLine($"return {FallbackArgument("__Fallback()", dependency, 0, accessor.Argument.Key)};");
@@ -656,6 +745,7 @@ internal static class ContainerEmitter
         LookupEntry[] keyed = [.. plan.Lookup.Where(static e => e.Key is not null)];
         CollectionPlan[] keyedCollections = [.. plan.Collections.Where(static c => c.Key is not null)];
         CollectionPlan[] demandOnly = [.. keyedCollections.Where(c => !keyed.Any(e => e.ServiceType.Equals(c.Element) && e.Key!.Equals(c.Key)))];
+        WrapperPlan[] keyedWrappers = [.. LookupWrappers(plan).Where(static w => w.Key is not null)];
 
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
@@ -686,6 +776,12 @@ internal static class ContainerEmitter
             {
                 writer.WriteLine($"{{ typeof({type}), static c => c.{All(collection)}() }},");
             }
+        }
+
+        // The wrappers that a dependency site asks for (Container.Output.spec, "Contents of the table")
+        foreach(WrapperPlan wrapper in LookupWrappers(plan).Where(static w => w.Key is null))
+        {
+            writer.WriteLine($"{{ typeof({TypeNames.CSharp(wrapper.Type)}), static c => c.{Wrap(wrapper)}() }},");
         }
 
         writer.Indentation--;
@@ -729,14 +825,14 @@ internal static class ContainerEmitter
         writer.WriteLine('{');
         writer.Indentation++;
         writer.WriteLine($"global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}> table = new global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}>();");
-        bool hasKeys = keyed.Length > 0 || keyedCollections.Length > 0;
+        bool hasKeys = keyed.Length > 0 || keyedCollections.Length > 0 || keyedWrappers.Length > 0;
         if(hasKeys)
         {
             writer.WriteLine($"global::System.Collections.Generic.HashSet<{typeAndKey}> keys = new global::System.Collections.Generic.HashSet<{typeAndKey}>();");
 
             // Each key is read one time
             Dictionary<string, string> variables = [];
-            foreach(KeyRef key in keyed.Select(static e => e.Key!).Concat(keyedCollections.Select(static c => c.Key!)))
+            foreach(KeyRef key in keyed.Select(static e => e.Key!).Concat(keyedCollections.Select(static c => c.Key!)).Concat(keyedWrappers.Select(static w => w.Key!)))
             {
                 if(!variables.ContainsKey(key.Canonical))
                 {
@@ -766,6 +862,13 @@ internal static class ContainerEmitter
                 {
                     writer.WriteLine($"__TryAddKeyed(table, keys, typeof({type}), typeof({enumerable}), {variables[collection.Key!.Canonical]}, static (c, _) => c.{All(collection)}());");
                 }
+            }
+
+            // A keyed wrapper of a registration has its key, and registered keys are not equal at run time. A key of a
+            // wrapper of the fallback provider that is equal to a key of the table uses that entry
+            foreach(WrapperPlan wrapper in keyedWrappers)
+            {
+                writer.WriteLine($"table.TryAdd((typeof({TypeNames.CSharp(wrapper.Type)}), {variables[wrapper.Key!.Canonical]}), static (c, _) => c.{Wrap(wrapper)}());");
             }
 
             // AnyKey: all registrations of the type that have a key, in the ordering. One service with AnyKey throws, as in MS.DI
@@ -827,6 +930,16 @@ internal static class ContainerEmitter
             }
         }
     }
+
+    /// <summary>
+    /// The wrappers in the lookup table: one for each wrapper type and key. When a wrapper of a service of the fallback
+    /// provider has a required and an optional dependency site, the table uses the required one, which throws when the
+    /// fallback provider does not have the service.
+    /// </summary>
+    private static IEnumerable<WrapperPlan> LookupWrappers(ContainerPlan plan)
+        => plan.Wrappers
+            .GroupBy(static w => (w.Type.CanonicalString, KeyRef.CanonicalOf(w.Key)))
+            .Select(static g => g.FirstOrDefault(static w => w.Required) ?? g.First());
 
     /// <summary>The collection types that the lookup table gives for a collection: <c>IEnumerable&lt;T&gt;</c> first.</summary>
     private static IEnumerable<string> CollectionTypes(CollectionPlan collection)

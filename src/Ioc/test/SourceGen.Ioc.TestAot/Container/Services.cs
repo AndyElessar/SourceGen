@@ -298,6 +298,8 @@ public partial class FallbackContainer
     public partial IExternal? OptionalExternal { get; }
 
     public partial IClock Clock { get; }
+
+    public partial Lazy<IExternal> LazyExternal { get; }
 }
 
 /// <summary>The default options: <c>ThreadSafeStrategy.Lock</c> and eager Singletons.</summary>
@@ -314,6 +316,8 @@ public partial class AppContainer
 
     [IocInject(KeyType = KeyType.Csharp, Key = nameof(StoreKeys.Primary))]
     public partial IStore PrimaryStore { get; }
+
+    public partial Func<Job> Jobs { get; }
 }
 
 [IocContainer(IntegrateServiceProvider = false, EagerResolveOptions = EagerResolveOptions.None)]

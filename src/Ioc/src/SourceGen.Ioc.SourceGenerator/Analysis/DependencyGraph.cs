@@ -8,7 +8,11 @@ namespace SourceGen.Ioc.Analysis;
 /// <param name="From">The index of the closed definition that owns the dependency site.</param>
 /// <param name="Parameter">The index of the dependency site in <see cref="ClosedDefinition.Dependencies"/>.</param>
 /// <param name="To">The index of the closed definition that the dependency resolves to.</param>
-internal readonly record struct GraphEdge(int From, int Parameter, int To);
+/// <param name="Deferred">
+/// The deferred wrapper of the edge. An edge through <c>Lazy</c> or <c>Func</c> is a deferred edge: it does not count
+/// for a cycle, and a Singleton that holds a <c>Func</c> of a Transient does not hold the Transient.
+/// </param>
+internal readonly record struct GraphEdge(int From, int Parameter, int To, DeferredKind Deferred = DeferredKind.None);
 
 /// <summary>A problem of the dependency graph. The definite check reports it at the dependency site.</summary>
 /// <param name="Id">The diagnostic ID.</param>
@@ -71,11 +75,13 @@ internal static class DependencyGraph
             ImmutableEquatableArray<Dependency> parameters = definitions[i].Dependencies;
             for(int p = 0; p < parameters.Length; p++)
             {
+                // Only the Deferred shape is definite (Analysis.Model.spec, "Definite edges")
                 if(parameters[p].KeyMode != SiteKeyMode.ServiceKey
-                    && providers.TryGetValue((parameters[p].Type, KeyRef.CanonicalOf(parameters[p].KeyIn(definitions[i]))), out List<int>? candidates)
+                    && WrapperRequest.Parse(parameters[p].Type) is { Shape: RequestShape.Single, KeyValuePair: false } request
+                    && providers.TryGetValue((request.Core, KeyRef.CanonicalOf(parameters[p].KeyIn(definitions[i]))), out List<int>? candidates)
                     && candidates.Count == 1)
                 {
-                    edges[i].Add(new GraphEdge(i, p, candidates[0]));
+                    edges[i].Add(new GraphEdge(i, p, candidates[0], request.Deferred));
                 }
             }
         }
@@ -116,10 +122,12 @@ internal static class DependencyGraph
 
     /// <summary>
     /// <c>SGIOC301</c>: one cycle for each strongly connected component that has a cycle. The cycle starts at the first
-    /// closed definition of the component in the ordering, and the generator reports it at the first edge.
+    /// closed definition of the component in the ordering, and the generator reports it at the first edge. A deferred
+    /// edge does not count.
     /// </summary>
-    public static IEnumerable<GraphProblem> Cycles(ImmutableEquatableArray<ClosedDefinition> definitions, List<GraphEdge>[] edges)
+    public static IEnumerable<GraphProblem> Cycles(ImmutableEquatableArray<ClosedDefinition> definitions, List<GraphEdge>[] allEdges)
     {
+        List<GraphEdge>[] edges = [.. allEdges.Select(static e => e.Where(static edge => edge.Deferred == DeferredKind.None).ToList())];
         foreach(List<int> component in Components(edges))
         {
             int start = component.Min();
@@ -179,12 +187,13 @@ internal static class DependencyGraph
 
     /// <summary>
     /// <c>SGIOC502</c> and <c>SGIOC503</c>: a Singleton or Scoped closed definition that holds a Transient instance. A
-    /// dependency on multiple services is reported one time, with its first Transient candidate.
+    /// dependency on multiple services is reported one time, with its first Transient candidate. A <c>Func</c> creates a
+    /// new instance for each call, so its holder holds only the factory.
     /// </summary>
     public static IEnumerable<GraphProblem> HeldTransients(ImmutableEquatableArray<ClosedDefinition> definitions, List<GraphEdge>[] edges)
     {
         HashSet<(int, int)> reported = [];
-        foreach(GraphEdge edge in edges.SelectMany(static e => e))
+        foreach(GraphEdge edge in edges.SelectMany(static e => e).Where(static e => e.Deferred != DeferredKind.Func))
         {
             ClosedDefinition holder = definitions[edge.From];
             if(definitions[edge.To].Lifetime != Lifetime.Transient || holder.Lifetime == Lifetime.Transient || !reported.Add((edge.From, edge.Parameter)))

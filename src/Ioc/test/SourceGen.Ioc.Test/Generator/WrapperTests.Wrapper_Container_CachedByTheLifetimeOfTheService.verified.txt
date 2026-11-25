@@ -1,0 +1,161 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private sealed class __Singletons
+    {
+        public global::App.AppContainer Root = null!;
+        public readonly global::System.Threading.Lock __lock_SystemClock_28ece501 = new global::System.Threading.Lock();
+        public global::App.SystemClock? __f_SystemClock_28ece501;
+        public readonly global::System.Threading.Lock __lock_UtcClock_3a1b2eea = new global::System.Threading.Lock();
+        public global::App.UtcClock? __f_UtcClock_3a1b2eea;
+        public global::App.IClock[]? __all_IClock_9550c2c1;
+        public global::App.IClock[]? __all_IClock_22d9f063;
+        public global::App.IClock[]? __all_IClock_c3395771;
+        public global::App.SystemClock[]? __all_SystemClock_0781b245;
+        public global::App.UtcClock[]? __all_UtcClock_c78bd868;
+        public global::App.UtcClock[]? __all_UtcClock_3a1b2eea;
+        public global::System.Lazy<global::App.IClock>? __w_LazyIClock_e9d264b5;
+        public global::System.Func<global::System.Threading.Tasks.Task<global::App.IClock>>? __w_FuncIClock_b6381faa;
+        public global::System.Lazy<global::App.IClock>? __w_LazyIClock_e5ee863a;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::App.Session>? __w_FuncSession_58254799;
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::App.Job>? __w_FuncJob_2b119521;
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer __Get_Consumer_fd0ac76a()
+    {
+        global::App.AppContainer c = this;
+        global::App.Consumer instance = new global::App.Consumer(
+            c.__Wrap_LazyIClock_e9d264b5(),
+            c.__Wrap_FuncSession_58254799(),
+            c.__Wrap_TaskJob_99c279da(),
+            c.__Wrap_FuncJob_2b119521(),
+            c.__Wrap_LazyJob_40c5c976(),
+            c.__Wrap_FuncIClock_b6381faa(),
+            c.__Wrap_LazyIClock_e5ee863a(),
+            c.__Wrap_LazyIServiceProvider_eacf3eea());
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Lazy<global::App.IClock> __Wrap_LazyIClock_e9d264b5() => __singletons.__w_LazyIClock_e9d264b5 ?? __CreateWrap_LazyIClock_e9d264b5();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Lazy<global::App.IClock> __CreateWrap_LazyIClock_e9d264b5()
+    {
+        global::App.AppContainer o = __singletons.Root;
+        global::System.Lazy<global::App.IClock> created = new global::System.Lazy<global::App.IClock>(() => (global::App.IClock)o.__Get_SystemClock_28ece501(), global::System.Threading.LazyThreadSafetyMode.PublicationOnly);
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__w_LazyIClock_e9d264b5, created, null) ?? created;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::App.Session> __Wrap_FuncSession_58254799() => __w_FuncSession_58254799 ?? __CreateWrap_FuncSession_58254799();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::App.Session> __CreateWrap_FuncSession_58254799()
+    {
+        global::App.AppContainer o = this;
+        global::System.Func<global::App.Session> created = new global::System.Func<global::App.Session>(() => (global::App.Session)o.__Get_Session_24b3f38a());
+        return global::System.Threading.Interlocked.CompareExchange(ref __w_FuncSession_58254799, created, null) ?? created;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Threading.Tasks.Task<global::App.Job> __Wrap_TaskJob_99c279da() => global::System.Threading.Tasks.Task.FromResult<global::App.Job>((global::App.Job)this.__Get_Job_d10a1feb());
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::App.Job> __Wrap_FuncJob_2b119521() => __w_FuncJob_2b119521 ?? __CreateWrap_FuncJob_2b119521();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::App.Job> __CreateWrap_FuncJob_2b119521()
+    {
+        global::App.AppContainer o = this;
+        global::System.Func<global::App.Job> created = new global::System.Func<global::App.Job>(() => (global::App.Job)o.__Get_Job_d10a1feb());
+        return global::System.Threading.Interlocked.CompareExchange(ref __w_FuncJob_2b119521, created, null) ?? created;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Lazy<global::System.Threading.Tasks.Task<global::App.Job>> __Wrap_LazyJob_40c5c976() => new global::System.Lazy<global::System.Threading.Tasks.Task<global::App.Job>>(() => global::System.Threading.Tasks.Task.FromResult<global::App.Job>((global::App.Job)this.__Get_Job_d10a1feb()), global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::System.Threading.Tasks.Task<global::App.IClock>> __Wrap_FuncIClock_b6381faa() => __singletons.__w_FuncIClock_b6381faa ?? __CreateWrap_FuncIClock_b6381faa();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::System.Threading.Tasks.Task<global::App.IClock>> __CreateWrap_FuncIClock_b6381faa()
+    {
+        global::App.AppContainer o = __singletons.Root;
+        global::System.Func<global::System.Threading.Tasks.Task<global::App.IClock>> created = new global::System.Func<global::System.Threading.Tasks.Task<global::App.IClock>>(() => global::System.Threading.Tasks.Task.FromResult<global::App.IClock>((global::App.IClock)o.__Get_SystemClock_28ece501()));
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__w_FuncIClock_b6381faa, created, null) ?? created;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Lazy<global::App.IClock> __Wrap_LazyIClock_e5ee863a() => __singletons.__w_LazyIClock_e5ee863a ?? __CreateWrap_LazyIClock_e5ee863a();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Lazy<global::App.IClock> __CreateWrap_LazyIClock_e5ee863a()
+    {
+        global::App.AppContainer o = __singletons.Root;
+        global::System.Lazy<global::App.IClock> created = new global::System.Lazy<global::App.IClock>(() => (global::App.IClock)o.__Get_UtcClock_3a1b2eea(), global::System.Threading.LazyThreadSafetyMode.PublicationOnly);
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__w_LazyIClock_e5ee863a, created, null) ?? created;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Lazy<global::System.IServiceProvider> __Wrap_LazyIServiceProvider_eacf3eea() => new global::System.Lazy<global::System.IServiceProvider>(() => (global::System.IServiceProvider)this, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::System.Func<global::App.Job> Jobs
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return __Wrap_FuncJob_2b119521();
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>> __lookup =
+        global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>>
+        {
+            { typeof(global::System.IServiceProvider), static c => c },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c.__singletons.Root },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService), static c => c.__singletons.Root },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService), static c => c.__singletons.Root },
+            { typeof(global::App.AppContainer), static c => c },
+            { typeof(global::App.Consumer), static c => (global::App.Consumer)c.__Get_Consumer_fd0ac76a() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Consumer>), static c => c.__All_Consumer_be782406() },
+            { typeof(global::App.IClock), static c => (global::App.IClock)c.__Get_SystemClock_28ece501() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IClock>), static c => c.__All_IClock_9550c2c1() },
+            { typeof(global::App.Job), static c => (global::App.Job)c.__Get_Job_d10a1feb() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Job>), static c => c.__All_Job_3962eaef() },
+            { typeof(global::App.Session), static c => (global::App.Session)c.__Get_Session_24b3f38a() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Session>), static c => c.__All_Session_3bfe4be6() },
+            { typeof(global::App.SystemClock), static c => (global::App.SystemClock)c.__Get_SystemClock_28ece501() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.SystemClock>), static c => c.__All_SystemClock_0781b245() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.UtcClock>), static c => c.__All_UtcClock_5b9bf802() },
+            { typeof(global::System.Lazy<global::App.IClock>), static c => c.__Wrap_LazyIClock_e9d264b5() },
+            { typeof(global::System.Func<global::App.Session>), static c => c.__Wrap_FuncSession_58254799() },
+            { typeof(global::System.Threading.Tasks.Task<global::App.Job>), static c => c.__Wrap_TaskJob_99c279da() },
+            { typeof(global::System.Func<global::App.Job>), static c => c.__Wrap_FuncJob_2b119521() },
+            { typeof(global::System.Lazy<global::System.Threading.Tasks.Task<global::App.Job>>), static c => c.__Wrap_LazyJob_40c5c976() },
+            { typeof(global::System.Func<global::System.Threading.Tasks.Task<global::App.IClock>>), static c => c.__Wrap_FuncIClock_b6381faa() },
+            { typeof(global::System.Lazy<global::System.IServiceProvider>), static c => c.__Wrap_LazyIServiceProvider_eacf3eea() },
+        });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static global::System.Collections.Frozen.FrozenDictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> __BuildKeyedLookup()
+    {
+        global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> table = new global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>>();
+        global::System.Collections.Generic.HashSet<(global::System.Type, object)> keys = new global::System.Collections.Generic.HashSet<(global::System.Type, object)>();
+        object k0 = "utc";
+        __AddKeyed(table, keys, typeof(global::App.IClock), k0, static (c, _) => (global::App.IClock)c.__Get_UtcClock_3a1b2eea());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IClock>), k0, static (c, _) => c.__All_IClock_c3395771());
+        __AddKeyed(table, keys, typeof(global::App.UtcClock), k0, static (c, _) => (global::App.UtcClock)c.__Get_UtcClock_3a1b2eea());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.UtcClock>), k0, static (c, _) => c.__All_UtcClock_3a1b2eea());
+        table.TryAdd((typeof(global::System.Lazy<global::App.IClock>), k0), static (c, _) => c.__Wrap_LazyIClock_e5ee863a());
+        table.Add((typeof(global::App.IClock), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.IClock'."));
+        table.Add((typeof(global::App.UtcClock), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.UtcClock'."));
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.IClock>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => c.__All_IClock_22d9f063());
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.UtcClock>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => c.__All_UtcClock_c78bd868());
+        return global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(table);
+    }

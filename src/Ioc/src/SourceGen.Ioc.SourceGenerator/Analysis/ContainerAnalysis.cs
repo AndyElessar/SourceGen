@@ -31,13 +31,17 @@ internal enum ArgumentKind
 
     /// <summary>A collection of the service itself: the resolver of the collection <see cref="ArgumentPlan.Target"/>.</summary>
     Collection,
+
+    /// <summary><c>Lazy&lt;T&gt;</c>, <c>Func&lt;T&gt;</c> or <c>Task&lt;T&gt;</c>: the resolver of the wrapper <see cref="ArgumentPlan.Target"/>.</summary>
+    Wrapper,
 }
 
 /// <summary>The resolution result of one dependency site.</summary>
 /// <param name="Kind">How the argument is resolved.</param>
 /// <param name="Target">
 /// The index of the target closed definition, for <see cref="ArgumentKind.Resolved"/>. The index of the collection in
-/// <see cref="ContainerPlan.Collections"/>, for <see cref="ArgumentKind.Collection"/>.
+/// <see cref="ContainerPlan.Collections"/>, for <see cref="ArgumentKind.Collection"/>. The index of the wrapper in
+/// <see cref="ContainerPlan.Wrappers"/>, for <see cref="ArgumentKind.Wrapper"/>.
 /// </param>
 /// <param name="Key">The key that the site asks for, after <c>InheritKey</c>. The fallback provider uses it.</param>
 internal sealed record ArgumentPlan(ArgumentKind Kind, int Target, KeyRef? Key = null);
@@ -105,6 +109,47 @@ internal sealed record CollectionPlan(
     public string KeyIdentity => AnyKey ? ErrorNode.AnyKey : KeyRef.CanonicalOf(Key);
 }
 
+/// <summary>Where the container caches a wrapper (Container.Output.spec, "Wrapper types").</summary>
+internal enum WrapperCache
+{
+    /// <summary>Each injection creates a new one.</summary>
+    None,
+
+    /// <summary>The service is Singleton: the root caches one.</summary>
+    Root,
+
+    /// <summary>The service is Scoped: each scope caches one.</summary>
+    Scope,
+
+    /// <summary>A <c>Func</c> of any other service: each instance (root or scope) caches one.</summary>
+    Instance,
+}
+
+/// <summary>
+/// The resolver of <c>Lazy&lt;T&gt;</c>, <c>Func&lt;T&gt;</c>, <c>Task&lt;T&gt;</c>, or a nested combination of them
+/// (Container.Output.spec, "Wrapper types").
+/// </summary>
+/// <param name="Type">The wrapper type.</param>
+/// <param name="Request">The wrapper type, taken apart by the grammar.</param>
+/// <param name="Source">
+/// How the wrapper gets <c>T</c>: <see cref="ArgumentKind.Resolved"/>, <see cref="ArgumentKind.Self"/>,
+/// <see cref="ArgumentKind.Root"/>, or <see cref="ArgumentKind.Fallback"/>.
+/// </param>
+/// <param name="Target">The index of the closed definition, for <see cref="ArgumentKind.Resolved"/>.</param>
+/// <param name="Key">The key that the site asks for. The lookup table and the fallback provider use it.</param>
+/// <param name="Required">For the fallback provider: whether a missing <c>T</c> throws. Otherwise <c>T</c> is <see langword="null"/>.</param>
+/// <param name="Cache">Where the container caches it.</param>
+/// <param name="Identity">The identity of the wrapper in names and in the order of the wrappers.</param>
+internal sealed record WrapperPlan(
+    TypeRef Type,
+    WrapperRequest Request,
+    ArgumentKind Source,
+    int Target,
+    KeyRef? Key,
+    bool Required,
+    WrapperCache Cache,
+    string Identity);
+
 /// <summary>Everything that the code of a container needs.</summary>
 /// <param name="Container">The container class.</param>
 /// <param name="Definitions">The construction plans, in the ordering of the closed definitions.</param>
@@ -112,13 +157,15 @@ internal sealed record CollectionPlan(
 /// <param name="TopologicalOrder">The indexes of the closed definitions, each dependency before the definitions that depend on it.</param>
 /// <param name="Accessors">The partial accessors.</param>
 /// <param name="Collections">The collections, by the canonical string of the element and the key.</param>
+/// <param name="Wrappers">The wrappers that the dependency sites ask for, by their identity.</param>
 internal sealed record ContainerPlan(
     ContainerModel Container,
     ImmutableEquatableArray<DefinitionPlan> Definitions,
     ImmutableEquatableArray<LookupEntry> Lookup,
     ImmutableEquatableArray<int> TopologicalOrder,
     ImmutableEquatableArray<AccessorPlan> Accessors,
-    ImmutableEquatableArray<CollectionPlan> Collections);
+    ImmutableEquatableArray<CollectionPlan> Collections,
+    ImmutableEquatableArray<WrapperPlan> Wrappers);
 
 /// <summary>A problem that the full check finds. The position is added from the site of the container.</summary>
 /// <param name="Id">The diagnostic ID.</param>
@@ -160,6 +207,8 @@ internal static class ContainerAnalysis
         List<ContainerProblem> problems = [];
         List<DefinitionPlan> plans = [];
         List<GraphEdge>[] edges = new List<GraphEdge>[definitions.Length];
+        List<WrapperPlan> wrappers = [];
+        Dictionary<string, int> wrapperIndexes = new(StringComparer.Ordinal);
         bool reachesErrorNode = false;
         for(int index = 0; index < definitions.Length; index++)
         {
@@ -188,6 +237,10 @@ internal static class ContainerAnalysis
                     {
                         // One edge for each candidate (Analysis.Model.spec, "Circular dependencies")
                         edges[index].AddRange(collections[argument.Target].Candidates.Select(c => new GraphEdge(index, p, c)));
+                    }
+                    else if(argument.Kind == ArgumentKind.Wrapper && wrappers[argument.Target] is { Source: ArgumentKind.Resolved } wrapper)
+                    {
+                        edges[index].Add(new GraphEdge(index, p, wrapper.Target, wrapper.Request.Deferred));
                     }
                 }
             }
@@ -219,7 +272,14 @@ internal static class ContainerAnalysis
             .OrderBy(static p => p.Key.Type.CanonicalString, StringComparer.Ordinal)
             .ThenBy(static p => p.Key.Key, StringComparer.Ordinal)
             .Select(p => new LookupEntry(p.Key.Type, definitions[p.Value[0]].Key, p.Value.ToImmutableEquatableArray()))];
-        ContainerPlan plan = new(container, plans.ToImmutableEquatableArray(), lookup.ToImmutableEquatableArray(), TopologicalOrder(plans, collections), accessors.ToImmutableEquatableArray(), collections.ToImmutableEquatableArray());
+        ContainerPlan plan = new(
+            container,
+            plans.ToImmutableEquatableArray(),
+            lookup.ToImmutableEquatableArray(),
+            TopologicalOrder(plans, collections, wrappers),
+            accessors.ToImmutableEquatableArray(),
+            collections.ToImmutableEquatableArray(),
+            wrappers.ToImmutableEquatableArray());
         return new(container.Type, plan, problems.ToImmutableEquatableArray());
 
         // A single dependency (Analysis.Model.spec, "Single service"). A problem is recorded, and the result is null.
@@ -243,7 +303,7 @@ internal static class ContainerAnalysis
             string requested = key is null ? TypeNames.Display(type) : $"{TypeNames.Display(type)} (Key: {KeyNames.Display(key)})";
             // An error node with this key already has its own error
             if(key is { IsAnyKey: false }
-                && (request.IsPlain || request.IsPlainCollection)
+                && (request.IsPlain || request.IsPlainCollection || IsSingleWrapper(request))
                 && !providers.ContainsKey((request.Core, canonical))
                 && !skipped.Contains((request.Core, canonical))
                 && !skipped.Contains((request.Core, ErrorNode.AnyKey)))
@@ -256,6 +316,33 @@ internal static class ContainerAnalysis
                 return ResolveCollection(request.Core, key);
             }
 
+            if(IsSingleWrapper(request))
+            {
+                // T itself, then the wrapper around it
+                if((key is null && BuiltIn(request.Core, container.Type) is { } builtInCore
+                        ? new ArgumentPlan(builtInCore, -1)
+                        : ResolveSingle(request.Core, key, optional, owner, member, requested)) is not { } core)
+                {
+                    return null;
+                }
+
+                return core.Kind == ArgumentKind.Default ? core : Wrap(type, request, core, key, optional);
+            }
+
+            if(!request.IsPlain)
+            {
+                // The other wrapper types come in a later slice. The container must create them itself, so until
+                // then they stay missing, also when they are optional or the container has a fallback provider.
+                problems.Add(new ContainerProblem(Descriptors.MissingDependency.Id, [$"{owner} → {member}", requested]));
+                return null;
+            }
+
+            return ResolveSingle(type, key, optional, owner, member, requested);
+        }
+
+        ArgumentPlan? ResolveSingle(TypeRef type, KeyRef? key, bool optional, string owner, string member, string requested)
+        {
+            string canonical = KeyRef.CanonicalOf(key);
             switch(providers.TryGetValue((type, canonical), out List<int>? candidates) ? candidates.Count : 0)
             {
                 case 1:
@@ -263,11 +350,6 @@ internal static class ContainerAnalysis
                 case 0 when skipped.Contains((type, canonical)) || skipped.Contains((type, ErrorNode.AnyKey)):
                     // An error node: the original error is already reported, and the build fails because of it
                     reachesErrorNode = true;
-                    return null;
-                case 0 when !request.IsPlain:
-                    // The other wrapper types come in a later slice. The container must create them itself, so until
-                    // then they stay missing, also when they are optional or the container has a fallback provider.
-                    problems.Add(new ContainerProblem(Descriptors.MissingDependency.Id, [$"{owner} → {member}", requested]));
                     return null;
                 case 0 when container.IntegrateServiceProvider:
                     if(!optional)
@@ -302,6 +384,34 @@ internal static class ContainerAnalysis
             return new ArgumentPlan(ArgumentKind.Collection, collectionIndexes[(element, CollectionKey(key))], key);
         }
 
+        // The wrapper around T (Container.Output.spec, "Wrapper types"). Its cache follows the lifetime of T. A service of
+        // the fallback provider and a built-in service count as Transient. Sites that ask for the same wrapper share it
+        ArgumentPlan Wrap(TypeRef type, WrapperRequest request, ArgumentPlan core, KeyRef? key, bool optional)
+        {
+            Lifetime lifetime = core.Kind == ArgumentKind.Resolved ? definitions[core.Target].Lifetime : Lifetime.Transient;
+            WrapperCache cache = lifetime switch
+            {
+                Lifetime.Singleton => WrapperCache.Root,
+                Lifetime.Scoped => WrapperCache.Scope,
+                _ => request.Deferred == DeferredKind.Func ? WrapperCache.Instance : WrapperCache.None,
+            };
+            bool required = core.Kind != ArgumentKind.Fallback || !optional;
+            string identity = core.Kind switch
+            {
+                ArgumentKind.Resolved => $"{type.CanonicalString}|{definitions[core.Target].Implementation.CanonicalString}|{KeyRef.CanonicalOf(definitions[core.Target].Key)}",
+                ArgumentKind.Fallback => $"{type.CanonicalString}|fallback|{KeyRef.CanonicalOf(key)}|{(required ? "required" : "optional")}",
+                _ => $"{type.CanonicalString}|{core.Kind}",
+            };
+            if(!wrapperIndexes.TryGetValue(identity, out int index))
+            {
+                index = wrappers.Count;
+                wrapperIndexes[identity] = index;
+                wrappers.Add(new WrapperPlan(type, request, core.Kind, core.Target, key, required, cache, identity));
+            }
+
+            return new ArgumentPlan(ArgumentKind.Wrapper, index, key);
+        }
+
         // SGIOC505: the key of the site has no registration of the same compile-time identity, but the key of a
         // registration of the same service type can be equal to it at run time (Semantics.spec, "Keyed services")
         void CheckRunTimeKey(TypeRef service, KeyRef key, string site, string requested)
@@ -327,6 +437,13 @@ internal static class ContainerAnalysis
             && (site.ValueType.Equals(registered.ValueType) || IsObject(site.ValueType) || IsObject(registered.ValueType));
 
     private static bool IsObject(TypeRef type) => type is NamedTypeRef { MetadataName: "System.Object" };
+
+    /// <summary>
+    /// Whether the request is one service in <c>Lazy</c>, <c>Func</c> without arguments, <c>Task</c>, or a nested
+    /// combination of them. <c>Func&lt;A..., T&gt;</c> comes in a later slice.
+    /// </summary>
+    private static bool IsSingleWrapper(WrapperRequest request)
+        => request is { Shape: RequestShape.Single, KeyValuePair: false, FuncArguments.Length: 0 } && (request.Deferred != DeferredKind.None || request.IsTask);
 
     /// <summary>The identity of the key of a collection: the empty string for no key, <c>*</c> for <c>AnyKey</c>.</summary>
     private static string CollectionKey(KeyRef? key) => key is { IsAnyKey: true } ? ErrorNode.AnyKey : KeyRef.CanonicalOf(key);
@@ -464,7 +581,7 @@ internal static class ContainerAnalysis
     /// Each dependency before the definitions that depend on it. Definitions without a relation follow the ordering.
     /// A cycle (SGIOC301) stops the generation before this walk. Each definition is visited once in any case.
     /// </summary>
-    private static ImmutableEquatableArray<int> TopologicalOrder(List<DefinitionPlan> plans, List<CollectionPlan> collections)
+    private static ImmutableEquatableArray<int> TopologicalOrder(List<DefinitionPlan> plans, List<CollectionPlan> collections, List<WrapperPlan> wrappers)
     {
         List<int> order = [];
         bool[] visited = new bool[plans.Count];
@@ -495,6 +612,11 @@ internal static class ContainerAnalysis
                     {
                         Visit(candidate);
                     }
+                }
+                else if(argument.Kind == ArgumentKind.Wrapper && wrappers[argument.Target] is { Source: ArgumentKind.Resolved, Request.Deferred: DeferredKind.None } task)
+                {
+                    // Task<T> creates T at once. Lazy and Func create it later
+                    Visit(task.Target);
                 }
             }
 

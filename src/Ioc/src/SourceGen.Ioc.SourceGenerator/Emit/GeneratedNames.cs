@@ -27,6 +27,13 @@ internal static class GeneratedNames
     public static string For(string prefix, CollectionPlan collection)
         => $"{prefix}{ShortName(collection.Element)}_{Fnv1a($"{collection.Element.CanonicalString}|{collection.KeyIdentity}"):x8}";
 
+    /// <summary>Gets the name of a member that belongs to a wrapper.</summary>
+    /// <param name="prefix">The prefix, for example <c>__Wrap_</c>.</param>
+    /// <param name="wrapper">The wrapper.</param>
+    /// <returns>The member name.</returns>
+    public static string For(string prefix, WrapperPlan wrapper)
+        => $"{prefix}{ShortName(wrapper.Type)}{ShortName(wrapper.Request.Core)}_{Fnv1a(wrapper.Identity):x8}";
+
     /// <summary>The short name of a type: the name of a named type without its namespace and arity.</summary>
     private static string ShortName(TypeRef type)
     {

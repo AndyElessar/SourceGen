@@ -8,10 +8,6 @@
         public global::App.SingletonStep[]? __all_SingletonStep_2191168d;
     }
 
-        public global::App.IStep[]? __all_IStep_2a0577bb;
-
-        public global::App.SingletonStep[]? __all_SingletonStep_2191168d;
-
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     private global::App.IStep[]? __all_IStep_380bf4b7;
 

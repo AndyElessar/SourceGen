@@ -12,15 +12,18 @@ public static class SnapshotHelper
 {
     /// <summary>
     /// Returns the text of each member or type declaration of <paramref name="source"/> whose name is in
-    /// <paramref name="names"/>, in source order, separated by an empty line.
+    /// <paramref name="names"/>, in source order, separated by an empty line. A member inside a declaration that is
+    /// already returned is not returned again.
     /// </summary>
     public static string Members(string source, params IReadOnlyList<string> names)
     {
         HashSet<string> wanted = [.. names];
         SyntaxNode root = CSharpSyntaxTree.ParseText(source, SourceGeneratorTestHelper.ParseOptions).GetRoot();
-        string[] parts = [.. root.DescendantNodes()
+        MemberDeclarationSyntax[] selected = [.. root.DescendantNodes()
             .OfType<MemberDeclarationSyntax>()
-            .Where(m => Name(m) is { } name && wanted.Contains(name))
+            .Where(m => Name(m) is { } name && wanted.Contains(name))];
+        string[] parts = [.. selected
+            .Where(m => !m.Ancestors().Any(a => a is MemberDeclarationSyntax outer && selected.Contains(outer)))
             .Select(static m => m.ToFullString().Trim('\r', '\n'))];
 
         HashSet<string> found = [.. root.DescendantNodes().OfType<MemberDeclarationSyntax>().Select(Name).OfType<string>()];
