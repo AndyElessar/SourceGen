@@ -13,6 +13,8 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
         public global::App.AppContainer Root = null!;
         public readonly global::System.Threading.Lock __lock_SystemClock_28ece501 = new global::System.Threading.Lock();
         public global::App.SystemClock? __f_SystemClock_28ece501;
+        public global::App.IClock[]? __all_IClock_9550c2c1;
+        public global::App.SystemClock[]? __all_SystemClock_0781b245;
     }
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
@@ -25,6 +27,10 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
     private readonly global::System.Threading.Lock __scopedLock = new global::System.Threading.Lock();
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     private global::App.OrderService? __f_OrderService_2487f1ef;
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IOrderService[]? __all_IOrderService_3893a0b2;
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.OrderService[]? __all_OrderService_7a08234b;
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     public AppContainer()
@@ -144,6 +150,49 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
     }
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Formatter[] __All_Formatter_c489c308() => new global::App.Formatter[] { (global::App.Formatter)__Get_Formatter_47faf9b4() };
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IClock[] __All_IClock_9550c2c1() => __singletons.__all_IClock_9550c2c1 ?? __CreateAll_IClock_9550c2c1();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IClock[] __CreateAll_IClock_9550c2c1()
+    {
+        global::App.IClock[] all = new global::App.IClock[] { (global::App.IClock)__Get_SystemClock_28ece501() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__all_IClock_9550c2c1, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IOrderService[] __All_IOrderService_3893a0b2() => __all_IOrderService_3893a0b2 ?? __CreateAll_IOrderService_3893a0b2();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IOrderService[] __CreateAll_IOrderService_3893a0b2()
+    {
+        global::App.IOrderService[] all = new global::App.IOrderService[] { (global::App.IOrderService)__Get_OrderService_2487f1ef() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __all_IOrderService_3893a0b2, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.OrderService[] __All_OrderService_7a08234b() => __all_OrderService_7a08234b ?? __CreateAll_OrderService_7a08234b();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.OrderService[] __CreateAll_OrderService_7a08234b()
+    {
+        global::App.OrderService[] all = new global::App.OrderService[] { (global::App.OrderService)__Get_OrderService_2487f1ef() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __all_OrderService_7a08234b, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.SystemClock[] __All_SystemClock_0781b245() => __singletons.__all_SystemClock_0781b245 ?? __CreateAll_SystemClock_0781b245();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.SystemClock[] __CreateAll_SystemClock_0781b245()
+    {
+        global::App.SystemClock[] all = new global::App.SystemClock[] { (global::App.SystemClock)__Get_SystemClock_28ece501() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__all_SystemClock_0781b245, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
     private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>> __lookup =
         global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>>
         {
@@ -153,15 +202,15 @@ partial class AppContainer : global::SourceGen.Ioc.IIocContainer, global::Micros
             { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService), static c => c.__singletons.Root },
             { typeof(global::App.AppContainer), static c => c },
             { typeof(global::App.Formatter), static c => (global::App.Formatter)c.__Get_Formatter_47faf9b4() },
-            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Formatter>), static c => new global::App.Formatter[] { (global::App.Formatter)c.__Get_Formatter_47faf9b4() } },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Formatter>), static c => c.__All_Formatter_c489c308() },
             { typeof(global::App.IClock), static c => (global::App.IClock)c.__Get_SystemClock_28ece501() },
-            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IClock>), static c => new global::App.IClock[] { (global::App.IClock)c.__Get_SystemClock_28ece501() } },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IClock>), static c => c.__All_IClock_9550c2c1() },
             { typeof(global::App.IOrderService), static c => (global::App.IOrderService)c.__Get_OrderService_2487f1ef() },
-            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IOrderService>), static c => new global::App.IOrderService[] { (global::App.IOrderService)c.__Get_OrderService_2487f1ef() } },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IOrderService>), static c => c.__All_IOrderService_3893a0b2() },
             { typeof(global::App.OrderService), static c => (global::App.OrderService)c.__Get_OrderService_2487f1ef() },
-            { typeof(global::System.Collections.Generic.IEnumerable<global::App.OrderService>), static c => new global::App.OrderService[] { (global::App.OrderService)c.__Get_OrderService_2487f1ef() } },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.OrderService>), static c => c.__All_OrderService_7a08234b() },
             { typeof(global::App.SystemClock), static c => (global::App.SystemClock)c.__Get_SystemClock_28ece501() },
-            { typeof(global::System.Collections.Generic.IEnumerable<global::App.SystemClock>), static c => new global::App.SystemClock[] { (global::App.SystemClock)c.__Get_SystemClock_28ece501() } },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.SystemClock>), static c => c.__All_SystemClock_0781b245() },
         });
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]

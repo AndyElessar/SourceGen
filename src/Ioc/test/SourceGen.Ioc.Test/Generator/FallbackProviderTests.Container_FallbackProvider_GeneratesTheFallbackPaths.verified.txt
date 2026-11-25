@@ -102,11 +102,11 @@
             { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService), static c => c.__singletons.Root },
             { typeof(global::App.AppContainer), static c => c },
             { typeof(global::App.Consumer), static c => (global::App.Consumer)c.__Get_Consumer_fd0ac76a() },
-            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Consumer>), static c => __Merge(c.__Fallback(), new global::App.Consumer[] { (global::App.Consumer)c.__Get_Consumer_fd0ac76a() }) },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Consumer>), static c => c.__All_Consumer_be782406() },
             { typeof(global::App.IClock), static c => (global::App.IClock)c.__Get_SystemClock_28ece501() },
-            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IClock>), static c => __Merge(c.__Fallback(), new global::App.IClock[] { (global::App.IClock)c.__Get_SystemClock_28ece501() }) },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IClock>), static c => c.__All_IClock_9550c2c1() },
             { typeof(global::App.SystemClock), static c => (global::App.SystemClock)c.__Get_SystemClock_28ece501() },
-            { typeof(global::System.Collections.Generic.IEnumerable<global::App.SystemClock>), static c => __Merge(c.__Fallback(), new global::App.SystemClock[] { (global::App.SystemClock)c.__Get_SystemClock_28ece501() }) },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.SystemClock>), static c => c.__All_SystemClock_0781b245() },
         });
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]

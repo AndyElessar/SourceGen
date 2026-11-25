@@ -1,0 +1,209 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private sealed class __Singletons
+    {
+        public global::App.AppContainer Root = null!;
+        public readonly global::System.Threading.Lock __lock_FirstHandler_1db4b03e = new global::System.Threading.Lock();
+        public global::App.FirstHandler? __f_FirstHandler_1db4b03e;
+        public readonly global::System.Threading.Lock __lock_KeyedHandler_53dcc257 = new global::System.Threading.Lock();
+        public global::App.KeyedHandler? __f_KeyedHandler_53dcc257;
+        public readonly global::System.Threading.Lock __lock_SecondHandler_4a21d994 = new global::System.Threading.Lock();
+        public global::App.SecondHandler? __f_SecondHandler_4a21d994;
+        public global::App.FirstHandler[]? __all_FirstHandler_779fbf12;
+        public global::App.IHandler[]? __all_IHandler_bc7587a9;
+        public global::App.IHandler[]? __all_IHandler_cfcf02bb;
+        public global::App.IHandler[]? __all_IHandler_2da4fcc8;
+        public global::App.KeyedHandler[]? __all_KeyedHandler_a11c9e14;
+        public global::App.KeyedHandler[]? __all_KeyedHandler_53dcc257;
+        public global::App.SecondHandler[]? __all_SecondHandler_ad8af028;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer __Create_Consumer_fd0ac76a()
+    {
+        if(__isRoot)
+        {
+            throw new global::System.InvalidOperationException("Cannot resolve scoped service 'App.Consumer' from the root container.");
+        }
+
+        global::App.Consumer instance;
+        lock(__scopedLock)
+        {
+            if(__f_Consumer_fd0ac76a is { } existing)
+            {
+                return existing;
+            }
+
+            global::App.AppContainer c = this;
+            instance = new global::App.Consumer(
+                (global::System.Collections.Generic.IEnumerable<global::App.IHandler>)c.__All_IHandler_bc7587a9(),
+                (global::System.Collections.Generic.IReadOnlyList<global::App.IHandler>)c.__All_IHandler_bc7587a9(),
+                (global::App.IHandler[])c.__All_IHandler_bc7587a9(),
+                (global::System.Collections.Generic.ICollection<global::App.IHandler>)c.__All_IHandler_2da4fcc8(),
+                (global::System.Collections.Generic.IList<global::App.IHandler>)c.__All_IHandler_cfcf02bb(),
+                (global::System.Collections.Generic.IEnumerable<global::App.IUnknown>)c.__All_IUnknown_bde627a1());
+            global::System.Threading.Interlocked.Exchange(ref __f_Consumer_fd0ac76a, instance);
+        }
+
+        if(global::System.Threading.Volatile.Read(ref __disposed) != 0)
+        {
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer[] __All_Consumer_be782406() => __all_Consumer_be782406 ?? __CreateAll_Consumer_be782406();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer[] __CreateAll_Consumer_be782406()
+    {
+        global::App.Consumer[] all = new global::App.Consumer[] { (global::App.Consumer)__Get_Consumer_fd0ac76a() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __all_Consumer_be782406, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.FirstHandler[] __All_FirstHandler_779fbf12() => __singletons.__all_FirstHandler_779fbf12 ?? __CreateAll_FirstHandler_779fbf12();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.FirstHandler[] __CreateAll_FirstHandler_779fbf12()
+    {
+        global::App.FirstHandler[] all = new global::App.FirstHandler[] { (global::App.FirstHandler)__Get_FirstHandler_1db4b03e() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__all_FirstHandler_779fbf12, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IHandler[] __All_IHandler_bc7587a9() => __singletons.__all_IHandler_bc7587a9 ?? __CreateAll_IHandler_bc7587a9();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IHandler[] __CreateAll_IHandler_bc7587a9()
+    {
+        global::App.IHandler[] all = new global::App.IHandler[] { (global::App.IHandler)__Get_FirstHandler_1db4b03e(), (global::App.IHandler)__Get_SecondHandler_4a21d994() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__all_IHandler_bc7587a9, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IHandler[] __All_IHandler_cfcf02bb() => __singletons.__all_IHandler_cfcf02bb ?? __CreateAll_IHandler_cfcf02bb();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IHandler[] __CreateAll_IHandler_cfcf02bb()
+    {
+        global::App.IHandler[] all = new global::App.IHandler[] { (global::App.IHandler)__Get_KeyedHandler_53dcc257() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__all_IHandler_cfcf02bb, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IHandler[] __All_IHandler_2da4fcc8() => __singletons.__all_IHandler_2da4fcc8 ?? __CreateAll_IHandler_2da4fcc8();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IHandler[] __CreateAll_IHandler_2da4fcc8()
+    {
+        global::App.IHandler[] all = new global::App.IHandler[] { (global::App.IHandler)__Get_KeyedHandler_53dcc257() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__all_IHandler_2da4fcc8, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IUnknown[] __All_IUnknown_bde627a1() => global::System.Array.Empty<global::App.IUnknown>();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.KeyedHandler[] __All_KeyedHandler_c2ce22de() => global::System.Array.Empty<global::App.KeyedHandler>();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.KeyedHandler[] __All_KeyedHandler_a11c9e14() => __singletons.__all_KeyedHandler_a11c9e14 ?? __CreateAll_KeyedHandler_a11c9e14();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.KeyedHandler[] __CreateAll_KeyedHandler_a11c9e14()
+    {
+        global::App.KeyedHandler[] all = new global::App.KeyedHandler[] { (global::App.KeyedHandler)__Get_KeyedHandler_53dcc257() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__all_KeyedHandler_a11c9e14, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.KeyedHandler[] __All_KeyedHandler_53dcc257() => __singletons.__all_KeyedHandler_53dcc257 ?? __CreateAll_KeyedHandler_53dcc257();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.KeyedHandler[] __CreateAll_KeyedHandler_53dcc257()
+    {
+        global::App.KeyedHandler[] all = new global::App.KeyedHandler[] { (global::App.KeyedHandler)__Get_KeyedHandler_53dcc257() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__all_KeyedHandler_53dcc257, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.SecondHandler[] __All_SecondHandler_ad8af028() => __singletons.__all_SecondHandler_ad8af028 ?? __CreateAll_SecondHandler_ad8af028();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.SecondHandler[] __CreateAll_SecondHandler_ad8af028()
+    {
+        global::App.SecondHandler[] all = new global::App.SecondHandler[] { (global::App.SecondHandler)__Get_SecondHandler_4a21d994() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__all_SecondHandler_ad8af028, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::System.Collections.Generic.IReadOnlyCollection<global::App.IHandler> Handlers
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return (global::System.Collections.Generic.IReadOnlyCollection<global::App.IHandler>)__All_IHandler_bc7587a9();
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>> __lookup =
+        global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>>
+        {
+            { typeof(global::System.IServiceProvider), static c => c },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c.__singletons.Root },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService), static c => c.__singletons.Root },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService), static c => c.__singletons.Root },
+            { typeof(global::App.AppContainer), static c => c },
+            { typeof(global::App.Consumer), static c => (global::App.Consumer)c.__Get_Consumer_fd0ac76a() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Consumer>), static c => c.__All_Consumer_be782406() },
+            { typeof(global::App.FirstHandler), static c => (global::App.FirstHandler)c.__Get_FirstHandler_1db4b03e() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.FirstHandler>), static c => c.__All_FirstHandler_779fbf12() },
+            { typeof(global::App.IHandler), static c => throw new global::System.InvalidOperationException("More than one registration provides 'App.IHandler': App.FirstHandler, App.SecondHandler.") },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IHandler>), static c => c.__All_IHandler_bc7587a9() },
+            { typeof(global::System.Collections.Generic.IReadOnlyCollection<global::App.IHandler>), static c => c.__All_IHandler_bc7587a9() },
+            { typeof(global::System.Collections.Generic.IReadOnlyList<global::App.IHandler>), static c => c.__All_IHandler_bc7587a9() },
+            { typeof(global::App.IHandler[]), static c => c.__All_IHandler_bc7587a9() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IUnknown>), static c => c.__All_IUnknown_bde627a1() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.KeyedHandler>), static c => c.__All_KeyedHandler_c2ce22de() },
+            { typeof(global::App.SecondHandler), static c => (global::App.SecondHandler)c.__Get_SecondHandler_4a21d994() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.SecondHandler>), static c => c.__All_SecondHandler_ad8af028() },
+        });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, global::System.Func<global::App.AppContainer, object, object>> __collections =
+        global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::App.AppContainer, object, object>>
+        {
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Consumer>), static (c, _) => global::System.Array.Empty<global::App.Consumer>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.FirstHandler>), static (c, _) => global::System.Array.Empty<global::App.FirstHandler>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IHandler>), static (c, _) => global::System.Array.Empty<global::App.IHandler>() },
+            { typeof(global::System.Collections.Generic.IReadOnlyCollection<global::App.IHandler>), static (c, _) => global::System.Array.Empty<global::App.IHandler>() },
+            { typeof(global::System.Collections.Generic.IReadOnlyList<global::App.IHandler>), static (c, _) => global::System.Array.Empty<global::App.IHandler>() },
+            { typeof(global::App.IHandler[]), static (c, _) => global::System.Array.Empty<global::App.IHandler>() },
+            { typeof(global::System.Collections.Generic.IList<global::App.IHandler>), static (c, _) => global::System.Array.Empty<global::App.IHandler>() },
+            { typeof(global::System.Collections.Generic.ICollection<global::App.IHandler>), static (c, _) => global::System.Array.Empty<global::App.IHandler>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IUnknown>), static (c, _) => global::System.Array.Empty<global::App.IUnknown>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.KeyedHandler>), static (c, _) => global::System.Array.Empty<global::App.KeyedHandler>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.SecondHandler>), static (c, _) => global::System.Array.Empty<global::App.SecondHandler>() },
+        });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static global::System.Collections.Frozen.FrozenDictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> __BuildKeyedLookup()
+    {
+        global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> table = new global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>>();
+        global::System.Collections.Generic.HashSet<(global::System.Type, object)> keys = new global::System.Collections.Generic.HashSet<(global::System.Type, object)>();
+        object k0 = "k";
+        __AddKeyed(table, keys, typeof(global::App.IHandler), k0, static (c, _) => (global::App.IHandler)c.__Get_KeyedHandler_53dcc257());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IHandler>), k0, static (c, _) => c.__All_IHandler_2da4fcc8());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.ICollection<global::App.IHandler>), k0, static (c, _) => c.__All_IHandler_2da4fcc8());
+        __AddKeyed(table, keys, typeof(global::App.KeyedHandler), k0, static (c, _) => (global::App.KeyedHandler)c.__Get_KeyedHandler_53dcc257());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.KeyedHandler>), k0, static (c, _) => c.__All_KeyedHandler_53dcc257());
+        table.Add((typeof(global::App.IHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.IHandler'."));
+        table.Add((typeof(global::App.KeyedHandler), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.KeyedHandler'."));
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.IHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => c.__All_IHandler_cfcf02bb());
+        table.Add((typeof(global::System.Collections.Generic.IList<global::App.IHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => c.__All_IHandler_cfcf02bb());
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.KeyedHandler>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => c.__All_KeyedHandler_a11c9e14());
+        return global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(table);
+    }

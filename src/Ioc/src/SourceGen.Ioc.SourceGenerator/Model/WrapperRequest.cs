@@ -1,0 +1,129 @@
+namespace SourceGen.Ioc.Model;
+
+/// <summary>The outermost shape of a requested type (Analysis.Model.spec, "Grammar of wrapper types").</summary>
+internal enum RequestShape
+{
+    /// <summary><c>Element</c>: one service, possibly in a <c>KeyValuePair</c> or a deferred wrapper.</summary>
+    Single,
+
+    /// <summary><c>Collection&lt;Element&gt;</c>.</summary>
+    Collection,
+
+    /// <summary><c>Dictionary&lt;TKey, Deferred&gt;</c>.</summary>
+    Dictionary,
+}
+
+/// <summary>The deferred wrapper of an element.</summary>
+internal enum DeferredKind
+{
+    /// <summary>No deferred wrapper.</summary>
+    None,
+
+    /// <summary><c>Lazy&lt;Async&gt;</c>.</summary>
+    Lazy,
+
+    /// <summary><c>Func&lt;Async&gt;</c> or <c>Func&lt;A1, ..., An, Async&gt;</c>.</summary>
+    Func,
+}
+
+/// <summary>A requested type, taken apart by the grammar of wrapper types (Analysis.Model.spec, "Grammar of wrapper types").</summary>
+/// <param name="Shape">The outermost shape.</param>
+/// <param name="KeyValuePair">Whether the element is <c>KeyValuePair&lt;TKey, Deferred&gt;</c>.</param>
+/// <param name="KeyType">The <c>TKey</c> of the dictionary or of the <c>KeyValuePair</c>.</param>
+/// <param name="Deferred">The deferred wrapper.</param>
+/// <param name="FuncArguments">The arguments <c>A1..An</c> of <c>Func&lt;A1, ..., An, Async&gt;</c>. Empty for the other shapes.</param>
+/// <param name="IsTask">Whether the service is asked for as <c>Task&lt;T&gt;</c>.</param>
+/// <param name="Core">The core service type <c>T</c>. It is never a wrapper type.</param>
+internal sealed record WrapperRequest(
+    RequestShape Shape,
+    bool KeyValuePair,
+    TypeRef? KeyType,
+    DeferredKind Deferred,
+    ImmutableEquatableArray<TypeRef> FuncArguments,
+    bool IsTask,
+    TypeRef Core)
+{
+    private const string Lazy = "System.Lazy`1";
+    private const string Task = "System.Threading.Tasks.Task`1";
+    private const string Pair = "System.Collections.Generic.KeyValuePair`2";
+
+    private static readonly HashSet<string> Collections =
+    [
+        "System.Collections.Generic.IEnumerable`1",
+        "System.Collections.Generic.IReadOnlyCollection`1",
+        "System.Collections.Generic.ICollection`1",
+        "System.Collections.Generic.IReadOnlyList`1",
+        "System.Collections.Generic.IList`1",
+    ];
+
+    private static readonly HashSet<string> Dictionaries =
+    [
+        "System.Collections.Generic.IDictionary`2",
+        "System.Collections.Generic.IReadOnlyDictionary`2",
+        "System.Collections.Generic.Dictionary`2",
+    ];
+
+    /// <summary>The metadata name of <c>IEnumerable&lt;T&gt;</c>.</summary>
+    public const string Enumerable = "System.Collections.Generic.IEnumerable`1";
+
+    /// <summary>Gets a value indicating whether the request is the service itself, without a wrapper.</summary>
+    public bool IsPlain => Shape == RequestShape.Single && !KeyValuePair && Deferred == DeferredKind.None && !IsTask;
+
+    /// <summary>Gets a value indicating whether the request is a collection whose element is the service itself.</summary>
+    public bool IsPlainCollection => Shape == RequestShape.Collection && !KeyValuePair && Deferred == DeferredKind.None && !IsTask;
+
+    /// <summary>Takes <paramref name="type"/> apart by the grammar.</summary>
+    /// <param name="type">The requested type.</param>
+    /// <returns>The request, or <see langword="null"/> when the combination of wrapper types is invalid (<c>SGIOC304</c>).</returns>
+    public static WrapperRequest? Parse(TypeRef type)
+    {
+        if(ElementOf(type) is { } element)
+        {
+            return ParseElement(element, RequestShape.Collection);
+        }
+
+        if(type is NamedTypeRef { Arguments: [TypeRef key, TypeRef value] } dictionary && Dictionaries.Contains(dictionary.MetadataName))
+        {
+            return ParseDeferred(value, RequestShape.Dictionary, false, key);
+        }
+
+        return ParseElement(type, RequestShape.Single);
+    }
+
+    /// <summary>The element of a collection of the grammar, or <see langword="null"/>.</summary>
+    /// <param name="type">The type.</param>
+    /// <returns>The element type.</returns>
+    public static TypeRef? ElementOf(TypeRef type) => type switch
+    {
+        ArrayTypeRef { Rank: 1 } array => array.Element,
+        NamedTypeRef { Arguments: [TypeRef element] } named when Collections.Contains(named.MetadataName) => element,
+        _ => null,
+    };
+
+    private static WrapperRequest? ParseElement(TypeRef type, RequestShape shape)
+        => type is NamedTypeRef { MetadataName: Pair, Arguments: [TypeRef key, TypeRef value] }
+            ? ParseDeferred(value, shape, true, key)
+            : ParseDeferred(type, shape, false, null);
+
+    private static WrapperRequest? ParseDeferred(TypeRef type, RequestShape shape, bool pair, TypeRef? keyType)
+    {
+        if(type is NamedTypeRef { MetadataName: Lazy, Arguments: [TypeRef lazy] })
+        {
+            return ParseAsync(lazy, shape, pair, keyType, DeferredKind.Lazy, []);
+        }
+
+        if(type is NamedTypeRef { MetadataName: var name, Arguments: { } arguments } && name.StartsWith("System.Func`", StringComparison.Ordinal))
+        {
+            return ParseAsync(arguments[^1], shape, pair, keyType, DeferredKind.Func, [.. arguments.Take(arguments.Length - 1)]);
+        }
+
+        return ParseAsync(type, shape, pair, keyType, DeferredKind.None, []);
+    }
+
+    private static WrapperRequest? ParseAsync(TypeRef type, RequestShape shape, bool pair, TypeRef? keyType, DeferredKind deferred, ImmutableEquatableArray<TypeRef> arguments)
+    {
+        bool isTask = type is NamedTypeRef { MetadataName: Task, Arguments: [_] };
+        TypeRef core = isTask ? ((NamedTypeRef)type).Arguments![0] : type;
+        return WrapperTypes.IsWrapper(core) ? null : new WrapperRequest(shape, pair, keyType, deferred, arguments, isTask, core);
+    }
+}

@@ -1,3 +1,4 @@
+using SourceGen.Ioc.Analysis;
 using SourceGen.Ioc.Model;
 
 namespace SourceGen.Ioc.Emit;
@@ -15,12 +16,32 @@ internal static class GeneratedNames
     public static string For(string prefix, ClosedDefinition definition)
     {
         NamedTypeRef type = definition.Implementation;
-        string metadataName = type.MetadataName;
-        int start = Math.Max(metadataName.LastIndexOf('.'), metadataName.LastIndexOf('+')) + 1;
-        int tick = metadataName.IndexOf('`', start);
-        string shortName = tick >= 0 ? metadataName[start..tick] : metadataName[start..];
         string identity = definition.Key is { } key ? $"{type.CanonicalString}|{key.Canonical}" : type.CanonicalString;
-        return $"{prefix}{shortName}_{Fnv1a(identity):x8}";
+        return $"{prefix}{ShortName(type)}_{Fnv1a(identity):x8}";
+    }
+
+    /// <summary>Gets the name of a member that belongs to a collection.</summary>
+    /// <param name="prefix">The prefix, for example <c>__All_</c>.</param>
+    /// <param name="collection">The collection.</param>
+    /// <returns>The member name.</returns>
+    public static string For(string prefix, CollectionPlan collection)
+        => $"{prefix}{ShortName(collection.Element)}_{Fnv1a($"{collection.Element.CanonicalString}|{collection.KeyIdentity}"):x8}";
+
+    /// <summary>The short name of a type: the name of a named type without its namespace and arity.</summary>
+    private static string ShortName(TypeRef type)
+    {
+        switch(type)
+        {
+            case NamedTypeRef named:
+                string metadataName = named.MetadataName;
+                int start = Math.Max(metadataName.LastIndexOf('.'), metadataName.LastIndexOf('+')) + 1;
+                int tick = metadataName.IndexOf('`', start);
+                return tick >= 0 ? metadataName[start..tick] : metadataName[start..];
+            case ArrayTypeRef array:
+                return ShortName(array.Element) + "Array";
+            default:
+                return "T";
+        }
     }
 
     /// <summary>The 32-bit FNV-1a hash of the UTF-16 code units of <paramref name="value"/>.</summary>

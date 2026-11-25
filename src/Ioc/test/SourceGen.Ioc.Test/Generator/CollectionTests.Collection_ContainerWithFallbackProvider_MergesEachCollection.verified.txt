@@ -1,0 +1,64 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer __Create_Consumer_fd0ac76a()
+    {
+        if(__isRoot)
+        {
+            throw new global::System.InvalidOperationException("Cannot resolve scoped service 'App.Consumer' from the root container.");
+        }
+
+        global::App.Consumer instance;
+        lock(__scopedLock)
+        {
+            if(__f_Consumer_fd0ac76a is { } existing)
+            {
+                return existing;
+            }
+
+            global::App.AppContainer c = this;
+            instance = new global::App.Consumer(
+                (global::System.Collections.Generic.IEnumerable<global::App.IHandler>)c.__All_IHandler_bc7587a9(),
+                (global::System.Collections.Generic.IReadOnlyList<global::App.IHandler>)c.__All_IHandler_bc7587a9(),
+                (global::App.IHandler[])c.__All_IHandler_bc7587a9(),
+                (global::System.Collections.Generic.ICollection<global::App.IHandler>)c.__All_IHandler_2da4fcc8(),
+                (global::System.Collections.Generic.IList<global::App.IHandler>)c.__All_IHandler_cfcf02bb(),
+                (global::System.Collections.Generic.IEnumerable<global::App.IUnknown>)c.__All_IUnknown_bde627a1());
+            global::System.Threading.Interlocked.Exchange(ref __f_Consumer_fd0ac76a, instance);
+        }
+
+        if(global::System.Threading.Volatile.Read(ref __disposed) != 0)
+        {
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer[] __All_Consumer_be782406() => __Merge(__Fallback(), new global::App.Consumer[] { (global::App.Consumer)__Get_Consumer_fd0ac76a() });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.FirstHandler[] __All_FirstHandler_779fbf12() => __Merge(__Fallback(), new global::App.FirstHandler[] { (global::App.FirstHandler)__Get_FirstHandler_1db4b03e() });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IHandler[] __All_IHandler_bc7587a9() => __Merge(__Fallback(), new global::App.IHandler[] { (global::App.IHandler)__Get_FirstHandler_1db4b03e(), (global::App.IHandler)__Get_SecondHandler_4a21d994() });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IHandler[] __All_IHandler_cfcf02bb() => __MergeKeyed(__Fallback(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, new global::App.IHandler[] { (global::App.IHandler)__Get_KeyedHandler_53dcc257() });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IHandler[] __All_IHandler_2da4fcc8() => __MergeKeyed(__Fallback(), "k", new global::App.IHandler[] { (global::App.IHandler)__Get_KeyedHandler_53dcc257() });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IUnknown[] __All_IUnknown_bde627a1() => __Merge(__Fallback(), global::System.Array.Empty<global::App.IUnknown>());
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.KeyedHandler[] __All_KeyedHandler_c2ce22de() => __Merge(__Fallback(), global::System.Array.Empty<global::App.KeyedHandler>());
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.KeyedHandler[] __All_KeyedHandler_a11c9e14() => __MergeKeyed(__Fallback(), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey, new global::App.KeyedHandler[] { (global::App.KeyedHandler)__Get_KeyedHandler_53dcc257() });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.KeyedHandler[] __All_KeyedHandler_53dcc257() => __MergeKeyed(__Fallback(), "k", new global::App.KeyedHandler[] { (global::App.KeyedHandler)__Get_KeyedHandler_53dcc257() });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.SecondHandler[] __All_SecondHandler_ad8af028() => __Merge(__Fallback(), new global::App.SecondHandler[] { (global::App.SecondHandler)__Get_SecondHandler_4a21d994() });

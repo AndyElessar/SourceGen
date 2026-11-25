@@ -35,6 +35,12 @@ internal sealed record KeyRef(KeyKind Kind, TypeRef Type, string Text, TypeRef V
     /// <summary>Gets whether this is the key of a declaration whose key is invalid: every valid value key has a literal kind.</summary>
     public bool IsInvalid => Kind == KeyKind.Value && Literal == KeyLiteral.None;
 
+    /// <summary>
+    /// Gets whether this is <c>KeyedService.AnyKey</c>. A dependency site can use it only for a collection or a
+    /// dictionary: it asks for all keyed registrations (Analysis.Model.spec, "Sources of demands").
+    /// </summary>
+    public bool IsAnyKey => Kind == KeyKind.Symbol && Text == "AnyKey" && Type is NamedTypeRef { MetadataName: "Microsoft.Extensions.DependencyInjection.KeyedService" };
+
     /// <summary>Gets the canonical string of an optional key: the empty string for no key.</summary>
     /// <param name="key">The key, or <see langword="null"/>.</param>
     /// <returns>The canonical string.</returns>

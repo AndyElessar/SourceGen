@@ -1,0 +1,33 @@
+﻿    public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddApp(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.ReadOnlySpan<string> tags)
+    {
+        global::SourceGen.Ioc.IocRegistrationMarker.Enter(services, "App.AppServiceCollectionExtensions.AddApp", "TestAssembly");
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedScoped<global::SourceGen.Ioc.IocHolder<global::App.Consumer>>(services, __k_Consumer_fd0ac76a, static (sp, _) => global::SourceGen.Ioc.IocHolder.Own(__Create_Consumer_fd0ac76a(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::App.Consumer>(services, static sp => __Get_Consumer_fd0ac76a(sp));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::SourceGen.Ioc.IocHolder<global::App.FirstHandler>>(services, __k_FirstHandler_1db4b03e, static (sp, _) => global::SourceGen.Ioc.IocHolder.Own(__Create_FirstHandler_1db4b03e(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::App.FirstHandler>(services, static sp => __Get_FirstHandler_1db4b03e(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::App.IHandler>(services, static sp => (global::App.IHandler)__Get_FirstHandler_1db4b03e(sp));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::SourceGen.Ioc.IocHolder<global::App.KeyedHandler>>(services, __k_KeyedHandler_53dcc257, static (sp, _) => global::SourceGen.Ioc.IocHolder.Own(__Create_KeyedHandler_53dcc257(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::App.KeyedHandler>(services, "k", static (sp, _) => __Get_KeyedHandler_53dcc257(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::App.IHandler>(services, "k", static (sp, _) => (global::App.IHandler)__Get_KeyedHandler_53dcc257(sp));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::SourceGen.Ioc.IocHolder<global::App.SecondHandler>>(services, __k_SecondHandler_4a21d994, static (sp, _) => global::SourceGen.Ioc.IocHolder.Own(__Create_SecondHandler_4a21d994(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::App.SecondHandler>(services, static sp => __Get_SecondHandler_4a21d994(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::App.IHandler>(services, static sp => (global::App.IHandler)__Get_SecondHandler_4a21d994(sp));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedTransient<global::System.Collections.Generic.ICollection<global::App.IHandler>>(services, "k", static (sp, key) => global::System.Linq.Enumerable.ToArray(global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetKeyedServices<global::App.IHandler>(sp, key)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::System.Collections.Generic.IReadOnlyList<global::App.IHandler>>(services, static sp => global::System.Linq.Enumerable.ToArray(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetServices<global::App.IHandler>(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::App.IHandler[]>(services, static sp => global::System.Linq.Enumerable.ToArray(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetServices<global::App.IHandler>(sp)));
+        return services;
+    }
+
+    private static global::App.Consumer __Create_Consumer_fd0ac76a(global::System.IServiceProvider sp)
+        => new global::App.Consumer(
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetServices<global::App.IHandler>(sp),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::System.Collections.Generic.IReadOnlyList<global::App.IHandler>>(sp),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.IHandler[]>(sp),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService<global::System.Collections.Generic.ICollection<global::App.IHandler>>(sp, "k"),
+            global::System.Linq.Enumerable.ToArray(global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetKeyedServices<global::App.IHandler>(sp, global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey)),
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetServices<global::App.IUnknown>(sp));

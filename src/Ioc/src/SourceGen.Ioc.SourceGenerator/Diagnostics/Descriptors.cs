@@ -177,6 +177,13 @@ internal static class Descriptors
         "Singleton '{0}' depends on scoped '{1}'{2}",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC304: a dependency site asks for a combination of wrapper types that the grammar does not allow.</summary>
+    public static readonly DiagnosticDescriptor UnsupportedWrapper = Create(
+        "SGIOC304",
+        "Unsupported wrapper combination",
+        "'{0}' is not a supported combination of wrapper types",
+        DiagnosticSeverity.Error);
+
     /// <summary>SGIOC403: a Transient closed definition is disposable, and the container does not track it.</summary>
     public static readonly DiagnosticDescriptor DisposableTransient = Create(
         "SGIOC403",
@@ -230,6 +237,7 @@ internal static class Descriptors
         InvalidServiceCollectionExtensionName,
         CircularDependency,
         CaptiveDependency,
+        UnsupportedWrapper,
         AmbiguousDependency,
         MissingDependency,
         DisposableTransient,

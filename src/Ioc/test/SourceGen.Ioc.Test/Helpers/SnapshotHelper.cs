@@ -34,6 +34,24 @@ public static class SnapshotHelper
     }
 
     /// <summary>
+    /// Returns the text of each member or type declaration of <paramref name="source"/> whose name is one of
+    /// <paramref name="names"/> or starts with one of <paramref name="prefixes"/>, in source order. Each prefix must match
+    /// at least one member: generated names end with a hash.
+    /// </summary>
+    public static string MembersByPrefix(string source, IReadOnlyList<string> names, params IReadOnlyList<string> prefixes)
+    {
+        SyntaxNode root = CSharpSyntaxTree.ParseText(source, SourceGeneratorTestHelper.ParseOptions).GetRoot();
+        string[] found = [.. root.DescendantNodes().OfType<MemberDeclarationSyntax>().Select(Name).OfType<string>().Distinct()];
+        string[] missing = [.. prefixes.Where(p => !found.Any(n => n.StartsWith(p, StringComparison.Ordinal)))];
+        if(missing.Length > 0)
+        {
+            throw new ArgumentException($"The source has no member that starts with {string.Join(", ", missing)}.", nameof(prefixes));
+        }
+
+        return Members(source, [.. names, .. found.Where(n => prefixes.Any(p => n.StartsWith(p, StringComparison.Ordinal)))]);
+    }
+
+    /// <summary>
     /// Returns the text of each constructor of <paramref name="source"/>, in source order. A constructor has the name of
     /// its type, so <see cref="Members"/> would return the complete type.
     /// </summary>

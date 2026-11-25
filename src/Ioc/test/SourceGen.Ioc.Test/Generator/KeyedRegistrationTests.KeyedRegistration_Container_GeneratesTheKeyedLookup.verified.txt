@@ -8,10 +8,10 @@
             { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService), static c => c.__singletons.Root },
             { typeof(global::App.AppContainer), static c => c },
             { typeof(global::App.DefaultRepo), static c => (global::App.DefaultRepo)c.__Get_DefaultRepo_5a131b07() },
-            { typeof(global::System.Collections.Generic.IEnumerable<global::App.DefaultRepo>), static c => new global::App.DefaultRepo[] { (global::App.DefaultRepo)c.__Get_DefaultRepo_5a131b07() } },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.DefaultRepo>), static c => c.__All_DefaultRepo_85e4e373() },
             { typeof(global::App.IRepo), static c => (global::App.IRepo)c.__Get_DefaultRepo_5a131b07() },
-            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), static c => new global::App.IRepo[] { (global::App.IRepo)c.__Get_DefaultRepo_5a131b07() } },
-            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), static c => global::System.Array.Empty<global::App.Repo>() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), static c => c.__All_IRepo_149f0181() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), static c => c.__All_Repo_c42fa0a8() },
         });
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
@@ -37,29 +37,29 @@
         object k3 = "main";
         object k4 = (global::App.Color)(2);
         __AddKeyed(table, keys, typeof(global::App.IRepo), k0, static (c, _) => (global::App.IRepo)c.__Get_Repo_c855a9f8());
-        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k0, static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_c855a9f8() });
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k0, static (c, _) => c.__All_IRepo_43058519());
         __AddKeyed(table, keys, typeof(global::App.IRepo), k1, static (c, _) => (global::App.IRepo)c.__Get_Repo_c4fdfc8f());
-        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k1, static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_c4fdfc8f() });
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k1, static (c, _) => c.__All_IRepo_6af3ac76());
         __AddKeyed(table, keys, typeof(global::App.IRepo), k2, static (c, _) => (global::App.IRepo)c.__Get_Repo_f09b9d5b());
-        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k2, static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_f09b9d5b() });
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k2, static (c, _) => c.__All_IRepo_fcb0fbfa());
         __AddKeyed(table, keys, typeof(global::App.IRepo), k3, static (c, _) => (global::App.IRepo)c.__Get_Repo_47fa1321());
-        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k3, static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_47fa1321() });
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k3, static (c, _) => c.__All_IRepo_1415def8());
         __AddKeyed(table, keys, typeof(global::App.IRepo), k4, static (c, _) => (global::App.IRepo)c.__Get_Repo_3caa9e08());
-        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k4, static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_3caa9e08() });
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), k4, static (c, _) => c.__All_IRepo_dc8007d9());
         __AddKeyed(table, keys, typeof(global::App.Repo), k0, static (c, _) => (global::App.Repo)c.__Get_Repo_c855a9f8());
-        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k0, static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_c855a9f8() });
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k0, static (c, _) => c.__All_Repo_c855a9f8());
         __AddKeyed(table, keys, typeof(global::App.Repo), k1, static (c, _) => (global::App.Repo)c.__Get_Repo_c4fdfc8f());
-        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k1, static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_c4fdfc8f() });
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k1, static (c, _) => c.__All_Repo_c4fdfc8f());
         __AddKeyed(table, keys, typeof(global::App.Repo), k2, static (c, _) => (global::App.Repo)c.__Get_Repo_f09b9d5b());
-        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k2, static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_f09b9d5b() });
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k2, static (c, _) => c.__All_Repo_f09b9d5b());
         __AddKeyed(table, keys, typeof(global::App.Repo), k3, static (c, _) => (global::App.Repo)c.__Get_Repo_47fa1321());
-        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k3, static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_47fa1321() });
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k3, static (c, _) => c.__All_Repo_47fa1321());
         __AddKeyed(table, keys, typeof(global::App.Repo), k4, static (c, _) => (global::App.Repo)c.__Get_Repo_3caa9e08());
-        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k4, static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_3caa9e08() });
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), k4, static (c, _) => c.__All_Repo_3caa9e08());
         table.Add((typeof(global::App.IRepo), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.IRepo'."));
-        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => new global::App.IRepo[] { (global::App.IRepo)c.__Get_Repo_c855a9f8(), (global::App.IRepo)c.__Get_Repo_c4fdfc8f(), (global::App.IRepo)c.__Get_Repo_f09b9d5b(), (global::App.IRepo)c.__Get_Repo_47fa1321(), (global::App.IRepo)c.__Get_Repo_3caa9e08() });
         table.Add((typeof(global::App.Repo), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.Repo'."));
-        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => new global::App.Repo[] { (global::App.Repo)c.__Get_Repo_c855a9f8(), (global::App.Repo)c.__Get_Repo_c4fdfc8f(), (global::App.Repo)c.__Get_Repo_f09b9d5b(), (global::App.Repo)c.__Get_Repo_47fa1321(), (global::App.Repo)c.__Get_Repo_3caa9e08() });
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.IRepo>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => c.__All_IRepo_a1592d23());
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.Repo>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => c.__All_Repo_b70ac952());
         return global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(table);
     }
 

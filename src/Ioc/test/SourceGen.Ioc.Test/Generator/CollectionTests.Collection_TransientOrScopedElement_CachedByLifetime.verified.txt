@@ -1,0 +1,90 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private sealed class __Singletons
+    {
+        public global::App.AppContainer Root = null!;
+        public readonly global::System.Threading.Lock __lock_SingletonStep_46afcef9 = new global::System.Threading.Lock();
+        public global::App.SingletonStep? __f_SingletonStep_46afcef9;
+        public global::App.IStep[]? __all_IStep_2a0577bb;
+        public global::App.SingletonStep[]? __all_SingletonStep_2191168d;
+    }
+
+        public global::App.IStep[]? __all_IStep_2a0577bb;
+
+        public global::App.SingletonStep[]? __all_SingletonStep_2191168d;
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IStep[]? __all_IStep_380bf4b7;
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.ScopedStep[]? __all_ScopedStep_9c9ae6ee;
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.ScopedStep[]? __all_ScopedStep_d4d5cc28;
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IStep[] __All_IStep_2a0577bb() => __singletons.__all_IStep_2a0577bb ?? __CreateAll_IStep_2a0577bb();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IStep[] __CreateAll_IStep_2a0577bb()
+    {
+        global::App.IStep[] all = new global::App.IStep[] { (global::App.IStep)__Get_SingletonStep_46afcef9() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__all_IStep_2a0577bb, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IStep[] __All_IStep_4c5b2479() => new global::App.IStep[] { (global::App.IStep)__Get_ScopedStep_d4d5cc28(), (global::App.IStep)__Get_TransientStep_f5499a38() };
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IStep[] __All_IStep_380bf4b7() => __all_IStep_380bf4b7 ?? __CreateAll_IStep_380bf4b7();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IStep[] __CreateAll_IStep_380bf4b7()
+    {
+        global::App.IStep[] all = new global::App.IStep[] { (global::App.IStep)__Get_ScopedStep_d4d5cc28() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __all_IStep_380bf4b7, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IStep[] __All_IStep_b6bca46d() => new global::App.IStep[] { (global::App.IStep)__Get_TransientStep_f5499a38() };
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.ScopedStep[] __All_ScopedStep_7b600594() => global::System.Array.Empty<global::App.ScopedStep>();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.ScopedStep[] __All_ScopedStep_9c9ae6ee() => __all_ScopedStep_9c9ae6ee ?? __CreateAll_ScopedStep_9c9ae6ee();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.ScopedStep[] __CreateAll_ScopedStep_9c9ae6ee()
+    {
+        global::App.ScopedStep[] all = new global::App.ScopedStep[] { (global::App.ScopedStep)__Get_ScopedStep_d4d5cc28() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __all_ScopedStep_9c9ae6ee, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.ScopedStep[] __All_ScopedStep_d4d5cc28() => __all_ScopedStep_d4d5cc28 ?? __CreateAll_ScopedStep_d4d5cc28();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.ScopedStep[] __CreateAll_ScopedStep_d4d5cc28()
+    {
+        global::App.ScopedStep[] all = new global::App.ScopedStep[] { (global::App.ScopedStep)__Get_ScopedStep_d4d5cc28() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __all_ScopedStep_d4d5cc28, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.SingletonStep[] __All_SingletonStep_2191168d() => __singletons.__all_SingletonStep_2191168d ?? __CreateAll_SingletonStep_2191168d();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.SingletonStep[] __CreateAll_SingletonStep_2191168d()
+    {
+        global::App.SingletonStep[] all = new global::App.SingletonStep[] { (global::App.SingletonStep)__Get_SingletonStep_46afcef9() };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__all_SingletonStep_2191168d, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.TransientStep[] __All_TransientStep_787c3876() => global::System.Array.Empty<global::App.TransientStep>();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.TransientStep[] __All_TransientStep_b686f5bc() => new global::App.TransientStep[] { (global::App.TransientStep)__Get_TransientStep_f5499a38() };
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.TransientStep[] __All_TransientStep_f5499a38() => new global::App.TransientStep[] { (global::App.TransientStep)__Get_TransientStep_f5499a38() };

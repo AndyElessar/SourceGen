@@ -22,9 +22,10 @@ internal sealed record GraphProblem(string Id, ImmutableEquatableArray<string> A
 /// held Transient"). The nodes are the closed definitions. Built-in services are not nodes.
 /// </summary>
 /// <remarks>
-/// Tags, modules, and wrapper types come in later slices. Until then every edge has one candidate, which is a concrete
-/// registration without tags, so every edge is definite (Analysis.Model.spec, "Definite edges"). A single dependency
-/// with more than one candidate is <c>SGIOC401</c> and is not an edge.
+/// Tags and modules come in later slices. Until then every single dependency with one candidate is definite
+/// (Analysis.Model.spec, "Definite edges"). A single dependency with more than one candidate is <c>SGIOC401</c> and is
+/// not an edge. A dependency on multiple services is never definite: only the full check has its edges, one for each
+/// candidate.
 /// </remarks>
 internal static class DependencyGraph
 {
@@ -90,10 +91,27 @@ internal static class DependencyGraph
     {
         List<GraphEdge>[] edges = Edges(definitions, Providers(definitions));
         cancellationToken.ThrowIfCancellationRequested();
-        return Cycles(definitions, edges)
+        return UnsupportedWrappers(definitions)
+            .Concat(Cycles(definitions, edges))
             .Concat(Captives(definitions, edges))
             .Concat(HeldTransients(definitions, edges))
             .ToImmutableEquatableArray();
+    }
+
+    /// <summary><c>SGIOC304</c>: each dependency site whose requested type the grammar of wrapper types does not allow.</summary>
+    public static IEnumerable<GraphProblem> UnsupportedWrappers(ImmutableEquatableArray<ClosedDefinition> definitions)
+    {
+        for(int i = 0; i < definitions.Length; i++)
+        {
+            ImmutableEquatableArray<Dependency> dependencies = definitions[i].Dependencies;
+            for(int p = 0; p < dependencies.Length; p++)
+            {
+                if(dependencies[p].KeyMode != SiteKeyMode.ServiceKey && WrapperRequest.Parse(dependencies[p].Type) is null)
+                {
+                    yield return Problem(Descriptors.UnsupportedWrapper.Id, [TypeNames.Display(dependencies[p].Type)], definitions, new GraphEdge(i, p, i));
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -159,21 +177,27 @@ internal static class DependencyGraph
         }
     }
 
-    /// <summary><c>SGIOC502</c> and <c>SGIOC503</c>: a Singleton or Scoped closed definition that holds a Transient instance.</summary>
+    /// <summary>
+    /// <c>SGIOC502</c> and <c>SGIOC503</c>: a Singleton or Scoped closed definition that holds a Transient instance. A
+    /// dependency on multiple services is reported one time, with its first Transient candidate.
+    /// </summary>
     public static IEnumerable<GraphProblem> HeldTransients(ImmutableEquatableArray<ClosedDefinition> definitions, List<GraphEdge>[] edges)
     {
+        HashSet<(int, int)> reported = [];
         foreach(GraphEdge edge in edges.SelectMany(static e => e))
         {
             ClosedDefinition holder = definitions[edge.From];
-            if(definitions[edge.To].Lifetime != Lifetime.Transient || holder.Lifetime == Lifetime.Transient)
+            if(definitions[edge.To].Lifetime != Lifetime.Transient || holder.Lifetime == Lifetime.Transient || !reported.Add((edge.From, edge.Parameter)))
             {
                 continue;
             }
 
+            TypeRef requested = holder.Dependencies[edge.Parameter].Type;
+
             string id = holder.Lifetime == Lifetime.Singleton ? Descriptors.SingletonHoldsTransient.Id : Descriptors.ScopedHoldsTransient.Id;
             yield return Problem(
                 id,
-                [KeyNames.Definition(holder), KeyNames.Definition(definitions[edge.To]), TypeNames.Display(holder.Dependencies[edge.Parameter].Type)],
+                [KeyNames.Definition(holder), KeyNames.Definition(definitions[edge.To]), TypeNames.Display(WrapperRequest.Parse(requested)?.Core ?? requested)],
                 definitions,
                 edge);
         }

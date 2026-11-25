@@ -172,5 +172,25 @@ public class ServiceCollectionExtensionTests
         await Assert.That(journal.Disposed.Count(static d => d == "InjectedScoped")).IsGreaterThanOrEqualTo(2);
     }
 
+    [Test]
+    public async Task AddTestAot_CollectionDependency_GetsTheRegistrationsInTheirOrder()
+    {
+        using ServiceProvider provider = Build();
+        using IServiceScope scope = provider.CreateScope();
+
+        PluginHost host = scope.ServiceProvider.GetRequiredService<PluginHost>();
+        IPlugin[] all = [.. host.All];
+
+        // The other collection types are registered as Transient services, built from the collection of MS.DI
+        await Assert.That(all.Length).IsEqualTo(2);
+        await Assert.That(all[0]).IsSameReferenceAs(scope.ServiceProvider.GetRequiredService<FirstPlugin>());
+        await Assert.That(all[1]).IsSameReferenceAs(scope.ServiceProvider.GetRequiredService<SecondPlugin>());
+        await Assert.That(host.List[1]).IsSameReferenceAs(all[1]);
+        await Assert.That(host.Array.Length).IsEqualTo(2);
+        await Assert.That(host.Extra.Single()).IsSameReferenceAs(scope.ServiceProvider.GetRequiredKeyedService<IPlugin>("extra"));
+        await Assert.That(host.Keyed.Single()).IsSameReferenceAs(host.Extra[0]);
+        await Assert.That(scope.ServiceProvider.GetRequiredService<IReadOnlyList<IPlugin>>().Count).IsEqualTo(2);
+    }
+
     private sealed class Missing : IMissing;
 }

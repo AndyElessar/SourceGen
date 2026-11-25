@@ -24,6 +24,7 @@ SGIOC107 | SourceGen.Ioc | Error | Unsupported module or container class
 SGIOC108 | SourceGen.Ioc | Error | Invalid Add method name
 SGIOC301 | SourceGen.Ioc | Error | Circular dependency
 SGIOC302 | SourceGen.Ioc | Error | Captive dependency
+SGIOC304 | SourceGen.Ioc | Error | Unsupported wrapper combination
 SGIOC401 | SourceGen.Ioc | Error | Ambiguous dependency
 SGIOC402 | SourceGen.Ioc | Error | Missing dependency
 SGIOC403 | SourceGen.Ioc | Error | Disposable Transient

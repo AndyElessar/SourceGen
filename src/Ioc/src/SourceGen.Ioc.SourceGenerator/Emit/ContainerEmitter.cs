@@ -59,6 +59,11 @@ internal static class ContainerEmitter
             WriteResolver(writer, plan, i, self);
         }
 
+        foreach(CollectionPlan collection in plan.Collections)
+        {
+            WriteCollection(writer, plan, collection);
+        }
+
         WriteAccessors(writer, plan);
         WriteLookup(writer, plan, self);
         WriteServiceProvider(writer, self, plan.Container.IntegrateServiceProvider);
@@ -83,6 +88,54 @@ internal static class ContainerEmitter
     private static string Get(ClosedDefinition definition) => GeneratedNames.For("__Get_", definition);
 
     private static string Create(ClosedDefinition definition) => GeneratedNames.For("__Create_", definition);
+
+    private static string All(CollectionPlan collection) => GeneratedNames.For("__All_", collection);
+
+    /// <summary>
+    /// The resolver of a collection: an array of the candidates in their ordering, merged with the services of the fallback
+    /// provider, which come first. A collection without a merge and without a Transient element is cached
+    /// (Container.Output.spec, "Collections and dictionaries"). Concurrent first resolutions keep one array.
+    /// </summary>
+    private static void WriteCollection(SourceWriter writer, ContainerPlan plan, CollectionPlan collection)
+    {
+        string element = TypeNames.CSharp(collection.Element);
+        string elements = Elements(plan, collection.Candidates, element, "");
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        if(plan.Container.IntegrateServiceProvider)
+        {
+            if(collection.AnyKey)
+            {
+                writer.WriteLine($"private {element}[] {All(collection)}() => __MergeKeyed(__Fallback(), {DependencyInjection}.KeyedService.AnyKey, {elements});");
+            }
+            else if(collection.Key is { } key)
+            {
+                writer.WriteLine($"private {element}[] {All(collection)}() => __MergeKeyed(__Fallback(), {KeyNames.Expression(key)}, {elements});");
+            }
+            else
+            {
+                writer.WriteLine($"private {element}[] {All(collection)}() => __Merge(__Fallback(), {elements});");
+            }
+
+            return;
+        }
+
+        if(collection.Cache == CollectionCache.None)
+        {
+            writer.WriteLine($"private {element}[] {All(collection)}() => {elements};");
+            return;
+        }
+
+        string field = $"{(collection.Cache == CollectionCache.Root ? "__singletons." : string.Empty)}{GeneratedNames.For("__all_", collection)}";
+        writer.WriteLine($"private {element}[] {All(collection)}() => {field} ?? {GeneratedNames.For("__CreateAll_", collection)}();");
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private {element}[] {GeneratedNames.For("__CreateAll_", collection)}()");
+        writer.WriteLine('{');
+        writer.WriteLine($"    {element}[] all = {elements};");
+        writer.WriteLine($"    return {Interlocked}.CompareExchange(ref {field}, all, null) ?? all;");
+        writer.WriteLine('}');
+    }
 
     private static void WriteState(SourceWriter writer, ContainerPlan plan, string self)
     {
@@ -111,6 +164,11 @@ internal static class ContainerEmitter
             writer.WriteLine($"public {TypeNames.CSharp(definition.Definition.Implementation)}? {Field(definition.Definition)};");
         }
 
+        foreach(CollectionPlan collection in plan.Collections.Where(static c => c.Cache == CollectionCache.Root))
+        {
+            writer.WriteLine($"public {TypeNames.CSharp(collection.Element)}[]? {GeneratedNames.For("__all_", collection)};");
+        }
+
         writer.Indentation--;
         writer.WriteLine('}');
         writer.WriteLine();
@@ -136,6 +194,12 @@ internal static class ContainerEmitter
         {
             writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
             writer.WriteLine($"private {TypeNames.CSharp(definition.Definition.Implementation)}? {Field(definition.Definition)};");
+        }
+
+        foreach(CollectionPlan collection in plan.Collections.Where(static c => c.Cache == CollectionCache.Scope))
+        {
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine($"private {TypeNames.CSharp(collection.Element)}[]? {GeneratedNames.For("__all_", collection)};");
         }
     }
 
@@ -434,6 +498,7 @@ internal static class ContainerEmitter
             ArgumentKind.Default => $"({type})({DefaultValue(parameter)})",
             ArgumentKind.Fallback => FallbackArgument("c.__Fallback()", parameter, index, argument.Key),
             ArgumentKind.ServiceKey => ServiceKeyArgument(definition.Definition.Key!),
+            ArgumentKind.Collection => $"({type})c.{All(plan.Collections[argument.Target])}()",
             _ => $"({type})c.{Get(plan.Definitions[argument.Target].Definition)}()",
         };
     }
@@ -544,6 +609,9 @@ internal static class ContainerEmitter
                 case ArgumentKind.Default:
                     writer.WriteLine("return null;");
                     break;
+                case ArgumentKind.Collection:
+                    writer.WriteLine($"return ({member.ReturnType}){All(plan.Collections[accessor.Argument.Target])}();");
+                    break;
                 case ArgumentKind.Fallback:
                     Dependency dependency = new(member.Type, member.Name, false, member.IsOptional ? OptionalMode.Nullable : OptionalMode.Required);
                     writer.WriteLine($"return {FallbackArgument("__Fallback()", dependency, 0, accessor.Argument.Key)};");
@@ -568,7 +636,8 @@ internal static class ContainerEmitter
     /// The lookup tables (Container.Output.spec, "Lookup by Type"): <c>__lookup</c> without a key, <c>__keyedLookup</c>
     /// by type and key, and <c>__collections</c>, which gives the collection of a known service type for a key that has no
     /// registration. The keyed table is built when the container type is initialized: it reads each symbol key one time,
-    /// and two keys that are equal at run time on the same type throw.
+    /// and two keys that are equal at run time on the same type throw. Each collection type of a collection resolves
+    /// through the resolver of that collection.
     /// </summary>
     private static void WriteLookup(SourceWriter writer, ContainerPlan plan, string self)
     {
@@ -576,8 +645,9 @@ internal static class ContainerEmitter
         string function = $"global::System.Func<{self}, object>";
         string keyedFunction = $"global::System.Func<{self}, object, object>";
         string typeAndKey = "(global::System.Type, object)";
-        TypeRef[] serviceTypes = [.. plan.Lookup.Select(static e => e.ServiceType).Distinct()];
         LookupEntry[] keyed = [.. plan.Lookup.Where(static e => e.Key is not null)];
+        CollectionPlan[] keyedCollections = [.. plan.Collections.Where(static c => c.Key is not null)];
+        CollectionPlan[] demandOnly = [.. keyedCollections.Where(c => !keyed.Any(e => e.ServiceType.Equals(c.Element) && e.Key!.Equals(c.Key)))];
 
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
@@ -595,20 +665,19 @@ internal static class ContainerEmitter
             writer.WriteLine($"{{ typeof({self}), static c => c }},");
         }
 
-        foreach(TypeRef serviceType in serviceTypes)
+        // By service type: the service, then its collection types. Only the registrations without a key
+        foreach(CollectionPlan collection in plan.Collections.Where(static c => c.Key is null && !c.AnyKey))
         {
-            string service = TypeNames.CSharp(serviceType);
-            LookupEntry? entry = plan.Lookup.FirstOrDefault(e => e.Key is null && e.ServiceType.Equals(serviceType));
-            if(entry is not null)
+            string service = TypeNames.CSharp(collection.Element);
+            if(plan.Lookup.FirstOrDefault(e => e.Key is null && e.ServiceType.Equals(collection.Element)) is { } entry)
             {
                 writer.WriteLine($"{{ typeof({service}), static c => {Single(plan, entry, service)} }},");
             }
 
-            // Only the registrations without a key. With a fallback provider, its services come first
-            string elements = Elements(plan, entry?.Candidates ?? [], service);
-            writer.WriteLine(fallback
-                ? $"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static c => __Merge(c.__Fallback(), {elements}) }},"
-                : $"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static c => {elements} }},");
+            foreach(string type in CollectionTypes(collection))
+            {
+                writer.WriteLine($"{{ typeof({type}), static c => c.{All(collection)}() }},");
+            }
         }
 
         writer.Indentation--;
@@ -623,12 +692,20 @@ internal static class ContainerEmitter
         writer.WriteLine($"global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, {keyedFunction}>");
         writer.WriteLine('{');
         writer.Indentation++;
-        foreach(TypeRef serviceType in serviceTypes)
+        foreach(IGrouping<TypeRef, CollectionPlan> group in plan.Collections.GroupBy(static c => c.Element))
         {
-            string service = TypeNames.CSharp(serviceType);
-            writer.WriteLine(fallback
-                ? $"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static (c, key) => __MergeKeyed(c.__Fallback(), key, global::System.Array.Empty<{service}>()) }},"
-                : $"{{ typeof(global::System.Collections.Generic.IEnumerable<{service}>), static (c, _) => global::System.Array.Empty<{service}>() }},");
+            string service = TypeNames.CSharp(group.Key);
+            foreach(string type in group.SelectMany(CollectionTypes).Distinct())
+            {
+                if(fallback)
+                {
+                    writer.WriteLine($"{{ typeof({type}), static (c, key) => __MergeKeyed(c.__Fallback(), key, global::System.Array.Empty<{service}>()) }},");
+                }
+                else
+                {
+                    writer.WriteLine($"{{ typeof({type}), static (c, _) => global::System.Array.Empty<{service}>() }},");
+                }
+            }
         }
 
         writer.Indentation--;
@@ -644,14 +721,14 @@ internal static class ContainerEmitter
         writer.WriteLine('{');
         writer.Indentation++;
         writer.WriteLine($"global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}> table = new global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}>();");
-        if(keyed.Length > 0)
+        bool hasKeys = keyed.Length > 0 || keyedCollections.Length > 0;
+        if(hasKeys)
         {
             writer.WriteLine($"global::System.Collections.Generic.HashSet<{typeAndKey}> keys = new global::System.Collections.Generic.HashSet<{typeAndKey}>();");
 
             // Each key is read one time
-            List<string> keyVariables = [];
             Dictionary<string, string> variables = [];
-            foreach(KeyRef key in keyed.Select(static e => e.Key!))
+            foreach(KeyRef key in keyed.Select(static e => e.Key!).Concat(keyedCollections.Select(static c => c.Key!)))
             {
                 if(!variables.ContainsKey(key.Canonical))
                 {
@@ -664,23 +741,37 @@ internal static class ContainerEmitter
             foreach(LookupEntry entry in keyed)
             {
                 string service = TypeNames.CSharp(entry.ServiceType);
-                string variable = variables[entry.Key!.Canonical];
-                string elements = Elements(plan, entry.Candidates, service);
-                writer.WriteLine($"__AddKeyed(table, keys, typeof({service}), {variable}, static (c, _) => {Single(plan, entry, service)});");
-                writer.WriteLine(fallback
-                    ? $"__AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<{service}>), {variable}, static (c, key) => __MergeKeyed(c.__Fallback(), key, {elements}));"
-                    : $"__AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<{service}>), {variable}, static (c, _) => {elements});");
+                writer.WriteLine($"__AddKeyed(table, keys, typeof({service}), {variables[entry.Key!.Canonical]}, static (c, _) => {Single(plan, entry, service)});");
+                if(keyedCollections.FirstOrDefault(c => c.Element.Equals(entry.ServiceType) && c.Key!.Equals(entry.Key)) is { } collection)
+                {
+                    WriteKeyedCollection(collection, variables[entry.Key!.Canonical]);
+                }
+            }
+
+            // The keyed collections that only a dependency site asks for, after all registered keys. Only registered keys
+            // throw (Semantics.spec, "Keyed services"). A key that is equal at run time to a key of the table uses the
+            // collection of that key, as a lookup with Equals does (Container.Output.spec, "Lookup rules")
+            foreach(CollectionPlan collection in demandOnly)
+            {
+                string enumerable = $"global::System.Collections.Generic.IEnumerable<{TypeNames.CSharp(collection.Element)}>";
+                foreach(string type in CollectionTypes(collection))
+                {
+                    writer.WriteLine($"__TryAddKeyed(table, keys, typeof({type}), typeof({enumerable}), {variables[collection.Key!.Canonical]}, static (c, _) => c.{All(collection)}());");
+                }
             }
 
             // AnyKey: all registrations of the type that have a key, in the ordering. One service with AnyKey throws, as in MS.DI
             foreach(IGrouping<TypeRef, LookupEntry> group in keyed.GroupBy(static e => e.ServiceType))
             {
-                string service = TypeNames.CSharp(group.Key);
-                string elements = Elements(plan, [.. group.SelectMany(static e => e.Candidates).OrderBy(static i => i)], service);
-                writer.WriteLine($"table.Add((typeof({service}), {DependencyInjection}.KeyedService.AnyKey), static (_, _) => throw new {InvalidOperation}({SymbolDisplay.FormatLiteral($"KeyedService.AnyKey cannot be used to resolve a single service of type '{TypeNames.Display(group.Key)}'.", quote: true)}));");
-                writer.WriteLine(fallback
-                    ? $"table.Add((typeof(global::System.Collections.Generic.IEnumerable<{service}>), {DependencyInjection}.KeyedService.AnyKey), static (c, key) => __MergeKeyed(c.__Fallback(), key, {elements}));"
-                    : $"table.Add((typeof(global::System.Collections.Generic.IEnumerable<{service}>), {DependencyInjection}.KeyedService.AnyKey), static (c, _) => {elements});");
+                writer.WriteLine($"table.Add((typeof({TypeNames.CSharp(group.Key)}), {DependencyInjection}.KeyedService.AnyKey), static (_, _) => throw new {InvalidOperation}({SymbolDisplay.FormatLiteral($"KeyedService.AnyKey cannot be used to resolve a single service of type '{TypeNames.Display(group.Key)}'.", quote: true)}));");
+            }
+        }
+
+        foreach(CollectionPlan collection in plan.Collections.Where(static c => c.AnyKey))
+        {
+            foreach(string type in CollectionTypes(collection))
+            {
+                writer.WriteLine($"table.Add((typeof({type}), {DependencyInjection}.KeyedService.AnyKey), static (c, _) => c.{All(collection)}());");
             }
         }
 
@@ -688,7 +779,7 @@ internal static class ContainerEmitter
         writer.Indentation--;
         writer.WriteLine('}');
 
-        if(keyed.Length > 0)
+        if(hasKeys)
         {
             writer.WriteLine();
             writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
@@ -703,7 +794,35 @@ internal static class ContainerEmitter
             writer.WriteLine("    table.Add((type, key), factory);");
             writer.WriteLine('}');
         }
+
+        if(demandOnly.Length > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine($"private static void __TryAddKeyed(global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}> table, global::System.Collections.Generic.HashSet<{typeAndKey}> keys, global::System.Type type, global::System.Type enumerable, object key, {keyedFunction} factory)");
+            writer.WriteLine('{');
+            writer.WriteLine("    if(!keys.Add((type, key)))");
+            writer.WriteLine("    {");
+            writer.WriteLine("        return;");
+            writer.WriteLine("    }");
+            writer.WriteLine();
+            writer.WriteLine("    // Each collection resolver returns an array of the element, which implements each collection type");
+            writer.WriteLine($"    table.Add((type, key), table.TryGetValue((enumerable, key), out {keyedFunction}? existing) ? existing : factory);");
+            writer.WriteLine('}');
+        }
+
+        void WriteKeyedCollection(CollectionPlan collection, string variable)
+        {
+            foreach(string type in CollectionTypes(collection))
+            {
+                writer.WriteLine($"__AddKeyed(table, keys, typeof({type}), {variable}, static (c, _) => c.{All(collection)}());");
+            }
+        }
     }
+
+    /// <summary>The collection types that the lookup table gives for a collection: <c>IEnumerable&lt;T&gt;</c> first.</summary>
+    private static IEnumerable<string> CollectionTypes(CollectionPlan collection)
+        => collection.Types.Select(TypeNames.CSharp).Prepend($"global::System.Collections.Generic.IEnumerable<{TypeNames.CSharp(collection.Element)}>");
 
     /// <summary>The expression of one service: the candidate, or an exception when more than one candidate stays.</summary>
     private static string Single(ContainerPlan plan, LookupEntry entry, string service)
@@ -718,10 +837,10 @@ internal static class ContainerEmitter
         return $"throw new {InvalidOperation}({SymbolDisplay.FormatLiteral($"More than one registration provides '{display}': {names}.", quote: true)})";
     }
 
-    /// <summary>The array of the candidates, in their ordering.</summary>
-    private static string Elements(ContainerPlan plan, IEnumerable<int> candidates, string service)
+    /// <summary>The array of the candidates, in their ordering, each resolved on <paramref name="owner"/>.</summary>
+    private static string Elements(ContainerPlan plan, IEnumerable<int> candidates, string service, string owner)
         => candidates.Any()
-            ? $"new {service}[] {{ {string.Join(", ", candidates.Select(i => $"({service})c.{Get(plan.Definitions[i].Definition)}()"))} }}"
+            ? $"new {service}[] {{ {string.Join(", ", candidates.Select(i => $"({service}){owner}{Get(plan.Definitions[i].Definition)}()"))} }}"
             : $"global::System.Array.Empty<{service}>()";
 
     /// <summary>

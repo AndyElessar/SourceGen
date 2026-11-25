@@ -81,6 +81,7 @@ internal static class ServiceCollectionExtensionEmitter
             WriteRegistrations(writer, definition);
         }
 
+        WriteCollectionRegistrations(writer, model);
         writer.WriteLine("return services;");
         writer.Indentation--;
         writer.WriteLine('}');
@@ -111,6 +112,73 @@ internal static class ServiceCollectionExtensionEmitter
                 writer.WriteLine($"{Services}.Add{lifetime}<{service}>(services, static sp => {cast}{source}(sp));");
             }
         }
+    }
+
+    /// <summary>
+    /// The collection types other than <c>IEnumerable&lt;T&gt;</c> that a dependency site asks for: each one is registered
+    /// as one Transient service, an array of the services that MS.DI collects (ServiceCollection.Output.spec, "Wrapper
+    /// types and collections"). A dependency site with <c>AnyKey</c> builds its array itself: MS.DI cannot resolve a
+    /// single service with <c>AnyKey</c>.
+    /// </summary>
+    private static void WriteCollectionRegistrations(SourceWriter writer, ServiceCollectionExtensionModel model)
+    {
+        SortedDictionary<string, (TypeRef Type, TypeRef Element, KeyRef? Key)> demands = new(StringComparer.Ordinal);
+        foreach(ClosedDefinition definition in model.Definitions)
+        {
+            foreach(Dependency dependency in definition.Dependencies.Where(static d => d.KeyMode != SiteKeyMode.ServiceKey))
+            {
+                KeyRef? key = dependency.KeyIn(definition);
+                if(CollectionElement(dependency.Type) is { } element
+                    && dependency.Type is not NamedTypeRef { MetadataName: WrapperRequest.Enumerable }
+                    && key is not { IsAnyKey: true })
+                {
+                    demands[$"{dependency.Type.CanonicalString}|{KeyRef.CanonicalOf(key)}"] = (dependency.Type, element, key);
+                }
+            }
+        }
+
+        if(demands.Count > 0)
+        {
+            writer.WriteLine();
+        }
+
+        foreach((TypeRef type, TypeRef element, KeyRef? key) in demands.Values)
+        {
+            string collection = TypeNames.CSharp(type);
+            string service = TypeNames.CSharp(element);
+            if(key is null)
+            {
+                writer.WriteLine($"{Services}.AddTransient<{collection}>(services, static sp => global::System.Linq.Enumerable.ToArray({Provider}.GetServices<{service}>(sp)));");
+            }
+            else
+            {
+                writer.WriteLine($"{Services}.AddKeyedTransient<{collection}>(services, {KeyNames.Expression(key)}, static (sp, key) => global::System.Linq.Enumerable.ToArray({KeyedProvider}.GetKeyedServices<{service}>(sp, key)));");
+            }
+        }
+    }
+
+    /// <summary>The element of a requested collection whose element is the service itself, or <see langword="null"/>.</summary>
+    private static TypeRef? CollectionElement(TypeRef type) => WrapperRequest.Parse(type) is { IsPlainCollection: true } request ? request.Core : null;
+
+    /// <summary>
+    /// The expression of a collection whose element is the service itself. It is never missing, so an optional one is
+    /// resolved the same way (Analysis.Model.spec, "Multiple services").
+    /// </summary>
+    private static string CollectionArgument(TypeRef type, TypeRef element, KeyRef? key)
+    {
+        string service = TypeNames.CSharp(element);
+        if(type is NamedTypeRef { MetadataName: WrapperRequest.Enumerable })
+        {
+            return key is null ? $"{Provider}.GetServices<{service}>(sp)" : $"{KeyedProvider}.GetKeyedServices<{service}>(sp, {KeyNames.Expression(key)})";
+        }
+
+        string collection = TypeNames.CSharp(type);
+        if(key is { IsAnyKey: true })
+        {
+            return $"global::System.Linq.Enumerable.ToArray({KeyedProvider}.GetKeyedServices<{service}>(sp, {KeyNames.Expression(key)}))";
+        }
+
+        return key is null ? $"{Provider}.GetRequiredService<{collection}>(sp)" : $"{KeyedProvider}.GetRequiredKeyedService<{collection}>(sp, {KeyNames.Expression(key)})";
     }
 
     private static void WriteCreate(SourceWriter writer, ClosedDefinition definition)
@@ -192,7 +260,7 @@ internal static class ServiceCollectionExtensionEmitter
     private static string Assignment(ClosedDefinition owner, int index, string member)
     {
         Dependency dependency = owner.Dependencies[index];
-        if(dependency.Optional != OptionalMode.KeepInitializer)
+        if(dependency.Optional != OptionalMode.KeepInitializer || CollectionElement(dependency.Type) is not null)
         {
             return $"instance.{member} = {Argument(owner, dependency, index)};";
         }
@@ -213,6 +281,11 @@ internal static class ServiceCollectionExtensionEmitter
         if(parameter.KeyMode == SiteKeyMode.ServiceKey)
         {
             return owner.Key is null ? $"({type})({ContainerEmitter.DefaultValue(parameter)})" : ContainerEmitter.ServiceKeyArgument(owner.Key);
+        }
+
+        if(CollectionElement(parameter.Type) is { } element)
+        {
+            return CollectionArgument(parameter.Type, element, parameter.KeyIn(owner));
         }
 
         // A keyed dependency uses the keyed methods of the provider, as the fallback provider of a container does
