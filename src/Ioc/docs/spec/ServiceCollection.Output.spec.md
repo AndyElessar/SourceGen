@@ -115,7 +115,7 @@ The method processes the closed definitions one by one in their [ordering](Analy
 At its start, the method converts `tags` to one boolean value for each tag. The registration of each closed definition that has tags is inside the related condition.
 
 - When a derived registration records a [suppressor](Analysis.Model.spec.md#suppression) (Analysis model, section "Suppression"), it is registered only when the suppressor is not included. The method filters first, then suppresses.
-- The registrations of decorator chains, wrapper types, and collections follow the closed definition that they belong to.
+- The registrations of decorator chains, wrapper types, and collections follow the closed definition that they belong to. A collection type whose element is the service itself has no condition (see [Wrapper types and collections](#wrapper-types-and-collections)).
 - The content of a dictionary is decided by the tags at the call to the service collection extension. When one key still has more than one instance definition after concrete registrations win, the service collection extension throws `InvalidOperationException`.
 
 ## Registration of closed definitions
@@ -318,6 +318,7 @@ The method registers these only for the [demands](Analysis.Model.spec.md#sources
 | Dictionary | The complete dictionary is registered as one service | Transient |
 
 - The table applies to the candidates of `S`. When `S` has no candidate, the method registers no wrapper for it. A dependency site that asks for a wrapper of such a service builds the wrapper itself (see [Dependency resolution](#dependency-resolution)).
+- A collection type other than `IEnumerable<X>` whose element is the service itself is the exception. The method registers it for each demand (with no key or with a specified key), also when `X` has no candidate, and without a tag condition. Its content comes from `IEnumerable<X>` at run time, so it is correct for each set of tags and for each registration of the user.
 - When the closed definition is not Singleton, `Func<S>` is registered as Transient and not as Scoped. A Singleton service can legally depend on a `Func<T>` of a Transient service (see [Dependency resolution](Semantics.spec.md#dependency-resolution)). If the registration were Scoped, MS.DI would reject it when `ValidateScopes` is on. "One cached `Func` for each scope" is an optimization of the container and not an observable behavior.
 - With NativeAOT, MS.DI refuses to collect a collection whose element is a value type, such as `IEnumerable<KeyValuePair<TKey, T>>`. It throws `InvalidOperationException` at run time, with no warning at publish. A registration of the complete collection as one service works (tested, see the ADRs).
 - A keyed wrapper type is registered with the key of the closed definition.
@@ -337,6 +338,8 @@ The generator generates each argument in a creation method from the shape of the
 | Optional, `X` is a value type (`KeyValuePair<TKey, T>`) | `sp.GetService(typeof(X)) is X value ? value : default value`. The generated code MUST NOT use the generic `GetService<X>()`: when there is no registration, it throws `NullReferenceException` for a value type (tested, see the ADRs). It also MUST NOT use `GetService<X?>()`, which is a different service type. When `X` is `Nullable<U>`, the pattern tests `U`, because a pattern cannot use a nullable value type |
 | `Func<S>`, `Lazy<S>`, `Func<Task<S>>`, `Lazy<Task<S>>`, and `S` has no candidate without tags in the assembly view | `sp.GetService<W>() ?? {wrapper}`, or the keyed version. `W` is the requested wrapper type. When a registration of `W` exists (a candidate with tags that the tags select, or a registration of the user), it is used. Otherwise the dependency site creates the wrapper, and the wrapper resolves `S` from `sp` with `GetRequiredService` when it is called. For `Task<S>`, the wrapper uses `Task.FromResult` |
 | `IEnumerable<X>` | `sp.GetServices<X>()` or its keyed version |
+| Another collection type of `X` (`IReadOnlyList<X>`, `X[]`, and so on) | The registered collection: `sp.GetRequiredService<C>()` or its keyed version. With `KeyedService.AnyKey`, the dependency site builds the array itself from `sp.GetKeyedServices<X>(KeyedService.AnyKey)`: MS.DI cannot resolve a single service with `AnyKey`, so no registration is made for it |
+| A collection, optional | The same as a required collection. A collection is never missing (see [Multiple services](Analysis.Model.spec.md#multiple-services)) |
 | `Task<S>` | See [Asynchronous closed definitions](#asynchronous-closed-definitions) |
 | Built-in service | `sp`, or a resolution from `sp` |
 | `[ServiceKey]` | The key expression |

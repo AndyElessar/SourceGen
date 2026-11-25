@@ -508,6 +508,7 @@ When a Singleton or Scoped closed definition holds a Transient instance directly
 
 - The check uses only the edges of the dependency site itself and does not follow the Transient further. For Scoped → Transient `A` → Transient `B`, the generator reports only the first edge.
 - When a dependency on multiple services (Collection, Dictionary) has more than one Transient candidate, the generator reports only one diagnostic for each dependency. The message lists the first candidate.
+- The type in the advice of the message (`Func<{2}>`) is the core service type `T` of the dependency.
 
 ### Disposable Transient
 

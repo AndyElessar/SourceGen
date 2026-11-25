@@ -150,6 +150,8 @@ At run time, the container compares keys with `Equals`, as MS.DI does. The conta
 
 Two keys can have different compile-time identities and be equal at run time. When two such keys are registered on the same service type, the container throws `InvalidOperationException` when the container type is initialized. The message lists the two keys. Such keys are the responsibility of the user (see [Keyed services](Semantics.spec.md#keyed-services)). This design fails early, so that one key does not silently replace the other.
 
+A key that only a dependency site asks for, such as the key of a keyed collection without a registration with that key, is not registered and does not throw. When it is equal at run time to a key that the table already has for the same element type, the lookup by `Type` uses `Equals` as usual: each collection type of that key, also one that only the dependency site asks for, gives the collection of the key that the table already has. The dependency site itself still uses its own collection, which matches keys by their compile-time identity (a [documented difference](../Constitution.md#8-documented-differences-from-msdi)).
+
 ### Unknown `IEnumerable<T>`
 
 A request by `Type` can ask for an `IEnumerable<T>` that the container does not know at all. This means that `T` has no registration and that no demand for it exists at compile time. Without a fallback provider, the result is `null`, so `sp.GetServices<T>()` throws `InvalidOperationException`. MS.DI returns an empty collection. This is a [documented difference](../Constitution.md#8-documented-differences-from-msdi).
