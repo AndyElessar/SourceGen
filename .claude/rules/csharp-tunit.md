@@ -17,10 +17,11 @@ For TUnit APIs (assertions, data sources, hooks, parallelism, filters), use the 
 
 | Kind | Pattern |
 |---|---|
-| Generator snapshot | `SourceGeneratorTestHelper.RunGenerator<TGenerator>(source)` → `await result.VerifyCompilableAsync()` → `await Verify(SourceGeneratorTestHelper.GetGeneratedSource(result, "Container.g.cs"))` |
+| Generator snapshot | `SourceGeneratorTestHelper.RunGenerator<TGenerator>(source)` → `await result.VerifyCompilableAsync()` → `await Verify(SnapshotHelper.MembersByPrefix(result.GetGeneratedSource("Container.g.cs")!, [names], prefixes))`. Generated member names end with a hash, so select them by prefix |
 | Expected compile errors | `await result.VerifyHasCompilationErrorsAsync()` |
-| Analyzer | `await SourceGeneratorTestHelper.RunAnalyzerAsync<TAnalyzer>(source)` → assert on `SourceGeneratorTestHelper.GetDiagnosticsById(diagnostics, "SGIOC0XX")` |
-| End-to-end / AOT | Real types in the TestCase project, exercised by the AOT test project |
+| Diagnostics | Mark each expected diagnostic in the source (`{\|SGIOC002:Foo\|}`), then `DiagnosticMarkup.Parse(sources)` → `RunGenerator` → `await result.VerifyDiagnosticsAsync(expected)`. Assert on the message with `result.ReportedDiagnostics`. The generator reports all diagnostics; there is no separate analyzer |
+| Determinism | `await SourceGeneratorTestHelper.VerifyDeterministicAsync<TGenerator>(sources)` |
+| End-to-end / AOT | Real types in the AOT test project, published with NativeAOT and run |
 
 ## Snapshot Failures (Verify.TUnit)
 
