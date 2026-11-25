@@ -33,9 +33,134 @@ public static partial class GeneratedCodeRules
             problems.AddRange(CheckHeader(tree).Select(p => $"{file}: {p}"));
             problems.AddRange(CheckNoVar(tree).Select(p => $"{file}: {p}"));
             problems.AddRange(CheckNoReflection(tree, model).Select(p => $"{file}: {p}"));
+            problems.AddRange(CheckGlobalQualified(tree, model).Select(p => $"{file}: {p}"));
         }
 
         problems.AddRange(CheckGeneratedCodeAttributes(compilation, generatedTrees));
+        problems.AddRange(CheckInfrastructurePrefix(compilation, generatedTrees));
+        return problems;
+    }
+
+    /// <summary>
+    /// Finds each type that is referenced without <c>global::</c>. A type that encloses the reference, or that is nested
+    /// in such a type, can use its simple name: the generator declares it there. A keyword (<c>object</c>) and a type
+    /// parameter are not names of types. The name of an attribute binds to its constructor, so the check uses its type.
+    /// The check includes the <c>cref</c> of documentation comments.
+    /// </summary>
+    public static IEnumerable<string> CheckGlobalQualified(SyntaxTree tree, SemanticModel model)
+    {
+        HashSet<int> reportedLines = [];
+        foreach(SimpleNameSyntax name in tree.GetRoot().DescendantNodes(descendIntoTrivia: true).OfType<SimpleNameSyntax>())
+        {
+            ISymbol? symbol = model.GetSymbolInfo(name).Symbol;
+            INamedTypeSymbol? type = symbol is IMethodSymbol { MethodKind: MethodKind.Constructor } constructor && name.AncestorsAndSelf().Any(static n => n.Parent is AttributeSyntax a && a.Name == n)
+                ? constructor.ContainingType
+                : symbol as INamedTypeSymbol;
+
+            // 'var' is reported by CheckNoVar
+            if(name.IsVar || type is null || Leftmost(name) is AliasQualifiedNameSyntax { Alias.Identifier.Text: "global" })
+            {
+                continue;
+            }
+
+            HashSet<ISymbol> enclosing = new(SymbolEqualityComparer.Default);
+            ISymbol? scope = model.GetEnclosingSymbol(name.SpanStart);
+            for(INamedTypeSymbol? outer = scope as INamedTypeSymbol ?? scope?.ContainingType; outer is not null; outer = outer.ContainingType)
+            {
+                enclosing.Add(outer.OriginalDefinition);
+            }
+
+            bool nested = false;
+            for(INamedTypeSymbol? outer = type; outer is not null && !nested; outer = outer.ContainingType)
+            {
+                nested = enclosing.Contains(outer.OriginalDefinition);
+            }
+
+            if(nested)
+            {
+                continue;
+            }
+
+            if(reportedLines.Add(name.GetLocation().GetLineSpan().StartLinePosition.Line))
+            {
+                yield return $"type '{type.ToDisplayString()}' without global:: at {Line(name)}";
+            }
+        }
+    }
+
+    /// <summary>The leftmost part of the qualified name or member access that <paramref name="name"/> ends.</summary>
+    private static SyntaxNode Leftmost(SimpleNameSyntax name)
+    {
+        SyntaxNode node = name;
+        while(node.Parent is QualifiedNameSyntax qualified && qualified.Right == node
+            || node.Parent is MemberAccessExpressionSyntax access && access.Name == node
+            || node.Parent is AliasQualifiedNameSyntax alias && alias.Name == node)
+        {
+            node = node.Parent;
+        }
+
+        while(true)
+        {
+            switch(node)
+            {
+                case QualifiedNameSyntax qualified:
+                    node = qualified.Left;
+                    break;
+                case MemberAccessExpressionSyntax access:
+                    node = access.Expression;
+                    break;
+                default:
+                    return node;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The members that the generator declares in a type that the user declares (the container class) are infrastructure
+    /// and start with <c>__</c>, so that they do not conflict with the members of the user (Container.Output.spec,
+    /// "Requirements for the generated code"). A public member, an override, an explicit interface implementation, a
+    /// constructor, a finalizer and the implementation part of a partial member that the user declares are not
+    /// infrastructure: their names come from elsewhere.
+    /// </summary>
+    public static IReadOnlyList<string> CheckInfrastructurePrefix(Compilation compilation, IReadOnlyList<SyntaxTree> generatedTrees)
+    {
+        List<string> problems = [];
+        HashSet<SyntaxTree> generated = [.. generatedTrees];
+        foreach(SyntaxTree tree in generatedTrees)
+        {
+            SemanticModel model = compilation.GetSemanticModel(tree);
+            foreach(TypeDeclarationSyntax type in tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
+            {
+                if(model.GetDeclaredSymbol(type) is not { } symbol || symbol.DeclaringSyntaxReferences.All(r => generated.Contains(r.SyntaxTree)))
+                {
+                    continue;
+                }
+
+                foreach(MemberDeclarationSyntax member in type.Members)
+                {
+                    if(member is ConstructorDeclarationSyntax or DestructorDeclarationSyntax
+                            or MethodDeclarationSyntax { ExplicitInterfaceSpecifier: not null }
+                            or BasePropertyDeclarationSyntax { ExplicitInterfaceSpecifier: not null }
+                        || member.Modifiers.Any(SyntaxKind.PublicKeyword)
+                        || member.Modifiers.Any(SyntaxKind.OverrideKeyword)
+                        || member.Modifiers.Any(SyntaxKind.PartialKeyword))
+                    {
+                        continue;
+                    }
+
+                    string name = member switch
+                    {
+                        BaseTypeDeclarationSyntax t => t.Identifier.Text,
+                        _ => MemberName(member),
+                    };
+                    if(!name.StartsWith("__", StringComparison.Ordinal))
+                    {
+                        problems.Add($"{File(member)}: member '{name}' of '{symbol.Name}' does not start with __");
+                    }
+                }
+            }
+        }
+
         return problems;
     }
 

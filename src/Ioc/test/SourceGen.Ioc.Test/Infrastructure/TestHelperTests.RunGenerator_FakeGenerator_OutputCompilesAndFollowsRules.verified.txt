@@ -6,7 +6,7 @@
 partial class FakePartial
 {
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
-    public int Generated() => FakePartial_Helper.Value;
+    public int Generated() => global::FakePartial_Helper.Value;
 }
 
 [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]

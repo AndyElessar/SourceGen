@@ -142,6 +142,20 @@ public class DisposalTests
     }
 
     [Test]
+    public async Task RootDisposeAsync_TwoFail_DisposesAllInReverseOrderAndThrowsAggregateException()
+    {
+        AppContainer root = new();
+        Journal journal = root.GetRequiredService<Journal>();
+        _ = root.GetRequiredService<Repository>();
+        journal.FailOnDispose = ["Repository", "SystemClock"];
+
+        AggregateException? thrown = await Assert.That(async () => await root.DisposeAsync()).ThrowsExactly<AggregateException>();
+
+        await Assert.That(string.Join(",", thrown!.InnerExceptions.Select(static e => e.Message))).IsEqualTo("Disposal of Repository failed.,Disposal of SystemClock failed.");
+        await Assert.That(string.Join(",", journal.Disposed)).IsEqualTo("SlowSingleton#1,Repository,SystemClock");
+    }
+
+    [Test]
     public async Task PublicMethods_AfterTheRootIsDisposed_ThrowObjectDisposedException()
     {
         AppContainer root = new();

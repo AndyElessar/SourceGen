@@ -42,10 +42,10 @@ public class TestHelperTests
             partial class Foo
             {
                 {{Attribute}}
-                private readonly int field;
+                private readonly int __field;
 
                 {{Attribute}}
-                public int M() { int x = field; return x; }
+                public int M() { int x = __field; Nested n = new Nested(); return x + global::Helper.Value; }
 
                 {{Attribute}}
                 public sealed class Nested;
@@ -134,6 +134,116 @@ public class TestHelperTests
         await Assert.That(problems).Count().IsEqualTo(4);
         await Assert.That(problems[0]).Contains("'var'");
         await Assert.That(problems.Skip(1).All(static p => p.Contains("reflection '", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task GeneratedCodeRules_TypeWithoutGlobal_ReportedOnceForEachLine()
+    {
+        IReadOnlyList<string> problems = CheckRules("namespace App; public class Service;", $$"""
+            {{Header}}
+            {{Attribute}}
+            internal static class Bad
+            {
+                public static object M(App.Service a, System.Collections.Generic.List<global::App.Service> b) => new App.Service();
+
+                public static global::System.Collections.Generic.List<global::App.Service> Good() => new global::System.Collections.Generic.List<global::App.Service>();
+            }
+            """);
+
+        await Assert.That(problems).HasSingleItem();
+        await Assert.That(problems[0]).Contains("type 'App.Service' without global:: at line 9");
+    }
+
+    [Test]
+    public async Task GeneratedCodeRules_AttributeAndCrefWithoutGlobal_Reported()
+    {
+        IReadOnlyList<string> problems = CheckRules("public class User;", $$"""
+            {{Header}}
+            {{Attribute}}
+            internal static class Bad
+            {
+                [System.Diagnostics.DebuggerHidden]
+                public static void M() { }
+
+                /// <see cref="System.String"/>
+                public static void N() { }
+            }
+            """);
+
+        await Assert.That(problems).Count().IsEqualTo(2);
+        await Assert.That(problems[0]).Contains("type 'System.Diagnostics.DebuggerHiddenAttribute' without global::");
+        await Assert.That(problems[1]).Contains("type 'string' without global::");
+    }
+
+    [Test]
+    public async Task GeneratedCodeRules_NamesThatComeFromElsewhere_NotReported()
+    {
+        IReadOnlyList<string> problems = CheckRules(
+            """
+            public interface IE { event global::System.EventHandler E; int this[int i] { get; } }
+            public class Base { protected virtual void Hook() { } }
+            public partial class Foo : Base, IE;
+            """,
+            $$"""
+            {{Header}}
+            partial class Foo
+            {
+                {{Attribute}}
+                event global::System.EventHandler global::IE.E { add { } remove { } }
+
+                {{Attribute}}
+                int global::IE.this[int i] => i;
+
+                {{Attribute}}
+                protected override void Hook() { }
+
+                {{Attribute}}
+                ~Foo() { }
+
+                {{Attribute}}
+                private sealed class __A
+                {
+                    public sealed class __B
+                    {
+                        public static int V;
+                    }
+                }
+
+                {{Attribute}}
+                private int __M() => __A.__B.V;
+            }
+            """);
+
+        await Assert.That(problems).IsEmpty();
+    }
+
+    [Test]
+    public async Task GeneratedCodeRules_MemberOfUserTypeWithoutPrefix_Reported()
+    {
+        IReadOnlyList<string> problems = CheckRules("public partial class Foo { public partial int P { get; } }", $$"""
+            {{Header}}
+            partial class Foo
+            {
+                {{Attribute}}
+                private int helper;
+
+                {{Attribute}}
+                private static void __Ok() { }
+
+                {{Attribute}}
+                public partial int P => helper;
+
+                {{Attribute}}
+                public void Api() { }
+
+                {{Attribute}}
+                private sealed class Holder;
+            }
+            """);
+
+        await Assert.That(problems).Count().IsEqualTo(2);
+        await Assert.That(problems[0]).Contains("member 'helper' of 'Foo' does not start with __");
+        await Assert.That(problems[1]).Contains("member 'Holder' of 'Foo' does not start with __");
     }
 
     [Test]
@@ -425,8 +535,10 @@ public class TestHelperTests
             internal static class Helper;
             """);
 
-        await Assert.That(problems).HasSingleItem();
-        await Assert.That(problems[0]).Contains("expected 'global::System.CodeDom.Compiler.GeneratedCode'");
+        // The rule of [GeneratedCode] and the rule of global:: both find it
+        await Assert.That(problems).Count().IsEqualTo(2);
+        await Assert.That(problems[0]).Contains("type 'System.CodeDom.Compiler.GeneratedCodeAttribute' without global::");
+        await Assert.That(problems[1]).Contains("expected 'global::System.CodeDom.Compiler.GeneratedCode'");
     }
 
     [Test]

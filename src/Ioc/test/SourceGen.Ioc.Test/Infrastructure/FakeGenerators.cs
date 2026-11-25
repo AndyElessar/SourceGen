@@ -51,7 +51,7 @@ internal sealed class FakeGenerator : IIncrementalGenerator
             partial class {{model.Name}}
             {
                 [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "1.2.3")]
-                public int Generated() => {{model.Name}}_Helper.Value;
+                public int Generated() => global::{{model.Name}}_Helper.Value;
             }
 
             [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "1.2.3")]

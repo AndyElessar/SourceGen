@@ -60,6 +60,30 @@ public class ServiceCollectionExtensionTests
     }
 
     [Test]
+    public async Task AddTestAot_AsyncOnlyServiceInAScope_SyncDisposeThrowsAndDisposeAsyncDisposes()
+    {
+        using ServiceProvider provider = Build();
+        Journal journal = provider.GetRequiredService<Journal>();
+        IServiceScope first = provider.CreateScope();
+        _ = first.ServiceProvider.GetRequiredService<AsyncResource>();
+        AsyncServiceScope second = provider.CreateAsyncScope();
+        _ = second.ServiceProvider.GetRequiredService<AsyncResource>();
+
+        // Neither MS.DI nor the holder disposes the object synchronously (ServiceCollection.Output.spec, "Disposal"). MS.DI 10
+        // throws at the first such object, before the holder, and MS.DI 11 collects the exceptions in an AggregateException:
+        // one from MS.DI for the object that the factory returned, and one from the holder. DisposeAsync disposes it one
+        // time by MS.DI and one time by the holder ("Number of disposals")
+        Exception? thrown = await Assert.That(first.Dispose).Throws<Exception>();
+        IReadOnlyList<Exception> errors = thrown is AggregateException aggregate ? aggregate.InnerExceptions : [thrown!];
+        await Assert.That(errors.Count).IsEqualTo(thrown is AggregateException ? 2 : 1);
+        await Assert.That(errors.All(static e => e is InvalidOperationException && e.Message.Contains("only implements IAsyncDisposable", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(journal.Disposed).DoesNotContain("AsyncResource");
+        await second.DisposeAsync();
+
+        await Assert.That(string.Join(",", journal.Disposed)).IsEqualTo("AsyncResource,AsyncResource");
+    }
+
+    [Test]
     public async Task AddTestAot_CalledTwice_ThrowsAndLeavesServicesUnchanged()
     {
         ServiceCollection services = new();
