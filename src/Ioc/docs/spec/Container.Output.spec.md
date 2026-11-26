@@ -389,6 +389,8 @@ The container always aggregates and throws each exception that its `Dispose` and
 | Faulted or canceled | Skip (no instance exists) | Skip |
 | Not yet complete | Wait until it completes (ignore its exception). If it succeeds, dispose the result. | Do not wait. Attach a continuation that disposes the result after the task completes successfully. An exception in the continuation goes to the [dispose-exception callback](#dispose-exception-callback). |
 
+- Disposal MUST NOT read the exception of a task that already failed. If it did, a failure of creation that no code awaited would give no signal. The caller that got the `Task<S>` awaits it and receives the exception. When no caller awaits a task that failed before disposal, the exception reaches `TaskScheduler.UnobservedTaskException`. When disposal waits for a task that is not complete, the wait observes the exception as a side effect, and disposal does not report it. The dispose-exception callback does not receive the failure of a creation. See [ADR IocRewrite/0020](../adr/0001_IocRewrite/0020_DisposalDoesNotObserveCreationFailure.md).
+
 ### After disposal, and concurrency
 
 - `Dispose` and `DisposeAsync` can be called more than one time. The second and later calls have no effect.

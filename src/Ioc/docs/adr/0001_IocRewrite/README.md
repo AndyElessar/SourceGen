@@ -64,6 +64,7 @@ The [constitution](../../Constitution.md) holds the principles, the scope and li
 | [0017](0017_FallbackInterfacesAsServices.md) | The container gets `IServiceProviderIsService` and `IServiceProviderIsKeyedService` from the fallback provider as services. |
 | [0018](0018_NoAnyKeyRegistration.md) | A registration cannot use `KeyedService.AnyKey` as its key. A documented difference of the constitution. |
 | [0019](0019_KeyMatchesOnlyAtRunTime.md) | A key of a dependency site that can be equal to a registered key only at run time is a warning (`SGIOC505`). The container keeps the match by compile-time identity. |
+| [0020](0020_DisposalDoesNotObserveCreationFailure.md) | Disposal does not observe the exception of a failed asynchronous creation. The caller that got the task awaits it. |
 
 ### Consequences
 
