@@ -473,7 +473,7 @@ The definite check is the check of the assembly view. It uses only definite edge
 Reporting rules:
 
 - The definite check reports one time for each assembly, at the location of the dependency site (parameter or member). A cycle is reported at the first edge of its message. A captive dependency is reported at the first edge of its path, which is a dependency site of the Singleton. When the dependency site is not declared in source (a type from metadata), the definite check reports at the registration attribute that brings the type in.
-- The full check reports for each container, on the container class. In the full check of a normal container, a problem that the definite check of this assembly already reported (the same diagnostic and the same edge) is not reported again. That container is still not generated.
+- The full check reports for each container, on the container class. In the full check of a normal container, a problem that the definite check of this assembly already reported (the same diagnostic and the same edge) is not reported again. That container is still not generated. When two sites give the same diagnostic with the same message, the full check reports it one time.
 - The private definitions of an `ExplicitOnly` container are not in the assembly view. The full check reports all their problems.
 - The Warnings (`SGIOC502`, `SGIOC503`) follow the same rules, but they have no effect on generation. For an edge whose dependency site comes from an imported module, the definite check does not report, because the assembly that declares it has already checked it. The full check still reports, because the registrations of the importer can change the target that the edge resolves to.
 
