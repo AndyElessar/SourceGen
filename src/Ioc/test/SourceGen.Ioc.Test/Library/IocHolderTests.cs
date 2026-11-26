@@ -176,7 +176,8 @@ public class IocHolderTests
         faulted.Dispose();
         await canceled.DisposeAsync();
 
-        await Assert.That(faulted.Value.IsFaulted).IsTrue();
+        // Reading Exception also observes it: the holder skips the faulted Task, and nobody else awaits it in this test
+        await Assert.That(faulted.Value.Exception?.InnerException).IsTypeOf<FormatException>();
     }
 
     [Test]
