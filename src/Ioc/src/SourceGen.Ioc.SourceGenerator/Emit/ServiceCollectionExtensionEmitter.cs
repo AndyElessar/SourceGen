@@ -56,10 +56,10 @@ internal static class ServiceCollectionExtensionEmitter
                 WriteGet(writer, definition);
             }
 
-            foreach((TypeRef func, ImmutableEquatableArray<int> mapping) in FuncsWithArguments(definition, wrappers))
+            foreach((ImmutableEquatableArray<TypeRef> arguments, ImmutableEquatableArray<int> mapping) in FuncsWithArguments(definition, wrappers))
             {
                 writer.WriteLine();
-                WriteCreateWith(writer, definition, func, mapping, providers);
+                WriteCreateWith(writer, definition, arguments, mapping, providers);
             }
         }
 
@@ -236,7 +236,7 @@ internal static class ServiceCollectionExtensionEmitter
 
                 Lifetime lifetime = request.Deferred == DeferredKind.Func && definition.Lifetime != Lifetime.Singleton ? Lifetime.Transient : definition.Lifetime;
                 string service = request.FuncArguments.Length > 0
-                    ? $"({TypeNames.CSharp(serviceType)}){GeneratedNames.For("__CreateWith_", definition, type)}(sp, {string.Join(", ", request.FuncArguments.Select(static (_, i) => $"a{i}"))})"
+                    ? $"({TypeNames.CSharp(serviceType)}){GeneratedNames.For("__CreateWith_", definition, request.FuncArguments)}(sp, {string.Join(", ", request.FuncArguments.Select(static (_, i) => $"a{i}"))})"
                     : $"({TypeNames.CSharp(serviceType)}){source}(sp)";
                 string value = WrapperExpression(request, service, cached: lifetime != Lifetime.Transient);
                 string wrapper = TypeNames.CSharp(type);
@@ -570,10 +570,13 @@ internal static class ServiceCollectionExtensionEmitter
             : $"{KeyedProvider}.GetKeyedService<{type}>(sp, {KeyNames.Expression(key)}) ?? {created}";
     }
 
-    /// <summary>The <c>Func&lt;A1, ..., An, S&gt;</c> types that the method registers for a closed definition, with their mapping.</summary>
-    private static (TypeRef Func, ImmutableEquatableArray<int> Mapping)[] FuncsWithArguments(ClosedDefinition definition, Dictionary<string, List<WrapperDemand>> demands)
+    /// <summary>
+    /// The argument types of the <c>Func&lt;A1, ..., An, S&gt;</c> that the method registers for a closed definition, with
+    /// their mapping. <c>Func&lt;A..., S&gt;</c> and <c>Func&lt;A..., Task&lt;S&gt;&gt;</c> share one creation method.
+    /// </summary>
+    private static (ImmutableEquatableArray<TypeRef> Arguments, ImmutableEquatableArray<int> Mapping)[] FuncsWithArguments(ClosedDefinition definition, Dictionary<string, List<WrapperDemand>> demands)
     {
-        SortedDictionary<string, (TypeRef, ImmutableEquatableArray<int>)> funcs = new(StringComparer.Ordinal);
+        SortedDictionary<string, (ImmutableEquatableArray<TypeRef>, ImmutableEquatableArray<int>)> funcs = new(StringComparer.Ordinal);
         foreach(TypeRef serviceType in definition.ServiceTypes)
         {
             if(!demands.TryGetValue(serviceType.CanonicalString, out List<WrapperDemand>? list))
@@ -585,7 +588,7 @@ internal static class ServiceCollectionExtensionEmitter
             {
                 if(WrapperRequest.Parse(demand.Wrapper) is { IsSingleFuncWithArguments: true } request && request.Map(definition, out ImmutableEquatableArray<int> mapping) is null)
                 {
-                    funcs[demand.Wrapper.CanonicalString] = (demand.Wrapper, mapping);
+                    funcs[string.Join(",", request.FuncArguments.Select(static a => a.CanonicalString))] = (request.FuncArguments, mapping);
                 }
             }
         }
@@ -598,11 +601,10 @@ internal static class ServiceCollectionExtensionEmitter
     /// the argument of the caller, and <c>sp</c> supplies the other dependencies (ServiceCollection.Output.spec, "Wrapper
     /// types and collections").
     /// </summary>
-    private static void WriteCreateWith(SourceWriter writer, ClosedDefinition definition, TypeRef func, ImmutableEquatableArray<int> mapping, Dictionary<(TypeRef Type, string Key), List<int>> providers)
+    private static void WriteCreateWith(SourceWriter writer, ClosedDefinition definition, ImmutableEquatableArray<TypeRef> arguments, ImmutableEquatableArray<int> mapping, Dictionary<(TypeRef Type, string Key), List<int>> providers)
     {
-        ImmutableEquatableArray<TypeRef> arguments = WrapperRequest.Parse(func)!.FuncArguments;
         int[] map = [.. mapping];
-        writer.WriteLine($"private static {TypeNames.CSharp(definition.Implementation)} {GeneratedNames.For("__CreateWith_", definition, func)}(global::System.IServiceProvider sp, {string.Join(", ", arguments.Select(static (a, i) => $"{TypeNames.CSharp(a)} a{i}"))})");
+        writer.WriteLine($"private static {TypeNames.CSharp(definition.Implementation)} {GeneratedNames.For("__CreateWith_", definition, arguments)}(global::System.IServiceProvider sp, {string.Join(", ", arguments.Select(static (a, i) => $"{TypeNames.CSharp(a)} a{i}"))})");
         writer.WriteLine('{');
         writer.Indentation++;
         CreationWriter.Write(

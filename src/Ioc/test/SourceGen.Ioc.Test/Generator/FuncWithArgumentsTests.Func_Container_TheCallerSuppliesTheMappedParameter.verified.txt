@@ -42,7 +42,7 @@
     }
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
-    private global::App.Job __CreateWith_FuncJob_ef9c988a(global::System.String a0)
+    private global::App.Job __CreateWith_Job_cb4283ef(global::System.String a0)
     {
         global::App.AppContainer c = this;
         global::App.Job instance = new global::App.Job(
@@ -58,18 +58,8 @@
     private global::System.Func<global::System.String, global::App.Job> __CreateWrap_FuncJob_ef9c988a()
     {
         global::App.AppContainer o = this;
-        global::System.Func<global::System.String, global::App.Job> created = new global::System.Func<global::System.String, global::App.Job>((a0) => (global::App.Job)o.__CreateWith_FuncJob_ef9c988a(a0));
+        global::System.Func<global::System.String, global::App.Job> created = new global::System.Func<global::System.String, global::App.Job>((a0) => (global::App.Job)o.__CreateWith_Job_cb4283ef(a0));
         return global::System.Threading.Interlocked.CompareExchange(ref __w_FuncJob_ef9c988a, created, null) ?? created;
-    }
-
-    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
-    private global::App.Job __CreateWith_FuncJob_3e66db35(global::System.String a0)
-    {
-        global::App.AppContainer c = this;
-        global::App.Job instance = new global::App.Job(
-            a0,
-            (global::App.Clock)c.__Get_Clock_67c9f39c());
-        return instance;
     }
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
@@ -79,7 +69,7 @@
     private global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>> __CreateWrap_FuncJob_3e66db35()
     {
         global::App.AppContainer o = this;
-        global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>> created = new global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>>((a0) => global::System.Threading.Tasks.Task.FromResult<global::App.Job>((global::App.Job)o.__CreateWith_FuncJob_3e66db35(a0)));
+        global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>> created = new global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>>((a0) => global::System.Threading.Tasks.Task.FromResult<global::App.Job>((global::App.Job)o.__CreateWith_Job_cb4283ef(a0)));
         return global::System.Threading.Interlocked.CompareExchange(ref __w_FuncJob_3e66db35, created, null) ?? created;
     }
 

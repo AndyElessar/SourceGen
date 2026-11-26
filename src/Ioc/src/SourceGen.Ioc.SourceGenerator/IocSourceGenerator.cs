@@ -241,9 +241,12 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                         continue;
                     }
 
-                    // The same diagnostic with the same message at the same edge, which the definite check reports, is not reported again
+                    // The same diagnostic with the same message at the same edge, which the definite check reports, is not reported again.
+                    // All problems of a container have the same location, so the same message from two sites is reported one time
+                    HashSet<(string, ImmutableEquatableArray<string>)> reported = [];
                     diagnostics.AddRange(analysis.Problems
                         .Where(p => p.Implementation is null || !reportedByDefiniteCheck.Contains((p.Id, p.Implementation, p.Site, p.Arguments)))
+                        .Where(p => reported.Add((p.Id, p.Arguments)))
                         .Select(p => new DiagnosticInfo(p.Id, p.Arguments, site.FilePath, site.Span)));
                 }
 

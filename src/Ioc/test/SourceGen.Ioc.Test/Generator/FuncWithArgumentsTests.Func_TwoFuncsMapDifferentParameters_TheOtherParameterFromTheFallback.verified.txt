@@ -9,7 +9,7 @@
     }
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
-    private global::App.Job __CreateWith_FuncJob_ef9c988a(global::System.String a0)
+    private global::App.Job __CreateWith_Job_cb4283ef(global::System.String a0)
     {
         global::App.AppContainer c = this;
         global::App.Job instance = new global::App.Job(
@@ -19,7 +19,7 @@
     }
 
     [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
-    private global::App.Job __CreateWith_FuncJob_f4e5666d(global::System.Int32 a0)
+    private global::App.Job __CreateWith_Job_f7724a20(global::System.Int32 a0)
     {
         global::App.AppContainer c = this;
         global::App.Job instance = new global::App.Job(

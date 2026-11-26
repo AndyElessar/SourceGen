@@ -81,6 +81,76 @@ public class FuncWithArgumentsTests
     }
 
     [Test]
+    public async Task Func_KeyedMethodAccessorAndMemberSite_Compile()
+    {
+        GeneratorTestResult result = await RunAsync(
+            Usings + """
+            [IocRegister(ServiceLifetime.Singleton)]
+            public sealed class Clock;
+
+            [IocRegister(ServiceLifetime.Transient, Key = "k")]
+            public sealed class Job(string name, Clock clock);
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public sealed class Consumer
+            {
+                [IocInject(Key = "k")] public Func<string, Task<Job>> Jobs { get; set; } = null!;
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class AppContainer
+            {
+                [IocInject(Key = "k")]
+                public partial Func<string, Job> GetJobs();
+            }
+            """,
+            "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]");
+
+        await result.VerifyCompilableAsync();
+        await Assert.That(result.GetGeneratedSource("AppContainer.g.cs")).Contains("__CreateWith_");
+        await Assert.That(result.GetGeneratedSource("AppServiceCollectionExtensions.g.cs")).Contains("AddKeyedTransient<global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>>>");
+    }
+
+    [Test]
+    public async Task SGIOC305_InvalidAccessor_ReportedOnTheContainer()
+    {
+        GeneratorTestResult result = await RunAsync(Usings + """
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Job(string name = "");
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class {|SGIOC305:AppContainer|}
+            {
+                public partial Func<int, Job> Jobs { get; }
+            }
+            """);
+
+        await Assert.That(Message(result, "SGIOC305")).IsEqualTo("'System.Func<System.Int32, App.Job>' cannot be generated: the argument type 'System.Int32' matches no constructor parameter of 'App.Job'");
+    }
+
+    [Test]
+    public async Task SGIOC305_SameInvalidFuncAtTwoSites_ReportedOneTimeOnTheContainer()
+    {
+        GeneratorTestResult result = await RunAsync(Usings + """
+            public interface IMissing;
+
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer(Func<string, IMissing> factory)
+            {
+                [IocInject] public Func<string, IMissing> Other { get; set; } = null!;
+            }
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class {|SGIOC305:AppContainer|}
+            {
+                public partial Func<string, IMissing> Missing { get; }
+            }
+            """);
+
+        await Assert.That(Message(result, "SGIOC305")).IsEqualTo("'System.Func<System.String, App.IMissing>' cannot be generated: 'App.IMissing' is not registered");
+    }
+
+    [Test]
     public async Task SGIOC305_ArgumentTypeTwice_ReportedAtTheSiteAlsoWithoutCandidate()
     {
         GeneratorTestResult result = await RunAsync(Usings + """

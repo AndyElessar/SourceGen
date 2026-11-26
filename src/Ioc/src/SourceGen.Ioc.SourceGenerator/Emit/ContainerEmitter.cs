@@ -64,8 +64,15 @@ internal static class ContainerEmitter
             WriteCollection(writer, plan, collection);
         }
 
+        // Func<A..., T> and Func<A..., Task<T>> share one creation method
+        HashSet<string> createWith = [];
         foreach(WrapperPlan wrapper in plan.Wrappers)
         {
+            if(wrapper.Mapping is not null && createWith.Add(CreateWith(plan, wrapper)))
+            {
+                WriteCreateWith(writer, plan, wrapper, self);
+            }
+
             WriteWrapper(writer, plan, wrapper, self);
         }
 
@@ -191,11 +198,6 @@ internal static class ContainerEmitter
     /// </summary>
     private static void WriteWrapper(SourceWriter writer, ContainerPlan plan, WrapperPlan wrapper, string self)
     {
-        if(wrapper.Mapping is not null)
-        {
-            WriteCreateWith(writer, plan, wrapper, self);
-        }
-
         string type = TypeNames.CSharp(wrapper.Type);
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
@@ -218,7 +220,8 @@ internal static class ContainerEmitter
         writer.WriteLine('}');
     }
 
-    private static string CreateWith(WrapperPlan wrapper) => GeneratedNames.For("__CreateWith_", wrapper);
+    private static string CreateWith(ContainerPlan plan, WrapperPlan wrapper)
+        => GeneratedNames.For("__CreateWith_", plan.Definitions[wrapper.Target].Definition, wrapper.Request.FuncArguments);
 
     /// <summary>
     /// The creation of <c>T</c> for a <c>Func&lt;A1, ..., An, T&gt;</c>: each mapped constructor parameter takes the
@@ -239,7 +242,7 @@ internal static class ContainerEmitter
         int[] mapping = [.. wrapper.Mapping!];
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-        writer.WriteLine($"private {TypeNames.CSharp(definition.Definition.Implementation)} {CreateWith(wrapper)}({string.Join(", ", arguments.Select(static (a, i) => $"{TypeNames.CSharp(a)} a{i}"))})");
+        writer.WriteLine($"private {TypeNames.CSharp(definition.Definition.Implementation)} {CreateWith(plan, wrapper)}({string.Join(", ", arguments.Select(static (a, i) => $"{TypeNames.CSharp(a)} a{i}"))})");
         writer.WriteLine('{');
         writer.Indentation++;
         writer.WriteLine($"{self} c = this;");
@@ -268,7 +271,7 @@ internal static class ContainerEmitter
         string names = string.Join(", ", arguments.Select(static (_, i) => $"a{i}"));
         string value = wrapper.Source switch
         {
-            ArgumentKind.Resolved when wrapper.Mapping is not null => $"({core}){owner}.{CreateWith(wrapper)}({names})",
+            ArgumentKind.Resolved when wrapper.Mapping is not null => $"({core}){owner}.{CreateWith(plan, wrapper)}({names})",
             ArgumentKind.Resolved => $"({core}){owner}.{Get(plan.Definitions[wrapper.Target].Definition)}()",
             ArgumentKind.Self => $"({core}){owner}",
             ArgumentKind.Root => $"({core}){owner}.__singletons.Root",

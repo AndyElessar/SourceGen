@@ -34,15 +34,18 @@ internal static class GeneratedNames
     public static string For(string prefix, WrapperPlan wrapper)
         => $"{prefix}{ShortName(wrapper.Type)}{ShortName(wrapper.Request.Core)}_{Fnv1a(wrapper.Identity):x8}";
 
-    /// <summary>Gets the name of a member that belongs to a closed definition and a wrapper type of it.</summary>
+    /// <summary>
+    /// Gets the name of a member that creates a closed definition with the arguments of a <c>Func&lt;A1, ..., An, T&gt;</c>.
+    /// The arguments decide the mapping, so <c>Func&lt;A..., T&gt;</c> and <c>Func&lt;A..., Task&lt;T&gt;&gt;</c> share it.
+    /// </summary>
     /// <param name="prefix">The prefix, for example <c>__CreateWith_</c>.</param>
     /// <param name="definition">The closed definition.</param>
-    /// <param name="wrapper">The wrapper type.</param>
+    /// <param name="arguments">The argument types of the <c>Func</c>.</param>
     /// <returns>The member name.</returns>
-    public static string For(string prefix, ClosedDefinition definition, TypeRef wrapper)
+    public static string For(string prefix, ClosedDefinition definition, ImmutableEquatableArray<TypeRef> arguments)
     {
         NamedTypeRef type = definition.Implementation;
-        string identity = $"{type.CanonicalString}|{KeyRef.CanonicalOf(definition.Key)}|{wrapper.CanonicalString}";
+        string identity = $"{type.CanonicalString}|{KeyRef.CanonicalOf(definition.Key)}|{string.Join(",", arguments.Select(static a => a.CanonicalString))}";
         return $"{prefix}{ShortName(type)}_{Fnv1a(identity):x8}";
     }
 
