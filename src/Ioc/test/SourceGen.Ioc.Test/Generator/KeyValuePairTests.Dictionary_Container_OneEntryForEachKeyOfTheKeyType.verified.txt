@@ -1,0 +1,107 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer __Get_Consumer_fd0ac76a() => __f_Consumer_fd0ac76a ?? __Create_Consumer_fd0ac76a();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.Dictionary<global::System.String, global::App.IStore> __Keyed_IStore_e2ff9fd2() => __keyed_IStore_e2ff9fd2 ?? __CreateKeyed_IStore_e2ff9fd2();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.Dictionary<global::System.String, global::App.IStore> __CreateKeyed_IStore_e2ff9fd2()
+    {
+        global::System.Collections.Generic.Dictionary<global::System.String, global::App.IStore> all = new global::System.Collections.Generic.Dictionary<global::System.String, global::App.IStore>(3) { { global::App.Keys.C, (global::App.IStore)__Get_Store_45816a3a() }, { "a", (global::App.IStore)__Get_Store_24241f34() }, { "b", (global::App.IStore)__Get_Store_962b8e6f() } };
+        return global::System.Threading.Interlocked.CompareExchange(ref __keyed_IStore_e2ff9fd2, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.Dictionary<global::System.Int64, global::System.Func<global::App.IStore>> __Keyed_IStore_fb314522() => __singletons.__keyed_IStore_fb314522 ?? __CreateKeyed_IStore_fb314522();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.Dictionary<global::System.Int64, global::System.Func<global::App.IStore>> __CreateKeyed_IStore_fb314522()
+    {
+        global::System.Collections.Generic.Dictionary<global::System.Int64, global::System.Func<global::App.IStore>> all = new global::System.Collections.Generic.Dictionary<global::System.Int64, global::System.Func<global::App.IStore>>(1) { { (global::System.Int64)(1), __Wrap_FuncIStore_a8fa895f() } };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__keyed_IStore_fb314522, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.Dictionary<global::System.Object, global::App.IStore> __Keyed_IStore_481e211a() => __keyed_IStore_481e211a ?? __CreateKeyed_IStore_481e211a();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.Dictionary<global::System.Object, global::App.IStore> __CreateKeyed_IStore_481e211a()
+    {
+        global::System.Collections.Generic.Dictionary<global::System.Object, global::App.IStore> all = new global::System.Collections.Generic.Dictionary<global::System.Object, global::App.IStore>(4) { { global::App.Keys.C, (global::App.IStore)__Get_Store_45816a3a() }, { (global::System.Int64)(1), (global::App.IStore)__Get_Store_6395b218() }, { "a", (global::App.IStore)__Get_Store_24241f34() }, { "b", (global::App.IStore)__Get_Store_962b8e6f() } };
+        return global::System.Threading.Interlocked.CompareExchange(ref __keyed_IStore_481e211a, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.Dictionary<global::System.String, global::App.IStore> __Keyed_IStore_413588ca() => __singletons.__keyed_IStore_413588ca ?? __CreateKeyed_IStore_413588ca();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.Dictionary<global::System.String, global::App.IStore> __CreateKeyed_IStore_413588ca()
+    {
+        global::System.Collections.Generic.Dictionary<global::System.String, global::App.IStore> all = new global::System.Collections.Generic.Dictionary<global::System.String, global::App.IStore>(1) { { "b", (global::App.IStore)__Get_Store_962b8e6f() } };
+        return global::System.Threading.Interlocked.CompareExchange(ref __singletons.__keyed_IStore_413588ca, all, null) ?? all;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::System.Collections.Generic.IReadOnlyDictionary<string, global::App.IStore> Strings
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return (global::System.Collections.Generic.IReadOnlyDictionary<string, global::App.IStore>)__Keyed_IStore_e2ff9fd2();
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static readonly global::System.Collections.Frozen.FrozenDictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>> __lookup =
+        global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::App.AppContainer, object>>
+        {
+            { typeof(global::System.IServiceProvider), static c => c },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceScopeFactory), static c => c.__singletons.Root },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService), static c => c.__singletons.Root },
+            { typeof(global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsKeyedService), static c => c.__singletons.Root },
+            { typeof(global::App.AppContainer), static c => c },
+            { typeof(global::App.Consumer), static c => (global::App.Consumer)c.__Get_Consumer_fd0ac76a() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Consumer>), static c => c.__All_Consumer_be782406() },
+            { typeof(global::App.DefaultStore), static c => (global::App.DefaultStore)c.__Get_DefaultStore_f5767460() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.DefaultStore>), static c => c.__All_DefaultStore_3122f77c() },
+            { typeof(global::App.IStore), static c => (global::App.IStore)c.__Get_DefaultStore_f5767460() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.IStore>), static c => c.__All_IStore_ccbfe45e() },
+            { typeof(global::System.Collections.Generic.IEnumerable<global::App.Store>), static c => c.__All_Store_fd6e8d5f() },
+            { typeof(global::System.Collections.Generic.IReadOnlyDictionary<global::System.String, global::App.IStore>), static c => c.__Keyed_IStore_e2ff9fd2() },
+            { typeof(global::System.Collections.Generic.Dictionary<global::System.Int64, global::System.Func<global::App.IStore>>), static c => c.__Keyed_IStore_fb314522() },
+            { typeof(global::System.Collections.Generic.IDictionary<global::System.Object, global::App.IStore>), static c => c.__Keyed_IStore_481e211a() },
+        });
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static global::System.Collections.Frozen.FrozenDictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> __BuildKeyedLookup()
+    {
+        global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> table = new global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>>();
+        global::System.Collections.Generic.HashSet<(global::System.Type, object)> keys = new global::System.Collections.Generic.HashSet<(global::System.Type, object)>();
+        object k0 = global::App.Keys.C;
+        object k1 = (global::System.Int64)(1);
+        object k2 = "a";
+        object k3 = "b";
+        __AddKeyed(table, keys, typeof(global::App.IStore), k0, static (c, _) => (global::App.IStore)c.__Get_Store_45816a3a());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IStore>), k0, static (c, _) => c.__All_IStore_7ed7347b());
+        __AddKeyed(table, keys, typeof(global::App.IStore), k1, static (c, _) => (global::App.IStore)c.__Get_Store_6395b218());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IStore>), k1, static (c, _) => c.__All_IStore_c7c78019());
+        __AddKeyed(table, keys, typeof(global::App.IStore), k2, static (c, _) => (global::App.IStore)c.__Get_Store_24241f34());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IStore>), k2, static (c, _) => c.__All_IStore_87af37bd());
+        __AddKeyed(table, keys, typeof(global::App.IStore), k3, static (c, _) => (global::App.IStore)c.__Get_Store_962b8e6f());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IStore>), k3, static (c, _) => c.__All_IStore_adb1b226());
+        __AddKeyed(table, keys, typeof(global::App.Store), k0, static (c, _) => (global::App.Store)c.__Get_Store_45816a3a());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Store>), k0, static (c, _) => c.__All_Store_45816a3a());
+        __AddKeyed(table, keys, typeof(global::App.Store), k1, static (c, _) => (global::App.Store)c.__Get_Store_6395b218());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Store>), k1, static (c, _) => c.__All_Store_6395b218());
+        __AddKeyed(table, keys, typeof(global::App.Store), k2, static (c, _) => (global::App.Store)c.__Get_Store_24241f34());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Store>), k2, static (c, _) => c.__All_Store_24241f34());
+        __AddKeyed(table, keys, typeof(global::App.Store), k3, static (c, _) => (global::App.Store)c.__Get_Store_962b8e6f());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.Store>), k3, static (c, _) => c.__All_Store_962b8e6f());
+        table.TryAdd((typeof(global::System.Func<global::App.IStore>), k1), static (c, _) => c.__Wrap_FuncIStore_a8fa895f());
+        table.TryAdd((typeof(global::System.Collections.Generic.IDictionary<global::System.String, global::App.IStore>), k3), static (c, _) => c.__Keyed_IStore_413588ca());
+        table.Add((typeof(global::App.IStore), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.IStore'."));
+        table.Add((typeof(global::App.Store), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.Store'."));
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.IStore>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => c.__All_IStore_6e7bfb94());
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.Store>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => c.__All_Store_1aabc6fd());
+        return global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(table);
+    }

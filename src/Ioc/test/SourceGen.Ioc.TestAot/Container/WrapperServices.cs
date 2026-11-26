@@ -50,6 +50,23 @@ public sealed class PairHost(
     public KeyValuePair<StoreKind, IStore> Disk => disk;
 }
 
+/// <summary>Collections of pairs and dictionaries: by key type, for all keys, and for one key.</summary>
+[IocRegister(ServiceLifetime.Scoped)]
+public sealed class KeyedCollectionHost(
+    IEnumerable<KeyValuePair<string, IStore>> strings,
+    IReadOnlyDictionary<StoreKey, IStore> records,
+    [IocInject(KeyType = KeyType.Csharp, Key = nameof(KeyedService.AnyKey))] IDictionary<object, Lazy<IStore>> all,
+    [IocInject(Key = "a")] KeyValuePair<string, IStore>[] onlyA)
+{
+    public IEnumerable<KeyValuePair<string, IStore>> Strings => strings;
+
+    public IReadOnlyDictionary<StoreKey, IStore> Records => records;
+
+    public IDictionary<object, Lazy<IStore>> All => all;
+
+    public KeyValuePair<string, IStore>[] OnlyA => onlyA;
+}
+
 /// <summary>Collections whose element is a wrapper of the service. They do not merge with the fallback provider.</summary>
 [IocRegister(ServiceLifetime.Scoped)]
 public sealed class PluginWrapperHost(IEnumerable<Lazy<IPlugin>> lazy, Func<IPlugin>[] funcs, IReadOnlyList<Task<IPlugin>> tasks, IEnumerable<Task<IPlugin>> allTasks)

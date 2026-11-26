@@ -120,6 +120,44 @@ public class WrapperTests
     }
 
     [Test]
+    public async Task KeyedCollection_ContainsTheRegistrationsOfTheKeyTypeEachWithItsKey()
+    {
+        using AppContainer root = new();
+        using AppContainer scope = root.CreateScope();
+
+        KeyedCollectionHost host = scope.GetRequiredService<KeyedCollectionHost>();
+        string[] keys = [.. host.Strings.Select(static p => p.Key).Order(StringComparer.Ordinal)];
+
+        await Assert.That(string.Join(",", keys)).IsEqualTo("a,primary");
+        await Assert.That(host.Strings.Single(static p => p.Key == "a").Value).IsSameReferenceAs(scope.GetRequiredKeyedService<IStore>("a"));
+        await Assert.That(host.Records.Count).IsEqualTo(1);
+        await Assert.That(host.Records[new StoreKey("backup")]).IsSameReferenceAs(scope.GetRequiredKeyedService<IStore>(StoreKeys.Backup));
+        await Assert.That(host.All.Count).IsEqualTo(5);
+        await Assert.That(host.All[StoreKind.Disk].Value).IsSameReferenceAs(scope.GetRequiredKeyedService<IStore>(StoreKind.Disk));
+        await Assert.That(host.All[1L].Value).IsSameReferenceAs(scope.GetRequiredKeyedService<IStore>(1L));
+        await Assert.That(host.OnlyA.Length).IsEqualTo(1);
+        await Assert.That(host.OnlyA[0].Value).IsSameReferenceAs(scope.GetRequiredKeyedService<IStore>("a"));
+    }
+
+    [Test]
+    public async Task KeyedCollection_CachedByTheLifetimeOfTheElementsAndFoundByType()
+    {
+        using AppContainer root = new();
+        using AppContainer first = root.CreateScope();
+        using AppContainer second = root.CreateScope();
+
+        KeyedCollectionHost one = first.GetRequiredService<KeyedCollectionHost>();
+        KeyedCollectionHost two = second.GetRequiredService<KeyedCollectionHost>();
+
+        // Only Singleton elements: the root caches one. A Scoped element: each scope caches one
+        await Assert.That(two.Records).IsSameReferenceAs(one.Records);
+        await Assert.That(two.All).IsNotSameReferenceAs(one.All);
+        await Assert.That(first.GetRequiredService<IReadOnlyDictionary<StoreKey, IStore>>()).IsSameReferenceAs(one.Records);
+        await Assert.That(first.GetRequiredService<IDictionary<object, Lazy<IStore>>>()).IsSameReferenceAs(one.All);
+        await Assert.That(first.GetRequiredKeyedService<KeyValuePair<string, IStore>[]>("a")).IsSameReferenceAs(one.OnlyA);
+    }
+
+    [Test]
     public async Task Wrapper_ScopedServiceFromTheRoot_ThrowsWhenUsed()
     {
         using AppContainer root = new();

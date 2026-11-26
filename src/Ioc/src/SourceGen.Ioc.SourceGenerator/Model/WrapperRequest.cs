@@ -94,8 +94,14 @@ internal sealed record WrapperRequest(
     /// </summary>
     public bool IsSinglePair => Shape == RequestShape.Single && KeyValuePair && FuncArguments.Length == 0;
 
-    /// <summary>Gets the request of the value of a <c>KeyValuePair</c>: the same request without the pair.</summary>
-    public WrapperRequest PairValue => this with { KeyValuePair = false, KeyType = null };
+    /// <summary>
+    /// Gets a value indicating whether the request is a collection of <c>KeyValuePair</c> or a dictionary whose value is
+    /// the service, or the service in <c>Lazy</c>, <c>Func</c> without arguments, or <c>Task</c>.
+    /// </summary>
+    public bool IsKeyedCollection => FuncArguments.Length == 0 && (Shape == RequestShape.Dictionary || (Shape == RequestShape.Collection && KeyValuePair));
+
+    /// <summary>Gets the request of one value of a <c>KeyValuePair</c> or of a dictionary: one service, without the key.</summary>
+    public WrapperRequest PairValue => this with { Shape = RequestShape.Single, KeyValuePair = false, KeyType = null };
 
     /// <summary>
     /// Whether a registered key matches <c>TKey</c>: the key type of the key is <c>TKey</c>, or <c>TKey</c> is

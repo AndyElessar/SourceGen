@@ -37,6 +37,9 @@ internal enum ArgumentKind
 
     /// <summary><c>KeyValuePair&lt;TKey, T&gt;</c>: the resolver of the pair <see cref="ArgumentPlan.Target"/>.</summary>
     Pair,
+
+    /// <summary>A collection of <c>KeyValuePair</c> or a dictionary: the resolver of <see cref="ArgumentPlan.Target"/> in <see cref="ContainerPlan.KeyedCollections"/>.</summary>
+    Keyed,
 }
 
 /// <summary>The resolution result of one dependency site.</summary>
@@ -181,6 +184,33 @@ internal sealed record PairPlan(TypeRef Type, WrapperRequest Request, KeyRef Key
     public TypeRef ValueType => ((NamedTypeRef)Type).Arguments![1];
 }
 
+/// <summary>
+/// The resolver of a collection of <c>KeyValuePair&lt;TKey, T&gt;</c> (an array of pairs) or of a dictionary (a
+/// <c>Dictionary&lt;TKey, T&gt;</c>): the keyed registrations whose key type is <c>TKey</c>, each with its own key
+/// (Analysis.Model.spec, "Multiple services"). It does not merge with the fallback provider.
+/// </summary>
+/// <param name="Request">The requested type, taken apart by the grammar.</param>
+/// <param name="ValueType">The type of each value: the service, or a wrapper of it.</param>
+/// <param name="Key">The key of the dependency site, or <see langword="null"/> for all keyed (no key or <c>AnyKey</c>).</param>
+/// <param name="Candidates">The indexes of the closed definitions, in their ordering.</param>
+/// <param name="Values">The value of each candidate: <see cref="ArgumentKind.Resolved"/> or <see cref="ArgumentKind.Wrapper"/>.</param>
+/// <param name="Types">The types that the dependency sites ask for, by canonical string.</param>
+/// <param name="Cache">Where the container caches it.</param>
+/// <param name="Identity">The identity in names and in the order of the resolvers.</param>
+internal sealed record KeyedCollectionPlan(
+    WrapperRequest Request,
+    TypeRef ValueType,
+    KeyRef? Key,
+    ImmutableEquatableArray<int> Candidates,
+    ImmutableEquatableArray<ArgumentPlan> Values,
+    ImmutableEquatableArray<TypeRef> Types,
+    CollectionCache Cache,
+    string Identity)
+{
+    /// <summary>Gets whether it is a dictionary. Otherwise it is a collection of pairs.</summary>
+    public bool IsDictionary => Request.Shape == RequestShape.Dictionary;
+}
+
 /// <summary>Everything that the code of a container needs.</summary>
 /// <param name="Container">The container class.</param>
 /// <param name="Definitions">The construction plans, in the ordering of the closed definitions.</param>
@@ -190,6 +220,7 @@ internal sealed record PairPlan(TypeRef Type, WrapperRequest Request, KeyRef Key
 /// <param name="Collections">The collections, by the canonical string of the element and the key.</param>
 /// <param name="Wrappers">The wrappers that the dependency sites ask for, by their identity.</param>
 /// <param name="Pairs">The <c>KeyValuePair</c> types that the dependency sites ask for, by their identity.</param>
+/// <param name="KeyedCollections">The collections of pairs and the dictionaries that the dependency sites ask for.</param>
 internal sealed record ContainerPlan(
     ContainerModel Container,
     ImmutableEquatableArray<DefinitionPlan> Definitions,
@@ -198,7 +229,8 @@ internal sealed record ContainerPlan(
     ImmutableEquatableArray<AccessorPlan> Accessors,
     ImmutableEquatableArray<CollectionPlan> Collections,
     ImmutableEquatableArray<WrapperPlan> Wrappers,
-    ImmutableEquatableArray<PairPlan> Pairs);
+    ImmutableEquatableArray<PairPlan> Pairs,
+    ImmutableEquatableArray<KeyedCollectionPlan> KeyedCollections);
 
 /// <summary>A problem that the full check finds. The position is added from the site of the container.</summary>
 /// <param name="Id">The diagnostic ID.</param>
@@ -244,6 +276,9 @@ internal static class ContainerAnalysis
         Dictionary<string, int> wrapperIndexes = new(StringComparer.Ordinal);
         List<PairPlan> pairs = [];
         Dictionary<string, int> pairIndexes = new(StringComparer.Ordinal);
+        List<KeyedCollectionPlan> keyedCollections = [];
+        Dictionary<string, int> keyedIndexes = new(StringComparer.Ordinal);
+        HashSet<(TypeRef, string)> duplicateKeys = [];
         bool reachesErrorNode = false;
 
         // The element of a collection of wrappers is the wrapper of each candidate, with the cache of that candidate
@@ -296,6 +331,12 @@ internal static class ContainerAnalysis
                     {
                         edges[index].Add(new GraphEdge(index, p, wrapper.Target, wrapper.Request.Deferred));
                     }
+                    else if(argument.Kind == ArgumentKind.Keyed)
+                    {
+                        // One edge for each candidate, deferred for Lazy and Func
+                        KeyedCollectionPlan keyed = keyedCollections[argument.Target];
+                        edges[index].AddRange(keyed.Candidates.Select(c => new GraphEdge(index, p, c, keyed.Request.Deferred)));
+                    }
                 }
             }
 
@@ -330,11 +371,12 @@ internal static class ContainerAnalysis
             container,
             plans.ToImmutableEquatableArray(),
             lookup.ToImmutableEquatableArray(),
-            TopologicalOrder(plans, collections, wrappers, pairs),
+            TopologicalOrder(plans, collections, wrappers, pairs, keyedCollections),
             accessors.ToImmutableEquatableArray(),
             collections.ToImmutableEquatableArray(),
             wrappers.ToImmutableEquatableArray(),
-            pairs.ToImmutableEquatableArray());
+            pairs.ToImmutableEquatableArray(),
+            keyedCollections.ToImmutableEquatableArray());
         return new(container.Type, plan, problems.ToImmutableEquatableArray());
 
         // A single dependency (Analysis.Model.spec, "Single service"). A problem is recorded, and the result is null.
@@ -358,17 +400,23 @@ internal static class ContainerAnalysis
             string requested = key is null ? TypeNames.Display(type) : $"{TypeNames.Display(type)} (Key: {KeyNames.Display(key)})";
             // An error node with this key already has its own error
             if(key is { IsAnyKey: false }
-                && (request.IsPlain || request.IsSimpleCollection || request.IsSingleWrapper || request.IsSinglePair)
+                && (request.IsPlain || request.IsSimpleCollection || request.IsSingleWrapper || request.IsSinglePair || request.IsKeyedCollection)
                 && !providers.ContainsKey((request.Core, canonical))
                 && !skipped.Contains((request.Core, canonical))
                 && !skipped.Contains((request.Core, ErrorNode.AnyKey)))
             {
-                CheckRunTimeKey(request.Core, key, request.IsSinglePair ? request.KeyType : null, $"{owner} → {member}", requested);
+                // TKey is null for the requests without a key type
+                CheckRunTimeKey(request.Core, key, request.KeyType, $"{owner} → {member}", requested);
             }
 
             if(request.IsSinglePair)
             {
                 return ResolvePair(type, request, key, optional, owner, member, requested);
+            }
+
+            if(request.IsKeyedCollection)
+            {
+                return ResolveKeyed(type, request, key);
             }
 
             if(request.IsSimpleCollection)
@@ -439,6 +487,74 @@ internal static class ContainerAnalysis
             }
 
             return new ArgumentPlan(ArgumentKind.Pair, index, key);
+        }
+
+        // A collection of pairs or a dictionary (Analysis.Model.spec, "Multiple services"): the keyed registrations whose
+        // key type is TKey. No key and AnyKey ask for all of them, a key only for its registrations. It is never missing
+        // and does not merge with the fallback provider (Container.Output.spec, "Behavior for each request"). In a
+        // dictionary, one key with more than one candidate is SGIOC404
+        ArgumentPlan? ResolveKeyed(TypeRef type, WrapperRequest request, KeyRef? key)
+        {
+            KeyRef? filter = key is { IsAnyKey: true } ? null : key;
+            if(skipped.Any(n => n.Item1.Equals(request.Core) && (filter is null ? n.Item2.Length > 0 : n.Item2 == filter.Canonical || n.Item2 == ErrorNode.AnyKey)))
+            {
+                reachesErrorNode = true;
+                return null;
+            }
+
+            TypeRef keyType = request.KeyType!;
+            NamedTypeRef keyed = (NamedTypeRef)(WrapperRequest.ElementOf(type) ?? type);
+            TypeRef valueType = keyed.Arguments![1];
+            string identity = $"{(request.Shape == RequestShape.Dictionary ? "dictionary" : "pairs")}|{keyType.CanonicalString}|{valueType.CanonicalString}|{KeyRef.CanonicalOf(filter)}";
+            if(keyedIndexes.TryGetValue(identity, out int index))
+            {
+                KeyedCollectionPlan existing = keyedCollections[index];
+                if(!existing.Types.Contains(type))
+                {
+                    keyedCollections[index] = existing with { Types = existing.Types.Append(type).OrderBy(static t => t.CanonicalString, StringComparer.Ordinal).ToImmutableEquatableArray() };
+                }
+
+                return new ArgumentPlan(ArgumentKind.Keyed, index, key);
+            }
+
+            int[] candidates = [.. providers
+                .Where(p => p.Key.Type.Equals(request.Core)
+                    && p.Key.Key.Length > 0
+                    && (filter is null || p.Key.Key == filter.Canonical)
+                    && WrapperRequest.MatchesKeyType(definitions[p.Value[0]].Key!, keyType))
+                .SelectMany(static p => p.Value)
+                .OrderBy(static i => i)];
+            if(request.Shape == RequestShape.Dictionary)
+            {
+                // One report for each service type and key: the message has no site, and a key implies its key type
+                foreach(IGrouping<string, int> duplicate in candidates
+                    .GroupBy(c => definitions[c].Key!.Canonical)
+                    .Where(g => g.Count() > 1 && duplicateKeys.Add((request.Core, g.Key))))
+                {
+                    problems.Add(new ContainerProblem(
+                        Descriptors.DuplicateDictionaryKey.Id,
+                        [TypeNames.Display(request.Core), KeyNames.Display(definitions[duplicate.First()].Key!), string.Join(", ", duplicate.Select(c => KeyNames.Definition(definitions[c])))]));
+                }
+            }
+
+            // The value of each candidate is the service or its wrapper. The wrapper of an element follows the rule of a
+            // single service in the lookup table, the same as for a collection of wrappers
+            WrapperRequest value = request.PairValue;
+            ArgumentPlan[] values = [.. candidates.Select(c => value.IsPlain
+                ? new ArgumentPlan(ArgumentKind.Resolved, c, definitions[c].Key)
+                : Wrap(valueType, value, new ArgumentPlan(ArgumentKind.Resolved, c), definitions[c].Key, false, site: false))];
+            index = keyedCollections.Count;
+            keyedIndexes[identity] = index;
+            keyedCollections.Add(new KeyedCollectionPlan(
+                request,
+                valueType,
+                filter,
+                candidates.ToImmutableEquatableArray(),
+                values.ToImmutableEquatableArray(),
+                [type],
+                ElementCache(candidates, definitions),
+                identity));
+            return new ArgumentPlan(ArgumentKind.Keyed, index, key);
         }
 
         // The single service rule on the candidates (Analysis.Model.spec, "Single service"). The fallback provider gets
@@ -642,15 +758,21 @@ internal static class ContainerAnalysis
 
         // A merge with the fallback provider and a Transient element need a new collection for each request. A
         // collection of wrappers does not merge
-        CollectionCache Cache(int[] candidates, bool merges)
-        {
-            if(merges || candidates.Length == 0 || candidates.Any(c => definitions[c].Lifetime == Lifetime.Transient))
-            {
-                return CollectionCache.None;
-            }
+        CollectionCache Cache(int[] candidates, bool merges) => merges ? CollectionCache.None : ElementCache(candidates, definitions);
+    }
 
-            return candidates.All(c => definitions[c].Lifetime == Lifetime.Singleton) ? CollectionCache.Root : CollectionCache.Scope;
+    /// <summary>
+    /// Where the container caches a collection that does not merge with the fallback provider (Container.Output.spec,
+    /// "Collections and dictionaries"): each request creates one when it is empty or has a Transient element.
+    /// </summary>
+    private static CollectionCache ElementCache(int[] candidates, ImmutableEquatableArray<ClosedDefinition> definitions)
+    {
+        if(candidates.Length == 0 || candidates.Any(c => definitions[c].Lifetime == Lifetime.Transient))
+        {
+            return CollectionCache.None;
         }
+
+        return candidates.All(c => definitions[c].Lifetime == Lifetime.Singleton) ? CollectionCache.Root : CollectionCache.Scope;
     }
 
     /// <summary>
@@ -702,7 +824,7 @@ internal static class ContainerAnalysis
     /// A cycle (SGIOC301) stops the generation before this walk. Each definition is visited once in any case. The walk
     /// keeps its own stack, so a long dependency chain does not overflow the call stack.
     /// </summary>
-    private static ImmutableEquatableArray<int> TopologicalOrder(List<DefinitionPlan> plans, List<CollectionPlan> collections, List<WrapperPlan> wrappers, List<PairPlan> pairs)
+    private static ImmutableEquatableArray<int> TopologicalOrder(List<DefinitionPlan> plans, List<CollectionPlan> collections, List<WrapperPlan> wrappers, List<PairPlan> pairs, List<KeyedCollectionPlan> keyedCollections)
     {
         List<int> order = [];
         bool[] visited = new bool[plans.Count];
@@ -751,9 +873,9 @@ internal static class ContainerAnalysis
                 {
                     yield return argument.Target;
                 }
-                else if(argument.Kind == ArgumentKind.Collection)
+                else if(argument.Kind is ArgumentKind.Collection or ArgumentKind.Keyed)
                 {
-                    foreach(int candidate in collections[argument.Target].Candidates)
+                    foreach(int candidate in argument.Kind == ArgumentKind.Collection ? collections[argument.Target].Candidates : keyedCollections[argument.Target].Candidates)
                     {
                         yield return candidate;
                     }

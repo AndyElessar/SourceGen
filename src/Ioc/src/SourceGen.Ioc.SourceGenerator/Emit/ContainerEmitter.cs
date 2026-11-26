@@ -74,6 +74,11 @@ internal static class ContainerEmitter
             WritePair(writer, plan, pair);
         }
 
+        foreach(KeyedCollectionPlan keyed in plan.KeyedCollections)
+        {
+            WriteKeyed(writer, plan, keyed);
+        }
+
         WriteAccessors(writer, plan);
         WriteLookup(writer, plan, self);
         WriteServiceProvider(writer, self, plan.Container.IntegrateServiceProvider);
@@ -106,6 +111,59 @@ internal static class ContainerEmitter
     private static string WrapField(WrapperPlan wrapper) => GeneratedNames.For("__w_", wrapper);
 
     private static string Pair(PairPlan pair) => GeneratedNames.For("__Pair_", pair);
+
+    private static string Keyed(KeyedCollectionPlan keyed) => GeneratedNames.For("__Keyed_", keyed);
+
+    /// <summary>The type that the resolver of a collection of pairs or a dictionary returns.</summary>
+    private static string KeyedType(KeyedCollectionPlan keyed)
+        => keyed.IsDictionary
+            ? $"global::System.Collections.Generic.Dictionary<{TypeNames.CSharp(keyed.Request.KeyType!)}, {TypeNames.CSharp(keyed.ValueType)}>"
+            : $"global::System.Collections.Generic.KeyValuePair<{TypeNames.CSharp(keyed.Request.KeyType!)}, {TypeNames.CSharp(keyed.ValueType)}>[]";
+
+    /// <summary>
+    /// The resolver of a collection of pairs (an array) or a dictionary: each candidate with its own key, in the ordering.
+    /// It is cached as a collection of the service is (Container.Output.spec, "Collections and dictionaries").
+    /// Concurrent first resolutions keep one.
+    /// </summary>
+    private static void WriteKeyed(SourceWriter writer, ContainerPlan plan, KeyedCollectionPlan keyed)
+    {
+        string type = KeyedType(keyed);
+        string pair = $"global::System.Collections.Generic.KeyValuePair<{TypeNames.CSharp(keyed.Request.KeyType!)}, {TypeNames.CSharp(keyed.ValueType)}>";
+        IEnumerable<string> entries = keyed.Candidates.Select((c, i) => $"{KeyNames.Expression(plan.Definitions[c].Definition.Key!)}, {KeyedValue(plan, keyed, i)}");
+        string create = (keyed.IsDictionary, keyed.Candidates.Length) switch
+        {
+            (true, 0) => $"new {type}()",
+            (true, var count) => $"new {type}({count}) {{ {string.Join(", ", entries.Select(static e => $"{{ {e} }}"))} }}",
+            (false, 0) => $"global::System.Array.Empty<{pair}>()",
+            _ => $"new {pair}[] {{ {string.Join(", ", entries.Select(e => $"new {pair}({e})"))} }}",
+        };
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        if(keyed.Cache == CollectionCache.None)
+        {
+            writer.WriteLine($"private {type} {Keyed(keyed)}() => {create};");
+            return;
+        }
+
+        string field = $"{(keyed.Cache == CollectionCache.Root ? "__singletons." : string.Empty)}{GeneratedNames.For("__keyed_", keyed)}";
+        writer.WriteLine($"private {type} {Keyed(keyed)}() => {field} ?? {GeneratedNames.For("__CreateKeyed_", keyed)}();");
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private {type} {GeneratedNames.For("__CreateKeyed_", keyed)}()");
+        writer.WriteLine('{');
+        writer.WriteLine($"    {type} all = {create};");
+        writer.WriteLine($"    return {Interlocked}.CompareExchange(ref {field}, all, null) ?? all;");
+        writer.WriteLine('}');
+    }
+
+    /// <summary>The value of one candidate of a collection of pairs or a dictionary: the service, or its wrapper.</summary>
+    private static string KeyedValue(ContainerPlan plan, KeyedCollectionPlan keyed, int index)
+    {
+        ArgumentPlan value = keyed.Values[index];
+        return value.Kind == ArgumentKind.Wrapper
+            ? $"{Wrap(plan.Wrappers[value.Target])}()"
+            : $"({TypeNames.CSharp(keyed.ValueType)}){Get(plan.Definitions[value.Target].Definition)}()";
+    }
 
     /// <summary>
     /// The resolver of a <c>KeyValuePair</c>: the key of the dependency site with the value, created each time. The value
@@ -276,6 +334,11 @@ internal static class ContainerEmitter
             writer.WriteLine($"public {TypeNames.CSharp(wrapper.Type)}? {WrapField(wrapper)};");
         }
 
+        foreach(KeyedCollectionPlan keyed in plan.KeyedCollections.Where(static k => k.Cache == CollectionCache.Root))
+        {
+            writer.WriteLine($"public {KeyedType(keyed)}? {GeneratedNames.For("__keyed_", keyed)};");
+        }
+
         writer.Indentation--;
         writer.WriteLine('}');
         writer.WriteLine();
@@ -313,6 +376,12 @@ internal static class ContainerEmitter
         {
             writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
             writer.WriteLine($"private {TypeNames.CSharp(wrapper.Type)}? {WrapField(wrapper)};");
+        }
+
+        foreach(KeyedCollectionPlan keyed in plan.KeyedCollections.Where(static k => k.Cache == CollectionCache.Scope))
+        {
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine($"private {KeyedType(keyed)}? {GeneratedNames.For("__keyed_", keyed)};");
         }
     }
 
@@ -622,6 +691,7 @@ internal static class ContainerEmitter
             ArgumentKind.Collection => $"({type})c.{All(plan.Collections[argument.Target])}()",
             ArgumentKind.Wrapper => $"c.{Wrap(plan.Wrappers[argument.Target])}()",
             ArgumentKind.Pair => $"c.{Pair(plan.Pairs[argument.Target])}()",
+            ArgumentKind.Keyed => $"({type})c.{Keyed(plan.KeyedCollections[argument.Target])}()",
             _ => $"({type})c.{Get(plan.Definitions[argument.Target].Definition)}()",
         };
     }
@@ -741,6 +811,9 @@ internal static class ContainerEmitter
                 case ArgumentKind.Pair:
                     writer.WriteLine($"return {Pair(plan.Pairs[accessor.Argument.Target])}();");
                     break;
+                case ArgumentKind.Keyed:
+                    writer.WriteLine($"return ({member.ReturnType}){Keyed(plan.KeyedCollections[accessor.Argument.Target])}();");
+                    break;
                 case ArgumentKind.Fallback:
                     Dependency dependency = new(member.Type, member.Name, false, member.IsOptional ? OptionalMode.Nullable : OptionalMode.Required);
                     writer.WriteLine($"return {FallbackArgument("__Fallback()", dependency, 0, accessor.Argument.Key)};");
@@ -816,6 +889,15 @@ internal static class ContainerEmitter
             writer.WriteLine($"{{ typeof({TypeNames.CSharp(wrapper.Type)}), static c => {expression} }},");
         }
 
+        // The collections of pairs and the dictionaries for all keyed registrations (no key or AnyKey at the site)
+        foreach(KeyedCollectionPlan all in plan.KeyedCollections.Where(static k => k.Key is null))
+        {
+            foreach(string type in KeyedTypes(all))
+            {
+                writer.WriteLine($"{{ typeof({type}), static c => c.{Keyed(all)}() }},");
+            }
+        }
+
         writer.Indentation--;
         writer.WriteLine("});");
         writer.Indentation--;
@@ -858,7 +940,8 @@ internal static class ContainerEmitter
         writer.WriteLine('{');
         writer.Indentation++;
         writer.WriteLine($"global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}> table = new global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}>();");
-        bool hasKeys = keyed.Length > 0 || keyedCollections.Length > 0 || keyedWrappers.Length > 0 || plan.Pairs.Length > 0;
+        KeyedCollectionPlan[] keyedPairs = [.. plan.KeyedCollections.Where(static k => k.Key is not null)];
+        bool hasKeys = keyed.Length > 0 || keyedCollections.Length > 0 || keyedWrappers.Length > 0 || plan.Pairs.Length > 0 || keyedPairs.Length > 0;
         if(hasKeys)
         {
             writer.WriteLine($"global::System.Collections.Generic.HashSet<{typeAndKey}> keys = new global::System.Collections.Generic.HashSet<{typeAndKey}>();");
@@ -868,7 +951,8 @@ internal static class ContainerEmitter
             foreach(KeyRef key in keyed.Select(static e => e.Key!)
                 .Concat(keyedCollections.Select(static c => c.Key!))
                 .Concat(keyedWrappers.Select(static w => w.Wrapper.Key!))
-                .Concat(plan.Pairs.Select(static p => p.Key)))
+                .Concat(plan.Pairs.Select(static p => p.Key))
+                .Concat(keyedPairs.Select(static k => k.Key!)))
             {
                 if(!variables.ContainsKey(key.Canonical))
                 {
@@ -911,6 +995,15 @@ internal static class ContainerEmitter
             foreach(PairPlan pair in plan.Pairs)
             {
                 writer.WriteLine($"table.TryAdd((typeof({TypeNames.CSharp(pair.Type)}), {variables[pair.Key.Canonical]}), static (c, _) => c.{Pair(pair)}());");
+            }
+
+            // A collection of pairs or a dictionary for one key
+            foreach(KeyedCollectionPlan keyedPair in keyedPairs)
+            {
+                foreach(string type in KeyedTypes(keyedPair))
+                {
+                    writer.WriteLine($"table.TryAdd((typeof({type}), {variables[keyedPair.Key!.Canonical]}), static (c, _) => c.{Keyed(keyedPair)}());");
+                }
             }
 
             // AnyKey: all registrations of the type that have a key, in the ordering. One service with AnyKey throws, as in MS.DI
@@ -1007,6 +1100,18 @@ internal static class ContainerEmitter
     /// <summary>The collection types that the lookup table gives for a collection: <c>IEnumerable&lt;T&gt;</c> first.</summary>
     private static IEnumerable<string> CollectionTypes(CollectionPlan collection)
         => collection.Types.Select(TypeNames.CSharp).Prepend($"global::System.Collections.Generic.IEnumerable<{TypeNames.CSharp(collection.Element)}>");
+
+    /// <summary>
+    /// The types that the lookup table gives for a collection of pairs or a dictionary: the types that the dependency
+    /// sites ask for, and <c>IEnumerable&lt;KeyValuePair&lt;TKey, T&gt;&gt;</c> for a collection of pairs.
+    /// </summary>
+    private static IEnumerable<string> KeyedTypes(KeyedCollectionPlan keyed)
+    {
+        IEnumerable<string> types = keyed.Types.Select(TypeNames.CSharp);
+        return keyed.IsDictionary
+            ? types
+            : types.Prepend($"global::System.Collections.Generic.IEnumerable<global::System.Collections.Generic.KeyValuePair<{TypeNames.CSharp(keyed.Request.KeyType!)}, {TypeNames.CSharp(keyed.ValueType)}>>").Distinct();
+    }
 
     /// <summary>The expression of one service: the candidate, or an exception when more than one candidate stays.</summary>
     private static string Single(ContainerPlan plan, LookupEntry entry, string service)

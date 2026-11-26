@@ -191,6 +191,13 @@ internal static class Descriptors
         "Transient '{0}' is disposable ({1}); the container does not track transient services",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC404: one key of a dictionary has more than one candidate.</summary>
+    public static readonly DiagnosticDescriptor DuplicateDictionaryKey = Create(
+        "SGIOC404",
+        "Duplicate dictionary key",
+        "Dictionary of '{0}' has more than one registration for key '{1}': {2}",
+        DiagnosticSeverity.Error);
+
     /// <summary>SGIOC501: a required dependency is not registered in the container and comes from the fallback provider.</summary>
     public static readonly DiagnosticDescriptor FallbackDependency = Create(
         "SGIOC501",
@@ -251,6 +258,7 @@ internal static class Descriptors
         AmbiguousDependency,
         MissingDependency,
         DisposableTransient,
+        DuplicateDictionaryKey,
         FallbackDependency,
         SingletonHoldsTransient,
         ScopedHoldsTransient,

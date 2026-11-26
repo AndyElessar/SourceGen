@@ -28,6 +28,7 @@ SGIOC304 | SourceGen.Ioc | Error | Unsupported wrapper combination
 SGIOC401 | SourceGen.Ioc | Error | Ambiguous dependency
 SGIOC402 | SourceGen.Ioc | Error | Missing dependency
 SGIOC403 | SourceGen.Ioc | Error | Disposable Transient
+SGIOC404 | SourceGen.Ioc | Error | Duplicate dictionary key
 SGIOC501 | SourceGen.Ioc | Info | Dependency resolved from the fallback provider
 SGIOC502 | SourceGen.Ioc | Warning | Singleton holds a transient service
 SGIOC503 | SourceGen.Ioc | Warning | Scoped service holds a transient service
