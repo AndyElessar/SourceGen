@@ -1,0 +1,53 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer __Get_Consumer_fd0ac76a()
+    {
+        global::App.AppContainer c = this;
+        global::App.Consumer instance = new global::App.Consumer(
+            c.__Pair_IClock_a2bbdf9d(),
+            c.__Pair_IClock_daf4d725(),
+            c.__Pair_IClock_baa76691());
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Lazy<global::App.IClock> __Wrap_LazyIClock_e5ee863a() => __singletons.__w_LazyIClock_e5ee863a ?? __CreateWrap_LazyIClock_e5ee863a();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.KeyValuePair<global::System.String, global::App.IClock> __Pair_IClock_a2bbdf9d() => new global::System.Collections.Generic.KeyValuePair<global::System.String, global::App.IClock>("utc", (global::App.IClock)__Get_UtcClock_3a1b2eea());
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.KeyValuePair<global::System.Object, global::App.IClock> __Pair_IClock_daf4d725() => new global::System.Collections.Generic.KeyValuePair<global::System.Object, global::App.IClock>("utc", (global::App.IClock)__Get_UtcClock_3a1b2eea());
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.KeyValuePair<global::System.String, global::System.Lazy<global::App.IClock>> __Pair_IClock_baa76691() => new global::System.Collections.Generic.KeyValuePair<global::System.String, global::System.Lazy<global::App.IClock>>("utc", __Wrap_LazyIClock_e5ee863a());
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::System.Collections.Generic.KeyValuePair<string, global::App.IClock> Utc
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return __Pair_IClock_a2bbdf9d();
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static global::System.Collections.Frozen.FrozenDictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> __BuildKeyedLookup()
+    {
+        global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>> table = new global::System.Collections.Generic.Dictionary<(global::System.Type, object), global::System.Func<global::App.AppContainer, object, object>>();
+        global::System.Collections.Generic.HashSet<(global::System.Type, object)> keys = new global::System.Collections.Generic.HashSet<(global::System.Type, object)>();
+        object k0 = "utc";
+        __AddKeyed(table, keys, typeof(global::App.IClock), k0, static (c, _) => (global::App.IClock)c.__Get_UtcClock_3a1b2eea());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.IClock>), k0, static (c, _) => c.__All_IClock_c3395771());
+        __AddKeyed(table, keys, typeof(global::App.UtcClock), k0, static (c, _) => (global::App.UtcClock)c.__Get_UtcClock_3a1b2eea());
+        __AddKeyed(table, keys, typeof(global::System.Collections.Generic.IEnumerable<global::App.UtcClock>), k0, static (c, _) => c.__All_UtcClock_3a1b2eea());
+        table.TryAdd((typeof(global::System.Lazy<global::App.IClock>), k0), static (c, _) => c.__Wrap_LazyIClock_e5ee863a());
+        table.TryAdd((typeof(global::System.Collections.Generic.KeyValuePair<global::System.String, global::App.IClock>), k0), static (c, _) => c.__Pair_IClock_a2bbdf9d());
+        table.TryAdd((typeof(global::System.Collections.Generic.KeyValuePair<global::System.Object, global::App.IClock>), k0), static (c, _) => c.__Pair_IClock_daf4d725());
+        table.TryAdd((typeof(global::System.Collections.Generic.KeyValuePair<global::System.String, global::System.Lazy<global::App.IClock>>), k0), static (c, _) => c.__Pair_IClock_baa76691());
+        table.Add((typeof(global::App.IClock), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.IClock'."));
+        table.Add((typeof(global::App.UtcClock), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (_, _) => throw new global::System.InvalidOperationException("KeyedService.AnyKey cannot be used to resolve a single service of type 'App.UtcClock'."));
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.IClock>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => c.__All_IClock_22d9f063());
+        table.Add((typeof(global::System.Collections.Generic.IEnumerable<global::App.UtcClock>), global::Microsoft.Extensions.DependencyInjection.KeyedService.AnyKey), static (c, _) => c.__All_UtcClock_c78bd868());
+        return global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(table);
+    }

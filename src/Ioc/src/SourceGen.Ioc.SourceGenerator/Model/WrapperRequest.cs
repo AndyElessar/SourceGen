@@ -88,6 +88,25 @@ internal sealed record WrapperRequest(
     /// <summary>Gets a value indicating whether the element is the service in <c>Lazy</c>, <c>Func</c> or <c>Task</c>.</summary>
     public bool IsWrappedElement => Deferred != DeferredKind.None || IsTask;
 
+    /// <summary>
+    /// Gets a value indicating whether the request is one <c>KeyValuePair</c> whose value is the service, or the service
+    /// in <c>Lazy</c>, <c>Func</c> without arguments, or <c>Task</c>.
+    /// </summary>
+    public bool IsSinglePair => Shape == RequestShape.Single && KeyValuePair && FuncArguments.Length == 0;
+
+    /// <summary>Gets the request of the value of a <c>KeyValuePair</c>: the same request without the pair.</summary>
+    public WrapperRequest PairValue => this with { KeyValuePair = false, KeyType = null };
+
+    /// <summary>
+    /// Whether a registered key matches <c>TKey</c>: the key type of the key is <c>TKey</c>, or <c>TKey</c> is
+    /// <c>object</c> (Analysis.Model.spec, "Grammar of wrapper types").
+    /// </summary>
+    /// <param name="key">The key of the registration.</param>
+    /// <param name="keyType">The <c>TKey</c>.</param>
+    /// <returns>Whether the registration matches.</returns>
+    public static bool MatchesKeyType(KeyRef key, TypeRef keyType)
+        => keyType is NamedTypeRef { MetadataName: "System.Object" } || key.ValueType.Equals(keyType);
+
     /// <summary>Takes <paramref name="type"/> apart by the grammar.</summary>
     /// <param name="type">The requested type.</param>
     /// <returns>The request, or <see langword="null"/> when the combination of wrapper types is invalid (<c>SGIOC304</c>).</returns>

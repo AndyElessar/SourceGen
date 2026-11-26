@@ -1,0 +1,9 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer __Get_Consumer_fd0ac76a()
+    {
+        global::App.AppContainer c = this;
+        global::App.Consumer instance = new global::App.Consumer(
+            (global::System.Collections.Generic.KeyValuePair<global::System.String, global::App.IClock>)global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(c.__Fallback(), typeof(global::System.Collections.Generic.KeyValuePair<global::System.String, global::App.IClock>)),
+            c.__Fallback().GetService(typeof(global::System.Collections.Generic.KeyValuePair<global::System.Int32, global::App.IClock>)) is global::System.Collections.Generic.KeyValuePair<global::System.Int32, global::App.IClock> v1 ? (global::System.Collections.Generic.KeyValuePair<global::System.Int32, global::App.IClock>)v1 : (global::System.Collections.Generic.KeyValuePair<global::System.Int32, global::App.IClock>)(default));
+        return instance;
+    }

@@ -36,6 +36,20 @@ public sealed class WrapperHost(
     public Lazy<IExternal>? External => external;
 }
 
+/// <summary><c>KeyValuePair&lt;TKey, T&gt;</c> with the key type of the registration, with <c>object</c>, and with an enum.</summary>
+[IocRegister(ServiceLifetime.Scoped)]
+public sealed class PairHost(
+    [IocInject(Key = "a")] KeyValuePair<string, IStore> store,
+    [IocInject(Key = "a")] KeyValuePair<object, Lazy<IStore>> lazy,
+    [IocInject(Key = StoreKind.Disk)] KeyValuePair<StoreKind, IStore> disk)
+{
+    public KeyValuePair<string, IStore> Store => store;
+
+    public KeyValuePair<object, Lazy<IStore>> Lazy => lazy;
+
+    public KeyValuePair<StoreKind, IStore> Disk => disk;
+}
+
 /// <summary>Collections whose element is a wrapper of the service. They do not merge with the fallback provider.</summary>
 [IocRegister(ServiceLifetime.Scoped)]
 public sealed class PluginWrapperHost(IEnumerable<Lazy<IPlugin>> lazy, Func<IPlugin>[] funcs, IReadOnlyList<Task<IPlugin>> tasks, IEnumerable<Task<IPlugin>> allTasks)

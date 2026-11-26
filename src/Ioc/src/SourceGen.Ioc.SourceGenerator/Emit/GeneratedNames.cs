@@ -34,6 +34,13 @@ internal static class GeneratedNames
     public static string For(string prefix, WrapperPlan wrapper)
         => $"{prefix}{ShortName(wrapper.Type)}{ShortName(wrapper.Request.Core)}_{Fnv1a(wrapper.Identity):x8}";
 
+    /// <summary>Gets the name of a member that belongs to a <c>KeyValuePair</c>.</summary>
+    /// <param name="prefix">The prefix, for example <c>__Pair_</c>.</param>
+    /// <param name="pair">The pair.</param>
+    /// <returns>The member name.</returns>
+    public static string For(string prefix, PairPlan pair)
+        => $"{prefix}{ShortName(pair.Request.Core)}_{Fnv1a(pair.Identity):x8}";
+
     /// <summary>The short name of a type: the name of a named type without its namespace and arity.</summary>
     private static string ShortName(TypeRef type)
     {

@@ -89,6 +89,37 @@ public class WrapperTests
     }
 
     [Test]
+    public async Task KeyValuePair_PairsTheKeyOfTheSiteWithTheService()
+    {
+        using AppContainer root = new();
+        using AppContainer scope = root.CreateScope();
+
+        PairHost host = scope.GetRequiredService<PairHost>();
+        IStore a = scope.GetRequiredKeyedService<IStore>("a");
+
+        await Assert.That(host.Store.Key).IsEqualTo("a");
+        await Assert.That(host.Store.Value).IsSameReferenceAs(a);
+        await Assert.That(host.Lazy.Key).IsEqualTo("a");
+        await Assert.That(host.Lazy.Value).IsSameReferenceAs(scope.GetRequiredKeyedService<Lazy<IStore>>("a"));
+        await Assert.That(host.Lazy.Value.Value).IsSameReferenceAs(a);
+        await Assert.That(host.Disk.Key).IsEqualTo(StoreKind.Disk);
+        await Assert.That(host.Disk.Value).IsSameReferenceAs(scope.GetRequiredKeyedService<IStore>(StoreKind.Disk));
+    }
+
+    [Test]
+    public async Task KeyValuePair_LookupByTypeAndKey_CreatesThePair()
+    {
+        using AppContainer root = new();
+        using AppContainer scope = root.CreateScope();
+
+        KeyValuePair<string, IStore> pair = scope.GetRequiredKeyedService<KeyValuePair<string, IStore>>("a");
+
+        await Assert.That(pair.Key).IsEqualTo("a");
+        await Assert.That(pair.Value).IsSameReferenceAs(scope.GetRequiredKeyedService<IStore>("a"));
+        await Assert.That(scope.GetKeyedService(typeof(KeyValuePair<string, IStore>), "missing")).IsNull();
+    }
+
+    [Test]
     public async Task Wrapper_ScopedServiceFromTheRoot_ThrowsWhenUsed()
     {
         using AppContainer root = new();

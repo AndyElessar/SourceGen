@@ -34,6 +34,9 @@ internal enum ArgumentKind
 
     /// <summary><c>Lazy&lt;T&gt;</c>, <c>Func&lt;T&gt;</c> or <c>Task&lt;T&gt;</c>: the resolver of the wrapper <see cref="ArgumentPlan.Target"/>.</summary>
     Wrapper,
+
+    /// <summary><c>KeyValuePair&lt;TKey, T&gt;</c>: the resolver of the pair <see cref="ArgumentPlan.Target"/>.</summary>
+    Pair,
 }
 
 /// <summary>The resolution result of one dependency site.</summary>
@@ -163,6 +166,21 @@ internal sealed record WrapperPlan(
     string Identity,
     bool Site);
 
+/// <summary>
+/// The resolver of a <c>KeyValuePair&lt;TKey, T&gt;</c>: the key of the dependency site with the value. A pair is a value
+/// type, so it is created each time (Container.Output.spec, "Wrapper types"). The value follows its own rules.
+/// </summary>
+/// <param name="Type">The pair type.</param>
+/// <param name="Request">The pair type, taken apart by the grammar.</param>
+/// <param name="Key">The key of the dependency site, which is also the key of the registration.</param>
+/// <param name="Value">The value: <see cref="ArgumentKind.Resolved"/>, or <see cref="ArgumentKind.Wrapper"/>.</param>
+/// <param name="Identity">The identity of the pair in names and in the order of the pairs.</param>
+internal sealed record PairPlan(TypeRef Type, WrapperRequest Request, KeyRef Key, ArgumentPlan Value, string Identity)
+{
+    /// <summary>Gets the type of the value of the pair.</summary>
+    public TypeRef ValueType => ((NamedTypeRef)Type).Arguments![1];
+}
+
 /// <summary>Everything that the code of a container needs.</summary>
 /// <param name="Container">The container class.</param>
 /// <param name="Definitions">The construction plans, in the ordering of the closed definitions.</param>
@@ -171,6 +189,7 @@ internal sealed record WrapperPlan(
 /// <param name="Accessors">The partial accessors.</param>
 /// <param name="Collections">The collections, by the canonical string of the element and the key.</param>
 /// <param name="Wrappers">The wrappers that the dependency sites ask for, by their identity.</param>
+/// <param name="Pairs">The <c>KeyValuePair</c> types that the dependency sites ask for, by their identity.</param>
 internal sealed record ContainerPlan(
     ContainerModel Container,
     ImmutableEquatableArray<DefinitionPlan> Definitions,
@@ -178,7 +197,8 @@ internal sealed record ContainerPlan(
     ImmutableEquatableArray<int> TopologicalOrder,
     ImmutableEquatableArray<AccessorPlan> Accessors,
     ImmutableEquatableArray<CollectionPlan> Collections,
-    ImmutableEquatableArray<WrapperPlan> Wrappers);
+    ImmutableEquatableArray<WrapperPlan> Wrappers,
+    ImmutableEquatableArray<PairPlan> Pairs);
 
 /// <summary>A problem that the full check finds. The position is added from the site of the container.</summary>
 /// <param name="Id">The diagnostic ID.</param>
@@ -222,6 +242,8 @@ internal static class ContainerAnalysis
         List<GraphEdge>[] edges = new List<GraphEdge>[definitions.Length];
         List<WrapperPlan> wrappers = [];
         Dictionary<string, int> wrapperIndexes = new(StringComparer.Ordinal);
+        List<PairPlan> pairs = [];
+        Dictionary<string, int> pairIndexes = new(StringComparer.Ordinal);
         bool reachesErrorNode = false;
 
         // The element of a collection of wrappers is the wrapper of each candidate, with the cache of that candidate
@@ -253,9 +275,12 @@ internal static class ContainerAnalysis
                     continue;
                 }
 
-                if(Resolve(parameter.Type, parameter.KeyIn(definition), parameter.Optional != OptionalMode.Required, KeyNames.Definition(definition), parameter.Name) is { } argument)
+                if(Resolve(parameter.Type, parameter.KeyIn(definition), parameter.Optional != OptionalMode.Required, KeyNames.Definition(definition), parameter.Name) is { } resolved)
                 {
-                    arguments.Add(argument);
+                    arguments.Add(resolved);
+
+                    // The edge of a pair is the edge of its value
+                    ArgumentPlan argument = resolved.Kind == ArgumentKind.Pair ? pairs[resolved.Target].Value : resolved;
                     if(argument.Kind == ArgumentKind.Resolved)
                     {
                         edges[index].Add(new GraphEdge(index, p, argument.Target));
@@ -305,10 +330,11 @@ internal static class ContainerAnalysis
             container,
             plans.ToImmutableEquatableArray(),
             lookup.ToImmutableEquatableArray(),
-            TopologicalOrder(plans, collections, wrappers),
+            TopologicalOrder(plans, collections, wrappers, pairs),
             accessors.ToImmutableEquatableArray(),
             collections.ToImmutableEquatableArray(),
-            wrappers.ToImmutableEquatableArray());
+            wrappers.ToImmutableEquatableArray(),
+            pairs.ToImmutableEquatableArray());
         return new(container.Type, plan, problems.ToImmutableEquatableArray());
 
         // A single dependency (Analysis.Model.spec, "Single service"). A problem is recorded, and the result is null.
@@ -332,12 +358,17 @@ internal static class ContainerAnalysis
             string requested = key is null ? TypeNames.Display(type) : $"{TypeNames.Display(type)} (Key: {KeyNames.Display(key)})";
             // An error node with this key already has its own error
             if(key is { IsAnyKey: false }
-                && (request.IsPlain || request.IsSimpleCollection || request.IsSingleWrapper)
+                && (request.IsPlain || request.IsSimpleCollection || request.IsSingleWrapper || request.IsSinglePair)
                 && !providers.ContainsKey((request.Core, canonical))
                 && !skipped.Contains((request.Core, canonical))
                 && !skipped.Contains((request.Core, ErrorNode.AnyKey)))
             {
-                CheckRunTimeKey(request.Core, key, $"{owner} → {member}", requested);
+                CheckRunTimeKey(request.Core, key, request.IsSinglePair ? request.KeyType : null, $"{owner} → {member}", requested);
+            }
+
+            if(request.IsSinglePair)
+            {
+                return ResolvePair(type, request, key, optional, owner, member, requested);
             }
 
             if(request.IsSimpleCollection)
@@ -372,11 +403,53 @@ internal static class ContainerAnalysis
         ArgumentPlan? ResolveSingle(TypeRef type, KeyRef? key, bool optional, string owner, string member, string requested)
         {
             string canonical = KeyRef.CanonicalOf(key);
-            switch(providers.TryGetValue((type, canonical), out List<int>? candidates) ? candidates.Count : 0)
+            List<int>? candidates = providers.TryGetValue((type, canonical), out List<int>? list) ? list : null;
+            return Pick(candidates, ReachesErrorNode(type, key), key, key, optional, owner, member, requested);
+        }
+
+        // Whether a single service with this key can be a skipped declaration
+        bool ReachesErrorNode(TypeRef type, KeyRef? key)
+            => skipped.Contains((type, KeyRef.CanonicalOf(key))) || skipped.Contains((type, ErrorNode.AnyKey));
+
+        // A KeyValuePair (Analysis.Model.spec, "Grammar of wrapper types"): the registration with the key of the site,
+        // when its key type is TKey. A site without a key has no candidate. A missing pair goes to the fallback provider
+        // unchanged and without a key (Container.Output.spec, "Behavior for each request")
+        ArgumentPlan? ResolvePair(TypeRef type, WrapperRequest request, KeyRef? key, bool optional, string owner, string member, string requested)
+        {
+            List<int>? candidates = key is not null
+                && providers.TryGetValue((request.Core, KeyRef.CanonicalOf(key)), out List<int>? list)
+                && WrapperRequest.MatchesKeyType(definitions[list[0]].Key!, request.KeyType!)
+                    ? list
+                    : null;
+            // The default value and the fallback provider stand for the whole pair
+            ArgumentPlan? picked = Pick(candidates, key is not null && ReachesErrorNode(request.Core, key), key, null, optional, owner, member, requested);
+            if(picked is not { Kind: ArgumentKind.Resolved } core)
+            {
+                return picked;
+            }
+
+            WrapperRequest value = request.PairValue;
+            ArgumentPlan argument = value.IsPlain ? core : Wrap(((NamedTypeRef)type).Arguments![1], value, core, key, optional);
+            string identity = $"{type.CanonicalString}|{key!.Canonical}|{definitions[core.Target].Implementation.CanonicalString}";
+            if(!pairIndexes.TryGetValue(identity, out int index))
+            {
+                index = pairs.Count;
+                pairIndexes[identity] = index;
+                pairs.Add(new PairPlan(type, request, key, argument, identity));
+            }
+
+            return new ArgumentPlan(ArgumentKind.Pair, index, key);
+        }
+
+        // The single service rule on the candidates (Analysis.Model.spec, "Single service"). The fallback provider gets
+        // fallbackKey: the key of the site, or no key for a KeyValuePair
+        ArgumentPlan? Pick(List<int>? candidates, bool errorNode, KeyRef? key, KeyRef? fallbackKey, bool optional, string owner, string member, string requested)
+        {
+            switch(candidates?.Count ?? 0)
             {
                 case 1:
                     return new ArgumentPlan(ArgumentKind.Resolved, candidates![0], key);
-                case 0 when skipped.Contains((type, canonical)) || skipped.Contains((type, ErrorNode.AnyKey)):
+                case 0 when errorNode:
                     // An error node: the original error is already reported, and the build fails because of it
                     reachesErrorNode = true;
                     return null;
@@ -386,7 +459,7 @@ internal static class ContainerAnalysis
                         problems.Add(new ContainerProblem(Descriptors.FallbackDependency.Id, [$"{owner} → {member}", requested]));
                     }
 
-                    return new ArgumentPlan(ArgumentKind.Fallback, -1, key);
+                    return new ArgumentPlan(ArgumentKind.Fallback, -1, fallbackKey);
                 case 0 when optional:
                     return new ArgumentPlan(ArgumentKind.Default, -1);
                 case 0:
@@ -447,11 +520,15 @@ internal static class ContainerAnalysis
         }
 
         // SGIOC505: the key of the site has no registration of the same compile-time identity, but the key of a
-        // registration of the same service type can be equal to it at run time (Semantics.spec, "Keyed services")
-        void CheckRunTimeKey(TypeRef service, KeyRef key, string site, string requested)
+        // registration of the same service type can be equal to it at run time (Semantics.spec, "Keyed services"). For a
+        // KeyValuePair, only the registrations whose key type is TKey count
+        void CheckRunTimeKey(TypeRef service, KeyRef key, TypeRef? keyType, string site, string requested)
         {
             string[] registrations = [.. providers
-                .Where(p => p.Key.Type.Equals(service) && p.Key.Key.Length > 0 && MayBeEqual(key, definitions[p.Value[0]].Key!))
+                .Where(p => p.Key.Type.Equals(service)
+                    && p.Key.Key.Length > 0
+                    && MayBeEqual(key, definitions[p.Value[0]].Key!)
+                    && (keyType is null || WrapperRequest.MatchesKeyType(definitions[p.Value[0]].Key!, keyType)))
                 .SelectMany(static p => p.Value)
                 .OrderBy(static i => i)
                 .Select(i => KeyNames.Definition(definitions[i]))];
@@ -625,7 +702,7 @@ internal static class ContainerAnalysis
     /// A cycle (SGIOC301) stops the generation before this walk. Each definition is visited once in any case. The walk
     /// keeps its own stack, so a long dependency chain does not overflow the call stack.
     /// </summary>
-    private static ImmutableEquatableArray<int> TopologicalOrder(List<DefinitionPlan> plans, List<CollectionPlan> collections, List<WrapperPlan> wrappers)
+    private static ImmutableEquatableArray<int> TopologicalOrder(List<DefinitionPlan> plans, List<CollectionPlan> collections, List<WrapperPlan> wrappers, List<PairPlan> pairs)
     {
         List<int> order = [];
         bool[] visited = new bool[plans.Count];
@@ -666,8 +743,10 @@ internal static class ContainerAnalysis
 
         IEnumerable<int> Dependencies(DefinitionPlan plan)
         {
-            foreach(ArgumentPlan argument in plan.Arguments)
+            foreach(ArgumentPlan resolved in plan.Arguments)
             {
+                // A pair creates its value at once
+                ArgumentPlan argument = resolved.Kind == ArgumentKind.Pair ? pairs[resolved.Target].Value : resolved;
                 if(argument.Kind == ArgumentKind.Resolved)
                 {
                     yield return argument.Target;

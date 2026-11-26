@@ -69,6 +69,11 @@ internal static class ContainerEmitter
             WriteWrapper(writer, plan, wrapper, self);
         }
 
+        foreach(PairPlan pair in plan.Pairs)
+        {
+            WritePair(writer, plan, pair);
+        }
+
         WriteAccessors(writer, plan);
         WriteLookup(writer, plan, self);
         WriteServiceProvider(writer, self, plan.Container.IntegrateServiceProvider);
@@ -99,6 +104,27 @@ internal static class ContainerEmitter
     private static string Wrap(WrapperPlan wrapper) => GeneratedNames.For("__Wrap_", wrapper);
 
     private static string WrapField(WrapperPlan wrapper) => GeneratedNames.For("__w_", wrapper);
+
+    private static string Pair(PairPlan pair) => GeneratedNames.For("__Pair_", pair);
+
+    /// <summary>
+    /// The resolver of a <c>KeyValuePair</c>: the key of the dependency site with the value, created each time. The value
+    /// is the service or its wrapper, with the cache of that wrapper (Container.Output.spec, "Wrapper types").
+    /// </summary>
+    private static void WritePair(SourceWriter writer, ContainerPlan plan, PairPlan pair)
+    {
+        string type = TypeNames.CSharp(pair.Type);
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        if(pair.Value.Kind == ArgumentKind.Wrapper)
+        {
+            writer.WriteLine($"private {type} {Pair(pair)}() => new {type}({KeyNames.Expression(pair.Key)}, {Wrap(plan.Wrappers[pair.Value.Target])}());");
+        }
+        else
+        {
+            writer.WriteLine($"private {type} {Pair(pair)}() => new {type}({KeyNames.Expression(pair.Key)}, ({TypeNames.CSharp(pair.ValueType)}){Get(plan.Definitions[pair.Value.Target].Definition)}());");
+        }
+    }
 
     /// <summary>
     /// The resolver of a wrapper (Container.Output.spec, "Wrapper types"). A cached wrapper is stored on the instance
@@ -595,6 +621,7 @@ internal static class ContainerEmitter
             ArgumentKind.ServiceKey => ServiceKeyArgument(definition.Definition.Key!),
             ArgumentKind.Collection => $"({type})c.{All(plan.Collections[argument.Target])}()",
             ArgumentKind.Wrapper => $"c.{Wrap(plan.Wrappers[argument.Target])}()",
+            ArgumentKind.Pair => $"c.{Pair(plan.Pairs[argument.Target])}()",
             _ => $"({type})c.{Get(plan.Definitions[argument.Target].Definition)}()",
         };
     }
@@ -710,6 +737,9 @@ internal static class ContainerEmitter
                     break;
                 case ArgumentKind.Wrapper:
                     writer.WriteLine($"return {Wrap(plan.Wrappers[accessor.Argument.Target])}();");
+                    break;
+                case ArgumentKind.Pair:
+                    writer.WriteLine($"return {Pair(plan.Pairs[accessor.Argument.Target])}();");
                     break;
                 case ArgumentKind.Fallback:
                     Dependency dependency = new(member.Type, member.Name, false, member.IsOptional ? OptionalMode.Nullable : OptionalMode.Required);
@@ -828,14 +858,17 @@ internal static class ContainerEmitter
         writer.WriteLine('{');
         writer.Indentation++;
         writer.WriteLine($"global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}> table = new global::System.Collections.Generic.Dictionary<{typeAndKey}, {keyedFunction}>();");
-        bool hasKeys = keyed.Length > 0 || keyedCollections.Length > 0 || keyedWrappers.Length > 0;
+        bool hasKeys = keyed.Length > 0 || keyedCollections.Length > 0 || keyedWrappers.Length > 0 || plan.Pairs.Length > 0;
         if(hasKeys)
         {
             writer.WriteLine($"global::System.Collections.Generic.HashSet<{typeAndKey}> keys = new global::System.Collections.Generic.HashSet<{typeAndKey}>();");
 
             // Each key is read one time
             Dictionary<string, string> variables = [];
-            foreach(KeyRef key in keyed.Select(static e => e.Key!).Concat(keyedCollections.Select(static c => c.Key!)).Concat(keyedWrappers.Select(static w => w.Wrapper.Key!)))
+            foreach(KeyRef key in keyed.Select(static e => e.Key!)
+                .Concat(keyedCollections.Select(static c => c.Key!))
+                .Concat(keyedWrappers.Select(static w => w.Wrapper.Key!))
+                .Concat(plan.Pairs.Select(static p => p.Key)))
             {
                 if(!variables.ContainsKey(key.Canonical))
                 {
@@ -872,6 +905,12 @@ internal static class ContainerEmitter
             foreach((WrapperPlan wrapper, string expression) in keyedWrappers)
             {
                 writer.WriteLine($"table.TryAdd((typeof({TypeNames.CSharp(wrapper.Type)}), {variables[wrapper.Key!.Canonical]}), static (c, _) => {expression});");
+            }
+
+            // A pair has the key of its registration, the same as a keyed wrapper
+            foreach(PairPlan pair in plan.Pairs)
+            {
+                writer.WriteLine($"table.TryAdd((typeof({TypeNames.CSharp(pair.Type)}), {variables[pair.Key.Canonical]}), static (c, _) => c.{Pair(pair)}());");
             }
 
             // AnyKey: all registrations of the type that have a key, in the ordering. One service with AnyKey throws, as in MS.DI
