@@ -1,0 +1,19 @@
+﻿    public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddApp(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.ReadOnlySpan<string> tags)
+    {
+        __ThrowDuplicateKey("Dictionary of 'App.IStore' has more than one registration for key '\"a\"': App.FirstStore (Key: \"a\"), App.SecondStore (Key: \"a\").");
+        global::SourceGen.Ioc.IocRegistrationMarker.Enter(services, "App.AppServiceCollectionExtensions.AddApp", "TestAssembly");
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::App.Consumer>(services, static sp => __Create_Consumer_fd0ac76a(sp));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::SourceGen.Ioc.IocHolder<global::App.FirstStore>>(services, __k_FirstStore_e557d50e, static (sp, _) => global::SourceGen.Ioc.IocHolder.Own(__Create_FirstStore_e557d50e(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::App.FirstStore>(services, "a", static (sp, _) => __Get_FirstStore_e557d50e(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::App.IStore>(services, "a", static (sp, _) => (global::App.IStore)__Get_FirstStore_e557d50e(sp));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::SourceGen.Ioc.IocHolder<global::App.SecondStore>>(services, __k_SecondStore_e5f3d8c4, static (sp, _) => global::SourceGen.Ioc.IocHolder.Own(__Create_SecondStore_e5f3d8c4(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::App.SecondStore>(services, "a", static (sp, _) => __Get_SecondStore_e5f3d8c4(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::App.IStore>(services, "a", static (sp, _) => (global::App.IStore)__Get_SecondStore_e5f3d8c4(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::System.Collections.Generic.IReadOnlyDictionary<global::System.String, global::App.IStore>>(services, static sp => new global::System.Collections.Generic.Dictionary<global::System.String, global::App.IStore>(2) { { "a", (global::App.IStore)__Get_FirstStore_e557d50e(sp) }, { "a", (global::App.IStore)__Get_SecondStore_e5f3d8c4(sp) } });
+        return services;
+    }
+
+    private static void __ThrowDuplicateKey(string message) => throw new global::System.InvalidOperationException(message);

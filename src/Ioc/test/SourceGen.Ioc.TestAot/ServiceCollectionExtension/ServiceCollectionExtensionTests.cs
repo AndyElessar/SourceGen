@@ -288,5 +288,43 @@ public class ServiceCollectionExtensionTests
         await Assert.That(container.GetRequiredService<StoreWrapperAliasConsumer>().Stores.Count()).IsEqualTo(0);
     }
 
+    [Test]
+    public async Task AddTestAot_KeyValuePair_RegisteredWithANonGenericDescriptor()
+    {
+        using ServiceProvider provider = Build();
+        using IServiceScope scope = provider.CreateScope();
+
+        PairHost host = scope.ServiceProvider.GetRequiredService<PairHost>();
+        IStore a = provider.GetRequiredKeyedService<IStore>("a");
+
+        await Assert.That(host.Store.Key).IsEqualTo("a");
+        await Assert.That(host.Store.Value).IsSameReferenceAs(a);
+        await Assert.That(host.Lazy.Key).IsEqualTo("a");
+        await Assert.That(host.Lazy.Value).IsSameReferenceAs(provider.GetRequiredKeyedService<Lazy<IStore>>("a"));
+        await Assert.That(host.Lazy.Value.Value).IsSameReferenceAs(a);
+        await Assert.That(host.Disk.Key).IsEqualTo(StoreKind.Disk);
+        await Assert.That(host.Disk.Value).IsSameReferenceAs(scope.ServiceProvider.GetRequiredKeyedService<IStore>(StoreKind.Disk));
+    }
+
+    [Test]
+    public async Task AddTestAot_CollectionOfPairsAndDictionary_RegisteredAsOneService()
+    {
+        using ServiceProvider provider = Build();
+        using IServiceScope scope = provider.CreateScope();
+
+        KeyedCollectionHost host = scope.ServiceProvider.GetRequiredService<KeyedCollectionHost>();
+        string[] keys = [.. host.Strings.Select(static p => p.Key).Order(StringComparer.Ordinal)];
+
+        await Assert.That(string.Join(",", keys)).IsEqualTo("a,primary");
+        await Assert.That(host.Records[new StoreKey("backup")]).IsSameReferenceAs(provider.GetRequiredKeyedService<IStore>(StoreKeys.Backup));
+        await Assert.That(host.All.Count).IsEqualTo(5);
+        await Assert.That(host.All[StoreKind.Disk].Value).IsSameReferenceAs(scope.ServiceProvider.GetRequiredKeyedService<IStore>(StoreKind.Disk));
+        await Assert.That(host.OnlyA.Length).IsEqualTo(1);
+        await Assert.That(host.OnlyA[0].Value).IsSameReferenceAs(provider.GetRequiredKeyedService<IStore>("a"));
+
+        // MS.DI cannot collect a value type with NativeAOT: the collection is registered as IEnumerable too
+        await Assert.That(scope.ServiceProvider.GetRequiredService<IEnumerable<KeyValuePair<string, IStore>>>().Count()).IsEqualTo(2);
+    }
+
     private sealed class Missing : IMissing;
 }

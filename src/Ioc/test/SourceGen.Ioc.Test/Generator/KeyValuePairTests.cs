@@ -492,6 +492,57 @@ public class KeyValuePairTests
     }
 
     [Test]
+    public async Task ServiceCollectionExtension_PairsCollectionsAndDictionaries_Registered()
+    {
+        GeneratorTestResult result = await RunAsync(
+            Stores + """
+            [IocRegister(ServiceLifetime.Scoped)]
+            public sealed class Consumer(
+                [IocInject(Key = "a")] KeyValuePair<string, IStore> pair,
+                [IocInject(Key = "a")] KeyValuePair<object, Lazy<IStore>> lazyPair,
+                IEnumerable<KeyValuePair<string, IStore>> strings,
+                IReadOnlyList<KeyValuePair<object, Func<IStore>>> all,
+                IReadOnlyDictionary<string, IStore> dictionary,
+                [IocInject(KeyType = KeyType.Csharp, Key = nameof(KeyedService.AnyKey))] IDictionary<long, Lazy<IStore>> longs,
+                [IocInject(Key = "b")] Dictionary<string, IStore> onlyB,
+                [IocInject(Key = "a")] KeyValuePair<string, System.Threading.Tasks.Task<IStore>> task)
+            {
+                // A dictionary is never missing: a member that keeps its initializer is always assigned
+                [IocInject]
+                public IDictionary<object, IStore> Member { get; set; } = new Dictionary<object, IStore>();
+            }
+            """,
+            "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]");
+
+        await result.VerifyCompilableAsync();
+        string source = result.GetGeneratedSource("AppServiceCollectionExtensions.g.cs")!;
+        await Verify(SnapshotHelper.MembersByPrefix(source, ["AddApp"], "__Create_Consumer_"));
+    }
+
+    [Test]
+    public async Task ServiceCollectionExtension_DuplicateDictionaryKey_TheMethodThrowsWithoutDiagnostic()
+    {
+        GeneratorTestResult result = await RunAsync(
+            Usings + """
+            public interface IStore;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IStore)], Key = "a")]
+            public sealed class FirstStore : IStore;
+
+            [IocRegister(ServiceLifetime.Singleton, ServiceTypes = [typeof(IStore)], Key = "a")]
+            public sealed class SecondStore : IStore;
+
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer(IReadOnlyDictionary<string, IStore> stores);
+            """,
+            "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]");
+
+        await result.VerifyCompilableAsync();
+        string source = result.GetGeneratedSource("AppServiceCollectionExtensions.g.cs")!;
+        await Verify(SnapshotHelper.MembersByPrefix(source, ["AddApp", "__ThrowDuplicateKey"]));
+    }
+
+    [Test]
     public async Task PairCollectionAndDictionary_Deterministic()
         => await SourceGeneratorTestHelper.VerifyDeterministicAsync<IocSourceGenerator>([Stores + """
             [IocRegister(ServiceLifetime.Scoped)]

@@ -75,9 +75,18 @@ internal static class ServiceCollectionExtensionEmitter
         writer.WriteLine($"public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection Add{settings.Name}(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.ReadOnlySpan<string> tags)");
         writer.WriteLine('{');
         writer.Indentation++;
+
+        // A duplicate dictionary key throws before anything is registered. A call instead of a throw statement, so that
+        // the rest of the method is not unreachable code
+        List<string> duplicates = DuplicateKeys(model);
+        foreach(string message in duplicates)
+        {
+            writer.WriteLine($"__ThrowDuplicateKey({SymbolDisplay.FormatLiteral(message, quote: true)});");
+        }
+
         writer.WriteLine($"global::SourceGen.Ioc.IocRegistrationMarker.Enter(services, \"{settings.Namespace}.{settings.Name}ServiceCollectionExtensions.Add{settings.Name}\", \"{settings.AssemblyName}\");");
 
-        Dictionary<string, List<(TypeRef Wrapper, KeyRef? Key)>> wrappers = WrapperDemands(model);
+        Dictionary<string, List<WrapperDemand>> wrappers = WrapperDemands(model);
         foreach(ClosedDefinition definition in model.Definitions)
         {
             WriteRegistrations(writer, definition);
@@ -85,9 +94,17 @@ internal static class ServiceCollectionExtensionEmitter
         }
 
         WriteCollectionRegistrations(writer, model);
+        WritePairRegistrations(writer, model);
+        WriteKeyedRegistrations(writer, model);
         writer.WriteLine("return services;");
         writer.Indentation--;
         writer.WriteLine('}');
+
+        if(duplicates.Count > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine("private static void __ThrowDuplicateKey(string message) => throw new global::System.InvalidOperationException(message);");
+        }
     }
 
     private static void WriteRegistrations(SourceWriter writer, ClosedDefinition definition)
@@ -117,14 +134,28 @@ internal static class ServiceCollectionExtensionEmitter
         }
     }
 
-    /// <summary>
-    /// The <c>Lazy</c> and <c>Func</c> wrapper types that the dependency sites ask for, alone or as the element of a
-    /// collection, by the canonical string of the service, with the key of each demand. A <c>Task&lt;S&gt;</c> alone is
-    /// not registered (ServiceCollection.Output.spec, "Wrapper types and collections").
-    /// </summary>
-    private static Dictionary<string, List<(TypeRef Wrapper, KeyRef? Key)>> WrapperDemands(ServiceCollectionExtensionModel model)
+    /// <summary>A demand for a wrapper type: its key, all keyed registrations, and the key type of a pair or a dictionary.</summary>
+    /// <param name="Wrapper">The wrapper type.</param>
+    /// <param name="Key">The key of the demand.</param>
+    /// <param name="AllKeyed">Whether it asks for all keyed registrations (<c>AnyKey</c>, or a collection of pairs or a dictionary without a key).</param>
+    /// <param name="KeyType">The <c>TKey</c> of a pair or a dictionary, or <see langword="null"/>.</param>
+    private readonly record struct WrapperDemand(TypeRef Wrapper, KeyRef? Key, bool AllKeyed = false, TypeRef? KeyType = null)
     {
-        Dictionary<string, List<(TypeRef, KeyRef?)>> demands = new(StringComparer.Ordinal);
+        /// <summary>Whether the demand can ask for a registration with the key <paramref name="registered"/>.</summary>
+        public bool Matches(KeyRef? registered)
+            => (AllKeyed ? registered is not null : ServiceCollectionExtensionEmitter.Matches(Key, registered))
+                && (KeyType is null || (registered is not null && WrapperRequest.MatchesKeyType(registered, KeyType)));
+    }
+
+    /// <summary>
+    /// The <c>Lazy</c> and <c>Func</c> wrapper types that the dependency sites ask for, alone, as the element of a
+    /// collection, or as the value of a pair or a dictionary, by the canonical string of the service. A
+    /// <c>Task&lt;S&gt;</c> alone is not registered (ServiceCollection.Output.spec, "Wrapper types and collections";
+    /// Container.Output.spec, "Contents of the table").
+    /// </summary>
+    private static Dictionary<string, List<WrapperDemand>> WrapperDemands(ServiceCollectionExtensionModel model)
+    {
+        Dictionary<string, List<WrapperDemand>> demands = new(StringComparer.Ordinal);
         foreach(ClosedDefinition definition in model.Definitions)
         {
             foreach(Dependency dependency in definition.Dependencies.Where(static d => d.KeyMode != SiteKeyMode.ServiceKey))
@@ -135,21 +166,33 @@ internal static class ServiceCollectionExtensionEmitter
                 }
 
                 KeyRef? key = dependency.KeyIn(definition);
-                TypeRef? wrapper = request.IsSingleWrapper ? dependency.Type : request.IsSimpleCollection ? WrapperRequest.ElementOf(dependency.Type) : null;
-                if(wrapper is not null)
+                WrapperDemand? demand = request switch
                 {
-                    if(!demands.TryGetValue(request.Core.CanonicalString, out List<(TypeRef, KeyRef?)>? list))
+                    { IsSingleWrapper: true } => new WrapperDemand(dependency.Type, key),
+                    { IsSimpleCollection: true } => new WrapperDemand(WrapperRequest.ElementOf(dependency.Type)!, key),
+
+                    // A pair without a key has no candidate
+                    { IsSinglePair: true } when key is not null => new WrapperDemand(PairValueType(dependency.Type), key, KeyType: request.KeyType),
+                    { IsKeyedCollection: true } => new WrapperDemand(PairValueType(dependency.Type), key, key is null or { IsAnyKey: true }, request.KeyType),
+                    _ => null,
+                };
+                if(demand is { } found)
+                {
+                    if(!demands.TryGetValue(request.Core.CanonicalString, out List<WrapperDemand>? list))
                     {
                         demands[request.Core.CanonicalString] = list = [];
                     }
 
-                    list.Add((wrapper, key));
+                    list.Add(found);
                 }
             }
         }
 
         return demands;
     }
+
+    /// <summary>The type of the value of a pair, of a collection of pairs, or of a dictionary.</summary>
+    private static TypeRef PairValueType(TypeRef type) => ((NamedTypeRef)(WrapperRequest.ElementOf(type) ?? type)).Arguments![1];
 
     /// <summary>
     /// One registration of each wrapper type that a dependency site asks for, for each service type of the closed
@@ -159,20 +202,20 @@ internal static class ServiceCollectionExtensionEmitter
     /// A demand matches the definition when the keys have the same identity, when it asks for all keyed registrations,
     /// or when the keys can be equal at run time: MS.DI then compares them with <c>Equals</c>, as for the service itself.
     /// </summary>
-    private static void WriteWrapperRegistrations(SourceWriter writer, ClosedDefinition definition, Dictionary<string, List<(TypeRef Wrapper, KeyRef? Key)>> demands)
+    private static void WriteWrapperRegistrations(SourceWriter writer, ClosedDefinition definition, Dictionary<string, List<WrapperDemand>> demands)
     {
         string source = HasHolder(definition) ? GeneratedNames.For("__Get_", definition) : GeneratedNames.For("__Create_", definition);
         foreach(TypeRef serviceType in definition.ServiceTypes)
         {
-            if(!demands.TryGetValue(serviceType.CanonicalString, out List<(TypeRef Wrapper, KeyRef? Key)>? list))
+            if(!demands.TryGetValue(serviceType.CanonicalString, out List<WrapperDemand>? list))
             {
                 continue;
             }
 
             SortedDictionary<string, TypeRef> types = new(StringComparer.Ordinal);
-            foreach((TypeRef wrapper, _) in list.Where(d => Matches(d.Key, definition.Key)))
+            foreach(WrapperDemand demand in list.Where(d => d.Matches(definition.Key)))
             {
-                types[wrapper.CanonicalString] = wrapper;
+                types[demand.Wrapper.CanonicalString] = demand.Wrapper;
             }
 
             foreach(TypeRef type in types.Values)
@@ -263,6 +306,166 @@ internal static class ServiceCollectionExtensionEmitter
             }
         }
     }
+
+    /// <summary>The source of the service of a closed definition: its holder, or its creation method.</summary>
+    private static string Source(ClosedDefinition definition) => HasHolder(definition) ? GeneratedNames.For("__Get_", definition) : GeneratedNames.For("__Create_", definition);
+
+    /// <summary>Whether a keyed closed definition is a candidate of a pair, a collection of pairs or a dictionary.</summary>
+    private static bool IsPairCandidate(ClosedDefinition definition, WrapperRequest request)
+        => definition.Key is { } key && definition.ServiceTypes.Contains(request.Core) && WrapperRequest.MatchesKeyType(key, request.KeyType!);
+
+    /// <summary>
+    /// One registration of each <c>KeyValuePair&lt;TKey, X&gt;</c> that a dependency site asks for, for each candidate,
+    /// with the key of the candidate. The registration uses a non-generic <c>ServiceDescriptor</c>: the generic methods
+    /// need a reference type (ServiceCollection.Output.spec, "Wrapper types and collections"). A value that is a
+    /// <c>Lazy</c> or a <c>Func</c> is the registered wrapper of the candidate.
+    /// </summary>
+    private static void WritePairRegistrations(SourceWriter writer, ServiceCollectionExtensionModel model)
+    {
+        SortedDictionary<string, (TypeRef Type, WrapperRequest Request, List<KeyRef> Keys)> demands = new(StringComparer.Ordinal);
+        foreach(ClosedDefinition definition in model.Definitions)
+        {
+            foreach(Dependency dependency in definition.Dependencies.Where(static d => d.KeyMode != SiteKeyMode.ServiceKey))
+            {
+                if(WrapperRequest.Parse(dependency.Type) is { IsSinglePair: true } request && dependency.KeyIn(definition) is { } key)
+                {
+                    if(!demands.TryGetValue(dependency.Type.CanonicalString, out (TypeRef, WrapperRequest, List<KeyRef> Keys) demand))
+                    {
+                        demands[dependency.Type.CanonicalString] = demand = (dependency.Type, request, []);
+                    }
+
+                    demand.Keys.Add(key);
+                }
+            }
+        }
+
+        foreach((TypeRef type, WrapperRequest request, List<KeyRef> keys) in demands.Values)
+        {
+            string pair = TypeNames.CSharp(type);
+            WrapperRequest value = request.PairValue;
+            foreach(ClosedDefinition candidate in model.Definitions.Where(d => IsPairCandidate(d, request) && keys.Any(k => Matches(k, d.Key))))
+            {
+                string key = KeyNames.Expression(candidate.Key!);
+                string service = $"({TypeNames.CSharp(request.Core)}){Source(candidate)}(sp)";
+                if(value.Deferred != DeferredKind.None)
+                {
+                    writer.WriteLine($"global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.Add(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.KeyedTransient(typeof({pair}), {key}, static (sp, _) => new {pair}({key}, {KeyedProvider}.GetRequiredKeyedService<{TypeNames.CSharp(PairValueType(type))}>(sp, {key}))));");
+                }
+                else
+                {
+                    writer.WriteLine($"global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.Add(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.KeyedTransient(typeof({pair}), {key}, static (sp, _) => new {pair}({key}, {WrapperExpression(value, service, cached: false)})));");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The collections of pairs and the dictionaries that the dependency sites ask for: each type is registered as one
+    /// Transient service, with the candidates of the assembly view, each with its own key (ServiceCollection.Output.spec,
+    /// "Wrapper types and collections"). A collection of pairs is also registered as <c>IEnumerable</c>: MS.DI cannot
+    /// collect a value type with NativeAOT. No key and <c>AnyKey</c> are registered without a key. A dictionary key with
+    /// more than one candidate throws when the method is called (see <see cref="DuplicateKeys"/>).
+    /// </summary>
+    private static void WriteKeyedRegistrations(SourceWriter writer, ServiceCollectionExtensionModel model)
+    {
+        foreach((string collection, WrapperRequest request, TypeRef valueType, KeyRef? key) in KeyedDemands(model).Values)
+        {
+            string create = KeyedContent(request, valueType, KeyedCandidates(model, request, key));
+            if(key is null)
+            {
+                writer.WriteLine($"{Services}.AddTransient<{collection}>(services, static sp => {create});");
+            }
+            else
+            {
+                writer.WriteLine($"{Services}.AddKeyedTransient<{collection}>(services, {KeyNames.Expression(key)}, static (sp, _) => {create});");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The messages of the dictionary keys that have more than one candidate, one for each service type and key. The
+    /// method throws them before it registers anything (ServiceCollection.Output.spec, "Checks").
+    /// </summary>
+    private static List<string> DuplicateKeys(ServiceCollectionExtensionModel model)
+    {
+        List<string> messages = [];
+        HashSet<(TypeRef, string)> reported = [];
+        foreach((_, WrapperRequest request, _, KeyRef? key) in KeyedDemands(model).Values.Where(static d => d.Request.Shape == RequestShape.Dictionary))
+        {
+            foreach(IGrouping<string, ClosedDefinition> duplicate in KeyedCandidates(model, request, key)
+                .GroupBy(static d => d.Key!.Canonical)
+                .Where(g => g.Count() > 1 && reported.Add((request.Core, g.Key))))
+            {
+                messages.Add($"Dictionary of '{TypeNames.Display(request.Core)}' has more than one registration for key '{KeyNames.Display(duplicate.First().Key!)}': {string.Join(", ", duplicate.Select(KeyNames.Definition))}.");
+            }
+        }
+
+        return messages;
+    }
+
+    /// <summary>The candidates of a collection of pairs or a dictionary: all of them for no key, only the key otherwise.</summary>
+    private static ClosedDefinition[] KeyedCandidates(ServiceCollectionExtensionModel model, WrapperRequest request, KeyRef? key)
+        => [.. model.Definitions.Where(d => IsPairCandidate(d, request) && (key is null || d.Key!.Equals(key)))];
+
+    /// <summary>
+    /// The registered types of the collections of pairs and the dictionaries that the dependency sites ask for, with the
+    /// key of the registration (<see langword="null"/> for no key and <c>AnyKey</c>), ordered by type and key.
+    /// </summary>
+    private static SortedDictionary<string, (string Collection, WrapperRequest Request, TypeRef ValueType, KeyRef? Key)> KeyedDemands(ServiceCollectionExtensionModel model)
+    {
+        SortedDictionary<string, (string Collection, WrapperRequest Request, TypeRef ValueType, KeyRef? Key)> demands = new(StringComparer.Ordinal);
+        foreach(ClosedDefinition definition in model.Definitions)
+        {
+            foreach(Dependency dependency in definition.Dependencies.Where(static d => d.KeyMode != SiteKeyMode.ServiceKey))
+            {
+                if(WrapperRequest.Parse(dependency.Type) is { IsKeyedCollection: true } request)
+                {
+                    KeyRef? key = dependency.KeyIn(definition) is { IsAnyKey: false } specified ? specified : null;
+                    TypeRef valueType = PairValueType(dependency.Type);
+                    string[] types = request.Shape == RequestShape.Dictionary
+                        ? [TypeNames.CSharp(dependency.Type)]
+                        : [TypeNames.CSharp(dependency.Type), $"global::System.Collections.Generic.IEnumerable<{TypeNames.CSharp(WrapperRequest.ElementOf(dependency.Type)!)}>"];
+                    foreach(string type in types)
+                    {
+                        demands[$"{type}|{KeyRef.CanonicalOf(key)}"] = (type, request, valueType, key);
+                    }
+                }
+            }
+        }
+
+        return demands;
+    }
+
+    /// <summary>
+    /// The expression of a collection of pairs (an array) or a dictionary: each candidate with its own key. A value that is
+    /// a wrapper is created around the service, as for the element of a collection of wrappers.
+    /// </summary>
+    private static string KeyedContent(WrapperRequest request, TypeRef valueType, ClosedDefinition[] candidates)
+    {
+        string keyType = TypeNames.CSharp(request.KeyType!);
+        string value = TypeNames.CSharp(valueType);
+        WrapperRequest valueRequest = request.PairValue;
+        IEnumerable<string> entries = candidates.Select(d =>
+            $"{KeyNames.Expression(d.Key!)}, {WrapperExpression(valueRequest, $"({TypeNames.CSharp(request.Core)}){Source(d)}(sp)", cached: d.Lifetime != Lifetime.Transient)}");
+        string pair = $"global::System.Collections.Generic.KeyValuePair<{keyType}, {value}>";
+        string dictionary = $"global::System.Collections.Generic.Dictionary<{keyType}, {value}>";
+        return (request.Shape == RequestShape.Dictionary, candidates.Length) switch
+        {
+            (true, 0) => $"new {dictionary}()",
+            (true, var count) => $"new {dictionary}({count}) {{ {string.Join(", ", entries.Select(static e => $"{{ {e} }}"))} }}",
+            (false, 0) => $"global::System.Array.Empty<{pair}>()",
+            _ => $"new {pair}[] {{ {string.Join(", ", entries.Select(e => $"new {pair}({e})"))} }}",
+        };
+    }
+
+    /// <summary>
+    /// The expression of a collection of pairs or a dictionary at a dependency site: the registered type, without a key
+    /// for no key and <c>AnyKey</c>. It is never missing, so an optional one is resolved the same way.
+    /// </summary>
+    private static string KeyedArgument(TypeRef type, KeyRef? key)
+        => key is null or { IsAnyKey: true }
+            ? $"{Provider}.GetRequiredService<{TypeNames.CSharp(type)}>(sp)"
+            : $"{KeyedProvider}.GetRequiredKeyedService<{TypeNames.CSharp(type)}>(sp, {KeyNames.Expression(key)})";
 
     /// <summary>
     /// The array of the elements that MS.DI collects. A <c>Task&lt;S&gt;</c> wraps each service <c>S</c>.
@@ -428,7 +631,7 @@ internal static class ServiceCollectionExtensionEmitter
     private static string Assignment(ClosedDefinition owner, int index, string member, Dictionary<(TypeRef Type, string Key), List<int>> providers)
     {
         Dependency dependency = owner.Dependencies[index];
-        if(dependency.Optional != OptionalMode.KeepInitializer || Collection(dependency.Type) is not null)
+        if(dependency.Optional != OptionalMode.KeepInitializer || Collection(dependency.Type) is not null || WrapperRequest.Parse(dependency.Type) is { IsKeyedCollection: true })
         {
             return $"instance.{member} = {Argument(owner, dependency, index, providers)};";
         }
@@ -460,6 +663,11 @@ internal static class ServiceCollectionExtensionEmitter
         if(Collection(parameter.Type) is { } collection)
         {
             return CollectionArgument(parameter.Type, collection, parameter.KeyIn(owner));
+        }
+
+        if(WrapperRequest.Parse(parameter.Type) is { IsKeyedCollection: true })
+        {
+            return KeyedArgument(parameter.Type, parameter.KeyIn(owner));
         }
 
         if(WrapperArgument(owner, parameter, providers) is { } wrapper)
