@@ -12,7 +12,11 @@ namespace SourceGen.Ioc.Analysis;
 /// The deferred wrapper of the edge. An edge through <c>Lazy</c> or <c>Func</c> is a deferred edge: it does not count
 /// for a cycle, and a Singleton that holds a <c>Func</c> of a Transient does not hold the Transient.
 /// </param>
-internal readonly record struct GraphEdge(int From, int Parameter, int To, DeferredKind Deferred = DeferredKind.None);
+/// <param name="Mapped">
+/// For <c>Func&lt;A1, ..., An, T&gt;</c>: the constructor parameters of <c>T</c> that the caller supplies. The lifetime
+/// checks do not follow the edges of these parameters through this edge.
+/// </param>
+internal readonly record struct GraphEdge(int From, int Parameter, int To, DeferredKind Deferred = DeferredKind.None, ImmutableEquatableArray<int>? Mapped = null);
 
 /// <summary>A problem of the dependency graph. The definite check reports it at the dependency site.</summary>
 /// <param name="Id">The diagnostic ID.</param>
@@ -81,7 +85,8 @@ internal static class DependencyGraph
                     && providers.TryGetValue((request.Core, KeyRef.CanonicalOf(parameters[p].KeyIn(definitions[i]))), out List<int>? candidates)
                     && candidates.Count == 1)
                 {
-                    edges[i].Add(new GraphEdge(i, p, candidates[0], request.Deferred));
+                    ImmutableEquatableArray<int>? mapped = request.IsSingleFuncWithArguments && request.Map(definitions[candidates[0]], out ImmutableEquatableArray<int> mapping) is null ? mapping : null;
+                    edges[i].Add(new GraphEdge(i, p, candidates[0], request.Deferred, mapped));
                 }
             }
         }
@@ -95,9 +100,11 @@ internal static class DependencyGraph
     /// <returns>The problems, each at its dependency site.</returns>
     public static ImmutableEquatableArray<GraphProblem> DefiniteCheck(ImmutableEquatableArray<ClosedDefinition> definitions, CancellationToken cancellationToken)
     {
-        List<GraphEdge>[] edges = Edges(definitions, Providers(definitions));
+        Dictionary<(TypeRef Type, string Key), List<int>> providers = Providers(definitions);
+        List<GraphEdge>[] edges = Edges(definitions, providers);
         cancellationToken.ThrowIfCancellationRequested();
         return UnsupportedWrappers(definitions)
+            .Concat(FuncMappings(definitions, providers))
             .Concat(Cycles(definitions, edges))
             .Concat(Captives(definitions, edges))
             .Concat(HeldTransients(definitions, edges))
@@ -115,6 +122,39 @@ internal static class DependencyGraph
                 if(dependencies[p].KeyMode != SiteKeyMode.ServiceKey && WrapperRequest.Parse(dependencies[p].Type) is null)
                 {
                     yield return Problem(Descriptors.UnsupportedWrapper.Id, [TypeNames.Display(dependencies[p].Type)], definitions, new GraphEdge(i, p, i));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>SGIOC305</c> of the definite check (Analysis.Model.spec, "Two levels of checks"): two arguments of the same
+    /// type at each site, and the lifetime and the mapping of the target on a definite edge. The full check of a
+    /// container finds the same problems with the same message, so it does not report them again.
+    /// </summary>
+    private static IEnumerable<GraphProblem> FuncMappings(ImmutableEquatableArray<ClosedDefinition> definitions, Dictionary<(TypeRef Type, string Key), List<int>> providers)
+    {
+        for(int i = 0; i < definitions.Length; i++)
+        {
+            ImmutableEquatableArray<Dependency> dependencies = definitions[i].Dependencies;
+            for(int p = 0; p < dependencies.Length; p++)
+            {
+                if(dependencies[p].KeyMode == SiteKeyMode.ServiceKey || WrapperRequest.Parse(dependencies[p].Type) is not { IsSingleFuncWithArguments: true } request)
+                {
+                    continue;
+                }
+
+                string? reason = request.DuplicateArgument();
+                if(reason is null
+                    && providers.TryGetValue((request.Core, KeyRef.CanonicalOf(dependencies[p].KeyIn(definitions[i]))), out List<int>? candidates)
+                    && candidates.Count == 1)
+                {
+                    reason = request.Map(definitions[candidates[0]], out _);
+                }
+
+                if(reason is not null)
+                {
+                    yield return Problem(Descriptors.InvalidFuncWithArguments.Id, [TypeNames.Display(dependencies[p].Type), reason], definitions, new GraphEdge(i, p, i));
                 }
             }
         }
@@ -144,7 +184,9 @@ internal static class DependencyGraph
 
     /// <summary>
     /// <c>SGIOC302</c>: a Scoped closed definition that a Singleton reaches directly or through Transient closed
-    /// definitions. The generator reports each pair one time, with the shortest path, at the first edge of the path.
+    /// definitions. The generator reports each pair one time, with the shortest path, at the first edge of the path. A
+    /// closed definition that the walk enters through <c>Func&lt;A1, ..., An, T&gt;</c> does not follow the parameters
+    /// that the caller supplies (Analysis.Model.spec, "Lifetime checks").
     /// </summary>
     public static IEnumerable<GraphProblem> Captives(ImmutableEquatableArray<ClosedDefinition> definitions, List<GraphEdge>[] edges)
     {
@@ -155,17 +197,28 @@ internal static class DependencyGraph
                 continue;
             }
 
-            Dictionary<int, GraphEdge> previous = [];
+            // A closed definition can be entered with and without supplied parameters, so the walk visits each pair, and
+            // the path goes back through the pairs
+            Dictionary<(int, ImmutableEquatableArray<int>?), (GraphEdge Edge, ImmutableEquatableArray<int>? FromSupplied)> previous = [];
             HashSet<int> reported = [];
-            Queue<int> queue = new([singleton]);
+            HashSet<(int, ImmutableEquatableArray<int>?)> visited = [(singleton, null)];
+            Queue<(int Node, ImmutableEquatableArray<int>? Supplied)> queue = new([(singleton, null)]);
             while(queue.Count > 0)
             {
-                foreach(GraphEdge edge in edges[queue.Dequeue()])
+                (int node, ImmutableEquatableArray<int>? supplied) = queue.Dequeue();
+                foreach(GraphEdge edge in edges[node].Where(e => supplied is null || !supplied.Contains(e.Parameter)))
                 {
                     switch(definitions[edge.To].Lifetime)
                     {
                         case Lifetime.Scoped when reported.Add(edge.To):
-                            List<GraphEdge> path = [.. PathTo(edge.From, singleton, previous), edge];
+                            List<GraphEdge> path = [edge];
+                            for((int Node, ImmutableEquatableArray<int>? Supplied) at = (node, supplied); at.Node != singleton;)
+                            {
+                                (GraphEdge back, ImmutableEquatableArray<int>? fromSupplied) = previous[at];
+                                path.Insert(0, back);
+                                at = (back.From, fromSupplied);
+                            }
+
                             string through = path.Count == 1
                                 ? string.Empty
                                 : " through " + string.Join(" → ", path.Select(e => KeyNames.Definition(definitions[e.From])).Append(KeyNames.Definition(definitions[edge.To])));
@@ -175,9 +228,9 @@ internal static class DependencyGraph
                                 definitions,
                                 path[0]);
                             break;
-                        case Lifetime.Transient when edge.To != singleton && !previous.ContainsKey(edge.To):
-                            previous[edge.To] = edge;
-                            queue.Enqueue(edge.To);
+                        case Lifetime.Transient when edge.To != singleton && visited.Add((edge.To, edge.Mapped)):
+                            previous[(edge.To, edge.Mapped)] = (edge, supplied);
+                            queue.Enqueue((edge.To, edge.Mapped));
                             break;
                     }
                 }

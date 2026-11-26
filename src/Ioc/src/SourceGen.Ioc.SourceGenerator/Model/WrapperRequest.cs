@@ -95,6 +95,54 @@ internal sealed record WrapperRequest(
     public bool IsSinglePair => Shape == RequestShape.Single && KeyValuePair && FuncArguments.Length == 0;
 
     /// <summary>
+    /// Gets a value indicating whether the request is one <c>Func&lt;A1, ..., An, T&gt;</c> or
+    /// <c>Func&lt;A1, ..., An, Task&lt;T&gt;&gt;</c> (<c>n ≥ 1</c>). In a collection, a pair or a dictionary, it comes later.
+    /// </summary>
+    public bool IsSingleFuncWithArguments => Shape == RequestShape.Single && !KeyValuePair && FuncArguments.Length > 0;
+
+    /// <summary>
+    /// The reason that <c>SGIOC305</c> reports when two arguments have the same type (Analysis.Model.spec, "Mapping of
+    /// <c>Func&lt;..., T&gt;</c>", condition 4), or <see langword="null"/>. It does not depend on the candidates.
+    /// </summary>
+    public string? DuplicateArgument()
+        => FuncArguments.GroupBy(static a => a).FirstOrDefault(static g => g.Count() > 1) is { } duplicate
+            ? $"the argument type '{Emit.TypeNames.Display(duplicate.Key)}' occurs more than once"
+            : null;
+
+    /// <summary>
+    /// The constructor parameter of <paramref name="target"/> that each argument maps to (Analysis.Model.spec, "Mapping
+    /// of <c>Func&lt;..., T&gt;</c>", conditions 3 and 5), or the reason that <c>SGIOC305</c> reports. A parameter with
+    /// <c>[ServiceKey]</c> takes no part.
+    /// </summary>
+    /// <param name="target">The closed definition that <c>T</c> resolves to.</param>
+    /// <param name="mapping">The index of the constructor parameter of each argument.</param>
+    /// <returns>The reason, or <see langword="null"/> when the mapping is valid.</returns>
+    public string? Map(ClosedDefinition target, out ImmutableEquatableArray<int> mapping)
+    {
+        mapping = [];
+        if(target.Lifetime != Lifetime.Transient)
+        {
+            return $"'{Emit.KeyNames.Definition(target)}' is {target.Lifetime}; it must be Transient";
+        }
+
+        int[] result = new int[FuncArguments.Length];
+        for(int a = 0; a < FuncArguments.Length; a++)
+        {
+            int[] matches = [.. System.Linq.Enumerable.Range(0, target.ConstructorParameters.Length)
+                .Where(p => target.ConstructorParameters[p].KeyMode != SiteKeyMode.ServiceKey && target.ConstructorParameters[p].Type.Equals(FuncArguments[a]))];
+            if(matches.Length != 1)
+            {
+                return $"the argument type '{Emit.TypeNames.Display(FuncArguments[a])}' matches {(matches.Length == 0 ? "no" : "more than one")} constructor parameter of '{Emit.KeyNames.Definition(target)}'";
+            }
+
+            result[a] = matches[0];
+        }
+
+        mapping = result.ToImmutableEquatableArray();
+        return null;
+    }
+
+    /// <summary>
     /// Gets a value indicating whether the request is a collection of <c>KeyValuePair</c> or a dictionary whose value is
     /// the service, or the service in <c>Lazy</c>, <c>Func</c> without arguments, or <c>Task</c>.
     /// </summary>

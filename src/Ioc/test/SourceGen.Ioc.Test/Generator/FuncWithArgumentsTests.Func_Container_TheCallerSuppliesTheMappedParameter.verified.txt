@@ -1,0 +1,97 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::System.String, global::App.Job>? __w_FuncJob_ef9c988a;
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>>? __w_FuncJob_3e66db35;
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Consumer __Create_Consumer_fd0ac76a()
+    {
+        __Singletons s = __singletons;
+        global::App.Consumer instance;
+        lock(s.__lock_Consumer_fd0ac76a)
+        {
+            if(s.__f_Consumer_fd0ac76a is { } existing)
+            {
+                return existing;
+            }
+
+            global::App.AppContainer c = s.Root;
+            instance = new global::App.Consumer(
+                c.__Wrap_FuncJob_ef9c988a(),
+                c.__Wrap_FuncJob_3e66db35());
+            global::System.Threading.Interlocked.Exchange(ref s.__f_Consumer_fd0ac76a, instance);
+        }
+
+        if(global::System.Threading.Volatile.Read(ref s.Root.__disposed) != 0)
+        {
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Job __Get_Job_d10a1feb()
+    {
+        global::App.AppContainer c = this;
+        global::App.Job instance = new global::App.Job(
+            __ThrowUnavailable<global::System.String>("'App.Job → name' has no registration; only the caller of a Func that creates 'App.Job' supplies it."),
+            (global::App.Clock)c.__Get_Clock_67c9f39c());
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Job __CreateWith_FuncJob_ef9c988a(global::System.String a0)
+    {
+        global::App.AppContainer c = this;
+        global::App.Job instance = new global::App.Job(
+            a0,
+            (global::App.Clock)c.__Get_Clock_67c9f39c());
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::System.String, global::App.Job> __Wrap_FuncJob_ef9c988a() => __w_FuncJob_ef9c988a ?? __CreateWrap_FuncJob_ef9c988a();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::System.String, global::App.Job> __CreateWrap_FuncJob_ef9c988a()
+    {
+        global::App.AppContainer o = this;
+        global::System.Func<global::System.String, global::App.Job> created = new global::System.Func<global::System.String, global::App.Job>((a0) => (global::App.Job)o.__CreateWith_FuncJob_ef9c988a(a0));
+        return global::System.Threading.Interlocked.CompareExchange(ref __w_FuncJob_ef9c988a, created, null) ?? created;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Job __CreateWith_FuncJob_3e66db35(global::System.String a0)
+    {
+        global::App.AppContainer c = this;
+        global::App.Job instance = new global::App.Job(
+            a0,
+            (global::App.Clock)c.__Get_Clock_67c9f39c());
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>> __Wrap_FuncJob_3e66db35() => __w_FuncJob_3e66db35 ?? __CreateWrap_FuncJob_3e66db35();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>> __CreateWrap_FuncJob_3e66db35()
+    {
+        global::App.AppContainer o = this;
+        global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>> created = new global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>>((a0) => global::System.Threading.Tasks.Task.FromResult<global::App.Job>((global::App.Job)o.__CreateWith_FuncJob_3e66db35(a0)));
+        return global::System.Threading.Interlocked.CompareExchange(ref __w_FuncJob_3e66db35, created, null) ?? created;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    public partial global::System.Func<string, global::App.Job> Jobs
+    {
+        get
+        {
+            __ThrowIfDisposed();
+            return __Wrap_FuncJob_ef9c988a();
+        }
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private static T __ThrowUnavailable<T>(string message) => throw new global::System.InvalidOperationException(message);

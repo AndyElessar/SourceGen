@@ -34,6 +34,18 @@ internal static class GeneratedNames
     public static string For(string prefix, WrapperPlan wrapper)
         => $"{prefix}{ShortName(wrapper.Type)}{ShortName(wrapper.Request.Core)}_{Fnv1a(wrapper.Identity):x8}";
 
+    /// <summary>Gets the name of a member that belongs to a closed definition and a wrapper type of it.</summary>
+    /// <param name="prefix">The prefix, for example <c>__CreateWith_</c>.</param>
+    /// <param name="definition">The closed definition.</param>
+    /// <param name="wrapper">The wrapper type.</param>
+    /// <returns>The member name.</returns>
+    public static string For(string prefix, ClosedDefinition definition, TypeRef wrapper)
+    {
+        NamedTypeRef type = definition.Implementation;
+        string identity = $"{type.CanonicalString}|{KeyRef.CanonicalOf(definition.Key)}|{wrapper.CanonicalString}";
+        return $"{prefix}{ShortName(type)}_{Fnv1a(identity):x8}";
+    }
+
     /// <summary>Gets the name of a member that belongs to a <c>KeyValuePair</c>.</summary>
     /// <param name="prefix">The prefix, for example <c>__Pair_</c>.</param>
     /// <param name="pair">The pair.</param>

@@ -1,0 +1,31 @@
+﻿    public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddApp(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.ReadOnlySpan<string> tags)
+    {
+        global::SourceGen.Ioc.IocRegistrationMarker.Enter(services, "App.AppServiceCollectionExtensions.AddApp", "TestAssembly");
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::SourceGen.Ioc.IocHolder<global::App.Clock>>(services, __k_Clock_67c9f39c, static (sp, _) => global::SourceGen.Ioc.IocHolder.Own(__Create_Clock_67c9f39c(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::App.Clock>(services, static sp => __Get_Clock_67c9f39c(sp));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddKeyedSingleton<global::SourceGen.Ioc.IocHolder<global::App.Consumer>>(services, __k_Consumer_fd0ac76a, static (sp, _) => global::SourceGen.Ioc.IocHolder.Own(__Create_Consumer_fd0ac76a(sp)));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::App.Consumer>(services, static sp => __Get_Consumer_fd0ac76a(sp));
+
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::App.Job>(services, static sp => __Create_Job_d10a1feb(sp));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>>>(services, static sp => new global::System.Func<global::System.String, global::System.Threading.Tasks.Task<global::App.Job>>((a0) => global::System.Threading.Tasks.Task.FromResult<global::App.Job>((global::App.Job)__CreateWith_Job_63128255(sp, a0))));
+        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<global::System.Func<global::System.String, global::App.Job>>(services, static sp => new global::System.Func<global::System.String, global::App.Job>((a0) => (global::App.Job)__CreateWith_Job_cde9b0f2(sp, a0)));
+        return services;
+    }
+
+    private static global::App.Job __CreateWith_Job_63128255(global::System.IServiceProvider sp, global::System.String a0)
+    {
+        global::App.Job instance = new global::App.Job(
+            a0,
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.Clock>(sp));
+        return instance;
+    }
+
+    private static global::App.Job __CreateWith_Job_cde9b0f2(global::System.IServiceProvider sp, global::System.String a0)
+    {
+        global::App.Job instance = new global::App.Job(
+            a0,
+            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::App.Clock>(sp));
+        return instance;
+    }

@@ -89,6 +89,33 @@ public class WrapperTests
     }
 
     [Test]
+    public async Task FuncWithArguments_TheCallerSuppliesTheMappedParameter()
+    {
+        using AppContainer root = new();
+
+        ReportHost host = root.GetRequiredService<ReportHost>();
+        Report first = host.Reports("first");
+        Report second = host.Reports("second");
+        Task<Report> task = host.ReportTasks("task");
+
+        await Assert.That(first.Title).IsEqualTo("first");
+        await Assert.That(second.Title).IsEqualTo("second");
+        await Assert.That(first).IsNotSameReferenceAs(second);
+        await Assert.That(first.Clock).IsSameReferenceAs(root.Clock);
+        await Assert.That(task.IsCompletedSuccessfully).IsTrue();
+        await Assert.That(task.Result.Title).IsEqualTo("task");
+        await Assert.That(ReferenceEquals(root.GetRequiredService<Func<string, Report>>(), host.Reports)).IsTrue();
+    }
+
+    [Test]
+    public async Task FuncWithArguments_TheTargetResolvedDirectly_ThrowsForTheMappedParameter()
+    {
+        using AppContainer root = new();
+
+        await Assert.That(() => root.GetRequiredService<Report>()).ThrowsExactly<InvalidOperationException>();
+    }
+
+    [Test]
     public async Task KeyValuePair_PairsTheKeyOfTheSiteWithTheService()
     {
         using AppContainer root = new();

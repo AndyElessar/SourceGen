@@ -191,6 +191,11 @@ internal static class ContainerEmitter
     /// </summary>
     private static void WriteWrapper(SourceWriter writer, ContainerPlan plan, WrapperPlan wrapper, string self)
     {
+        if(wrapper.Mapping is not null)
+        {
+            WriteCreateWith(writer, plan, wrapper, self);
+        }
+
         string type = TypeNames.CSharp(wrapper.Type);
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
@@ -213,6 +218,43 @@ internal static class ContainerEmitter
         writer.WriteLine('}');
     }
 
+    private static string CreateWith(WrapperPlan wrapper) => GeneratedNames.For("__CreateWith_", wrapper);
+
+    /// <summary>
+    /// The creation of <c>T</c> for a <c>Func&lt;A1, ..., An, T&gt;</c>: each mapped constructor parameter takes the
+    /// argument of the caller, and the instance that resolves the <c>Func</c> supplies the other dependencies
+    /// (Container.Output.spec, "Wrapper types"). <c>T</c> is Transient, so the instance is not stored.
+    /// </summary>
+    private static void WriteCreateWith(SourceWriter writer, ContainerPlan plan, WrapperPlan wrapper, string self)
+    {
+        // The parameters that another Func maps are unavailable in the resolver of T: this Func resolves them as usual
+        DefinitionPlan own = plan.Definitions[wrapper.Target];
+        DefinitionPlan definition = own with
+        {
+            Arguments = own.Arguments
+                .Select((a, i) => wrapper.Overrides?.FirstOrDefault(o => o.Index == i)?.Argument ?? a)
+                .ToImmutableEquatableArray(),
+        };
+        ImmutableEquatableArray<TypeRef> arguments = wrapper.Request.FuncArguments;
+        int[] mapping = [.. wrapper.Mapping!];
+        writer.WriteLine();
+        writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+        writer.WriteLine($"private {TypeNames.CSharp(definition.Definition.Implementation)} {CreateWith(wrapper)}({string.Join(", ", arguments.Select(static (a, i) => $"{TypeNames.CSharp(a)} a{i}"))})");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        writer.WriteLine($"{self} c = this;");
+        CreationWriter.Write(
+            writer,
+            definition.Definition,
+            declare: true,
+            i => Array.IndexOf(mapping, i) is var a and >= 0 ? $"a{a}" : Argument(plan, definition, i),
+            (i, member) => Assignment(plan, definition, i, member),
+            disposeOnFailure: false);
+        writer.WriteLine("return instance;");
+        writer.Indentation--;
+        writer.WriteLine('}');
+    }
+
     /// <summary>
     /// The expression that creates a wrapper: <c>T</c> resolved on <paramref name="owner"/>, wrapped from the inside to
     /// the outside. A synchronous service in <c>Task&lt;T&gt;</c> is a completed task. A service of the fallback provider
@@ -222,8 +264,11 @@ internal static class ContainerEmitter
     {
         WrapperRequest request = wrapper.Request;
         string core = TypeNames.CSharp(request.Core);
+        ImmutableEquatableArray<TypeRef> arguments = request.FuncArguments;
+        string names = string.Join(", ", arguments.Select(static (_, i) => $"a{i}"));
         string value = wrapper.Source switch
         {
+            ArgumentKind.Resolved when wrapper.Mapping is not null => $"({core}){owner}.{CreateWith(wrapper)}({names})",
             ArgumentKind.Resolved => $"({core}){owner}.{Get(plan.Definitions[wrapper.Target].Definition)}()",
             ArgumentKind.Self => $"({core}){owner}",
             ArgumentKind.Root => $"({core}){owner}.__singletons.Root",
@@ -244,6 +289,8 @@ internal static class ContainerEmitter
             DeferredKind.Lazy when wrapper.Cache is WrapperCache.Root or WrapperCache.Scope
                 => $"new global::System.Lazy<{result}>(() => {value}, global::System.Threading.LazyThreadSafetyMode.PublicationOnly)",
             DeferredKind.Lazy => $"new global::System.Lazy<{result}>(() => {value}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)",
+            DeferredKind.Func when arguments.Length > 0
+                => $"new global::System.Func<{string.Join(", ", arguments.Select(TypeNames.CSharp))}, {result}>(({names}) => {value})",
             DeferredKind.Func => $"new global::System.Func<{result}>(() => {value})",
             _ => value,
         };
@@ -692,6 +739,7 @@ internal static class ContainerEmitter
             ArgumentKind.Wrapper => $"c.{Wrap(plan.Wrappers[argument.Target])}()",
             ArgumentKind.Pair => $"c.{Pair(plan.Pairs[argument.Target])}()",
             ArgumentKind.Keyed => $"({type})c.{Keyed(plan.KeyedCollections[argument.Target])}()",
+            ArgumentKind.Unavailable => $"__ThrowUnavailable<{type}>({SymbolDisplay.FormatLiteral($"'{KeyNames.Definition(definition.Definition)} → {parameter.Name}' has no registration; only the caller of a Func that creates '{KeyNames.Definition(definition.Definition)}' supplies it.", quote: true)})",
             _ => $"({type})c.{Get(plan.Definitions[argument.Target].Definition)}()",
         };
     }
@@ -1434,6 +1482,14 @@ internal static class ContainerEmitter
         writer.WriteLine();
         writer.WriteLine("    throw new global::System.AggregateException(errors);");
         writer.WriteLine('}');
+
+        // A generic method, because an argument cannot be a throw expression
+        if(plan.Definitions.Any(static d => d.Arguments.Any(static a => a.Kind == ArgumentKind.Unavailable)))
+        {
+            writer.WriteLine();
+            writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
+            writer.WriteLine($"private static T __ThrowUnavailable<T>(string message) => throw new {InvalidOperation}(message);");
+        }
 
         if(container.IntegrateServiceProvider || stored.Any(static d => d.Definition.Disposal != Disposal.None))
         {

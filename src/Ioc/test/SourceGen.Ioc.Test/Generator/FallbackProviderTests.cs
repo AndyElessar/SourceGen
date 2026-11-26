@@ -131,8 +131,8 @@ public partial class FallbackProviderTests
     [Test]
     public async Task SGIOC402_WrapperDependencyWithFallbackProvider_NotSentToTheFallbackYet()
     {
-        // Func<A..., T> comes in a later slice. The container must create it, so until then it stays a missing dependency
-        // and does not go to the fallback provider. A collection of the service is merged with it.
+        // A collection of Func<A..., T> comes in a later slice. The container must create it, so until then it stays a
+        // missing dependency and does not go to the fallback provider. A collection of the service is merged with it.
         GeneratorTestResult result = await RunAsync(Usings + """
             using System.Collections.Generic;
 
@@ -142,7 +142,7 @@ public partial class FallbackProviderTests
             public sealed class SystemClock : IClock;
 
             [IocRegister(ServiceLifetime.Singleton)]
-            public sealed class Consumer(IEnumerable<IClock> clocks, IClock[] array, Func<string, IClock>? factory = null);
+            public sealed class Consumer(IEnumerable<IClock> clocks, IClock[] array, IEnumerable<Func<string, IClock>>? factories = null);
 
             [IocContainer]
             public partial class {|SGIOC402:AppContainer|};

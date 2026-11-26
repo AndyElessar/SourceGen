@@ -45,7 +45,8 @@ internal static class ServiceCollectionExtensionEmitter
         }
 
         Dictionary<(TypeRef Type, string Key), List<int>> providers = Analysis.DependencyGraph.Providers(model.Definitions);
-        WriteMethod(writer, model);
+        Dictionary<string, List<WrapperDemand>> wrappers = WrapperDemands(model);
+        WriteMethod(writer, model, wrappers);
         foreach(ClosedDefinition definition in model.Definitions)
         {
             writer.WriteLine();
@@ -53,6 +54,12 @@ internal static class ServiceCollectionExtensionEmitter
             if(HasHolder(definition))
             {
                 WriteGet(writer, definition);
+            }
+
+            foreach((TypeRef func, ImmutableEquatableArray<int> mapping) in FuncsWithArguments(definition, wrappers))
+            {
+                writer.WriteLine();
+                WriteCreateWith(writer, definition, func, mapping, providers);
             }
         }
 
@@ -69,7 +76,7 @@ internal static class ServiceCollectionExtensionEmitter
 
     private static bool HasHolder(ClosedDefinition definition) => definition.Lifetime != Lifetime.Transient;
 
-    private static void WriteMethod(SourceWriter writer, ServiceCollectionExtensionModel model)
+    private static void WriteMethod(SourceWriter writer, ServiceCollectionExtensionModel model, Dictionary<string, List<WrapperDemand>> wrappers)
     {
         ServiceCollectionExtensionSettings settings = model.Settings;
         writer.WriteLine($"public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection Add{settings.Name}(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, params global::System.ReadOnlySpan<string> tags)");
@@ -86,7 +93,6 @@ internal static class ServiceCollectionExtensionEmitter
 
         writer.WriteLine($"global::SourceGen.Ioc.IocRegistrationMarker.Enter(services, \"{settings.Namespace}.{settings.Name}ServiceCollectionExtensions.Add{settings.Name}\", \"{settings.AssemblyName}\");");
 
-        Dictionary<string, List<WrapperDemand>> wrappers = WrapperDemands(model);
         foreach(ClosedDefinition definition in model.Definitions)
         {
             WriteRegistrations(writer, definition);
@@ -168,7 +174,7 @@ internal static class ServiceCollectionExtensionEmitter
                 KeyRef? key = dependency.KeyIn(definition);
                 WrapperDemand? demand = request switch
                 {
-                    { IsSingleWrapper: true } => new WrapperDemand(dependency.Type, key),
+                    { IsSingleWrapper: true } or { IsSingleFuncWithArguments: true } => new WrapperDemand(dependency.Type, key),
                     { IsSimpleCollection: true } => new WrapperDemand(WrapperRequest.ElementOf(dependency.Type)!, key),
 
                     // A pair without a key has no candidate
@@ -221,8 +227,18 @@ internal static class ServiceCollectionExtensionEmitter
             foreach(TypeRef type in types.Values)
             {
                 WrapperRequest request = WrapperRequest.Parse(type)!;
+
+                // A Func<A..., S> needs a valid mapping; the full check of a container reports the others (SGIOC305)
+                if(request.FuncArguments.Length > 0 && request.Map(definition, out _) is not null)
+                {
+                    continue;
+                }
+
                 Lifetime lifetime = request.Deferred == DeferredKind.Func && definition.Lifetime != Lifetime.Singleton ? Lifetime.Transient : definition.Lifetime;
-                string value = WrapperExpression(request, $"({TypeNames.CSharp(serviceType)}){source}(sp)", cached: lifetime != Lifetime.Transient);
+                string service = request.FuncArguments.Length > 0
+                    ? $"({TypeNames.CSharp(serviceType)}){GeneratedNames.For("__CreateWith_", definition, type)}(sp, {string.Join(", ", request.FuncArguments.Select(static (_, i) => $"a{i}"))})"
+                    : $"({TypeNames.CSharp(serviceType)}){source}(sp)";
+                string value = WrapperExpression(request, service, cached: lifetime != Lifetime.Transient);
                 string wrapper = TypeNames.CSharp(type);
                 if(definition.Key is { } registered)
                 {
@@ -255,8 +271,11 @@ internal static class ServiceCollectionExtensionEmitter
         string core = TypeNames.CSharp(request.Core);
         string value = request.IsTask ? $"global::System.Threading.Tasks.Task.FromResult<{core}>({service})" : service;
         string result = request.IsTask ? $"global::System.Threading.Tasks.Task<{core}>" : core;
+        ImmutableEquatableArray<TypeRef> arguments = request.FuncArguments;
         return request.Deferred switch
         {
+            DeferredKind.Func when arguments.Length > 0
+                => $"new global::System.Func<{string.Join(", ", arguments.Select(TypeNames.CSharp))}, {result}>(({string.Join(", ", arguments.Select(static (_, i) => $"a{i}"))}) => {value})",
             DeferredKind.Lazy when cached => $"new global::System.Lazy<{result}>(() => {value}, global::System.Threading.LazyThreadSafetyMode.PublicationOnly)",
             DeferredKind.Lazy => $"new global::System.Lazy<{result}>(() => {value}, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)",
             DeferredKind.Func => $"new global::System.Func<{result}>(() => {value})",
@@ -549,6 +568,53 @@ internal static class ServiceCollectionExtensionEmitter
         return key is null
             ? $"{Provider}.GetService<{type}>(sp) ?? {created}"
             : $"{KeyedProvider}.GetKeyedService<{type}>(sp, {KeyNames.Expression(key)}) ?? {created}";
+    }
+
+    /// <summary>The <c>Func&lt;A1, ..., An, S&gt;</c> types that the method registers for a closed definition, with their mapping.</summary>
+    private static (TypeRef Func, ImmutableEquatableArray<int> Mapping)[] FuncsWithArguments(ClosedDefinition definition, Dictionary<string, List<WrapperDemand>> demands)
+    {
+        SortedDictionary<string, (TypeRef, ImmutableEquatableArray<int>)> funcs = new(StringComparer.Ordinal);
+        foreach(TypeRef serviceType in definition.ServiceTypes)
+        {
+            if(!demands.TryGetValue(serviceType.CanonicalString, out List<WrapperDemand>? list))
+            {
+                continue;
+            }
+
+            foreach(WrapperDemand demand in list.Where(d => d.Matches(definition.Key)))
+            {
+                if(WrapperRequest.Parse(demand.Wrapper) is { IsSingleFuncWithArguments: true } request && request.Map(definition, out ImmutableEquatableArray<int> mapping) is null)
+                {
+                    funcs[demand.Wrapper.CanonicalString] = (demand.Wrapper, mapping);
+                }
+            }
+        }
+
+        return [.. funcs.Values];
+    }
+
+    /// <summary>
+    /// The creation of a closed definition for a <c>Func&lt;A1, ..., An, S&gt;</c>: each mapped constructor parameter takes
+    /// the argument of the caller, and <c>sp</c> supplies the other dependencies (ServiceCollection.Output.spec, "Wrapper
+    /// types and collections").
+    /// </summary>
+    private static void WriteCreateWith(SourceWriter writer, ClosedDefinition definition, TypeRef func, ImmutableEquatableArray<int> mapping, Dictionary<(TypeRef Type, string Key), List<int>> providers)
+    {
+        ImmutableEquatableArray<TypeRef> arguments = WrapperRequest.Parse(func)!.FuncArguments;
+        int[] map = [.. mapping];
+        writer.WriteLine($"private static {TypeNames.CSharp(definition.Implementation)} {GeneratedNames.For("__CreateWith_", definition, func)}(global::System.IServiceProvider sp, {string.Join(", ", arguments.Select(static (a, i) => $"{TypeNames.CSharp(a)} a{i}"))})");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        CreationWriter.Write(
+            writer,
+            definition,
+            declare: true,
+            i => Array.IndexOf(map, i) is var a and >= 0 ? $"a{a}" : Argument(definition, definition.Dependencies[i], i, providers),
+            (i, member) => Assignment(definition, i, member, providers),
+            definition.Disposal != Disposal.None);
+        writer.WriteLine("return instance;");
+        writer.Indentation--;
+        writer.WriteLine('}');
     }
 
     private static void WriteCreate(SourceWriter writer, ClosedDefinition definition, Dictionary<(TypeRef Type, string Key), List<int>> providers)

@@ -326,5 +326,20 @@ public class ServiceCollectionExtensionTests
         await Assert.That(scope.ServiceProvider.GetRequiredService<IEnumerable<KeyValuePair<string, IStore>>>().Count()).IsEqualTo(2);
     }
 
+    [Test]
+    public async Task AddTestAot_FuncWithArguments_TheCallerSuppliesTheMappedParameter()
+    {
+        using ServiceProvider provider = Build();
+
+        ReportHost host = provider.GetRequiredService<ReportHost>();
+        Report report = host.Reports("first");
+        Task<Report> task = host.ReportTasks("task");
+
+        await Assert.That(report.Title).IsEqualTo("first");
+        await Assert.That(report.Clock).IsSameReferenceAs(provider.GetRequiredService<IClock>());
+        await Assert.That(host.Reports("second")).IsNotSameReferenceAs(report);
+        await Assert.That(task.Result.Title).IsEqualTo("task");
+    }
+
     private sealed class Missing : IMissing;
 }

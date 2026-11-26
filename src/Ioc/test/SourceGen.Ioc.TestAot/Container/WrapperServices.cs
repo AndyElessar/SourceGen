@@ -36,6 +36,24 @@ public sealed class WrapperHost(
     public Lazy<IExternal>? External => external;
 }
 
+/// <summary>A Transient service whose <c>title</c> only the caller of a <c>Func&lt;string, Report&gt;</c> supplies.</summary>
+[IocRegister(ServiceLifetime.Transient)]
+public sealed class Report(string title, IClock clock)
+{
+    public string Title => title;
+
+    public IClock Clock => clock;
+}
+
+/// <summary><c>Func&lt;A..., T&gt;</c>: the caller supplies the mapped constructor parameter.</summary>
+[IocRegister(ServiceLifetime.Singleton)]
+public sealed class ReportHost(Func<string, Report> reports, Func<string, Task<Report>> reportTasks)
+{
+    public Func<string, Report> Reports => reports;
+
+    public Func<string, Task<Report>> ReportTasks => reportTasks;
+}
+
 /// <summary><c>KeyValuePair&lt;TKey, T&gt;</c> with the key type of the registration, with <c>object</c>, and with an enum.</summary>
 [IocRegister(ServiceLifetime.Scoped)]
 public sealed class PairHost(

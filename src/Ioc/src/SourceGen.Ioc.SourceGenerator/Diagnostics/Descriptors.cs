@@ -184,6 +184,13 @@ internal static class Descriptors
         "'{0}' is not a supported combination of wrapper types",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC305: a <c>Func&lt;A1, ..., An, T&gt;</c> does not meet the conditions of the mapping.</summary>
+    public static readonly DiagnosticDescriptor InvalidFuncWithArguments = Create(
+        "SGIOC305",
+        "Invalid Func with arguments",
+        "'{0}' cannot be generated: {1}",
+        DiagnosticSeverity.Error);
+
     /// <summary>SGIOC403: a Transient closed definition is disposable, and the container does not track it.</summary>
     public static readonly DiagnosticDescriptor DisposableTransient = Create(
         "SGIOC403",
@@ -257,6 +264,7 @@ internal static class Descriptors
         UnsupportedWrapper,
         AmbiguousDependency,
         MissingDependency,
+        InvalidFuncWithArguments,
         DisposableTransient,
         DuplicateDictionaryKey,
         FallbackDependency,

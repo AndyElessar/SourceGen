@@ -1,0 +1,29 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Job __Get_Job_d10a1feb()
+    {
+        global::App.AppContainer c = this;
+        global::App.Job instance = new global::App.Job(
+            (global::System.String)global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(c.__Fallback(), typeof(global::System.String)),
+            (global::System.Int32)global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(c.__Fallback(), typeof(global::System.Int32)));
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Job __CreateWith_FuncJob_ef9c988a(global::System.String a0)
+    {
+        global::App.AppContainer c = this;
+        global::App.Job instance = new global::App.Job(
+            a0,
+            (global::System.Int32)global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(c.__Fallback(), typeof(global::System.Int32)));
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Job __CreateWith_FuncJob_f4e5666d(global::System.Int32 a0)
+    {
+        global::App.AppContainer c = this;
+        global::App.Job instance = new global::App.Job(
+            (global::System.String)global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(c.__Fallback(), typeof(global::System.String)),
+            a0);
+        return instance;
+    }

@@ -40,6 +40,12 @@ internal enum ArgumentKind
 
     /// <summary>A collection of <c>KeyValuePair</c> or a dictionary: the resolver of <see cref="ArgumentPlan.Target"/> in <see cref="ContainerPlan.KeyedCollections"/>.</summary>
     Keyed,
+
+    /// <summary>
+    /// A required constructor parameter that a <c>Func&lt;A..., T&gt;</c> maps and that the container has no candidate
+    /// for: only the caller of the <c>Func</c> supplies it. The resolver of <c>T</c> itself throws.
+    /// </summary>
+    Unavailable,
 }
 
 /// <summary>The resolution result of one dependency site.</summary>
@@ -158,6 +164,12 @@ internal enum WrapperCache
 /// Whether a dependency site asks for it. Otherwise it is only the element of a collection. The candidates of a
 /// collection can have the same wrapper type and key, so its entry in the lookup table follows the rule of a single service.
 /// </param>
+/// <param name="Mapping">For <c>Func&lt;A1, ..., An, T&gt;</c>: the constructor parameter of <c>T</c> that each argument supplies.</param>
+/// <param name="Overrides">
+/// For <c>Func&lt;A1, ..., An, T&gt;</c>: the arguments of <c>T</c> that differ from its own resolver. A parameter that
+/// another <c>Func</c> maps is <see cref="ArgumentKind.Unavailable"/> in the resolver of <c>T</c>, and this <c>Func</c>
+/// resolves it as usual.
+/// </param>
 internal sealed record WrapperPlan(
     TypeRef Type,
     WrapperRequest Request,
@@ -167,7 +179,14 @@ internal sealed record WrapperPlan(
     bool Required,
     WrapperCache Cache,
     string Identity,
-    bool Site);
+    bool Site,
+    ImmutableEquatableArray<int>? Mapping = null,
+    ImmutableEquatableArray<ArgumentOverride>? Overrides = null);
+
+/// <summary>An argument of a closed definition that replaces the argument of its own resolver.</summary>
+/// <param name="Index">The index in <see cref="ClosedDefinition.Dependencies"/>.</param>
+/// <param name="Argument">The argument.</param>
+internal sealed record ArgumentOverride(int Index, ArgumentPlan Argument);
 
 /// <summary>
 /// The resolver of a <c>KeyValuePair&lt;TKey, T&gt;</c>: the key of the dependency site with the value. A pair is a value
@@ -281,6 +300,27 @@ internal static class ContainerAnalysis
         HashSet<(TypeRef, string)> duplicateKeys = [];
         bool reachesErrorNode = false;
 
+        // The constructor parameters that a valid Func<A..., T> maps, by closed definition and parameter
+        HashSet<(int Definition, int Parameter)> mapped = [];
+        foreach((TypeRef type, KeyRef? key) in definitions
+            .SelectMany(static d => d.Dependencies.Where(static p => p.KeyMode != SiteKeyMode.ServiceKey).Select(p => (p.Type, p.KeyIn(d))))
+            .Concat(container.Accessors.Select(static a => (a.Type, a.Key))))
+        {
+            if(WrapperRequest.Parse(type) is { IsSingleFuncWithArguments: true } request
+                && request.DuplicateArgument() is null
+                && providers.TryGetValue((request.Core, KeyRef.CanonicalOf(key)), out List<int>? targets)
+                && targets.Count == 1
+                && request.Map(definitions[targets[0]], out ImmutableEquatableArray<int> mapping) is null)
+            {
+                mapped.UnionWith(mapping.Select(m => (targets[0], m)));
+            }
+        }
+
+        // The parameters that a Func resolves itself, because they are unavailable in the resolver of their closed
+        // definition: each one is resolved one time, and its edges are added after the walk of the definitions
+        Dictionary<(int Definition, int Parameter), ArgumentPlan?> funcArguments = [];
+        List<GraphEdge> funcEdges = [];
+
         // The element of a collection of wrappers is the wrapper of each candidate, with the cache of that candidate
         for(int c = 0; c < collections.Count; c++)
         {
@@ -310,33 +350,20 @@ internal static class ContainerAnalysis
                     continue;
                 }
 
-                if(Resolve(parameter.Type, parameter.KeyIn(definition), parameter.Optional != OptionalMode.Required, KeyNames.Definition(definition), parameter.Name) is { } resolved)
+                // A mapped parameter without a candidate is not missing: the caller of the Func usually supplies it. It
+                // goes to the fallback provider without SGIOC501, or it throws (Analysis.Model.spec, "Mapping of Func<..., T>")
+                if(MappedWithoutCandidate(index, p))
+                {
+                    arguments.Add(container.IntegrateServiceProvider
+                        ? new ArgumentPlan(ArgumentKind.Fallback, -1, parameter.KeyIn(definition))
+                        : new ArgumentPlan(ArgumentKind.Unavailable, -1));
+                    continue;
+                }
+
+                if(ResolveParameter(index, p) is { } resolved)
                 {
                     arguments.Add(resolved);
-
-                    // The edge of a pair is the edge of its value
-                    ArgumentPlan argument = resolved.Kind == ArgumentKind.Pair ? pairs[resolved.Target].Value : resolved;
-                    if(argument.Kind == ArgumentKind.Resolved)
-                    {
-                        edges[index].Add(new GraphEdge(index, p, argument.Target));
-                    }
-                    else if(argument.Kind == ArgumentKind.Collection)
-                    {
-                        // One edge for each candidate (Analysis.Model.spec, "Circular dependencies"), deferred for Lazy and Func
-                        CollectionPlan collection = collections[argument.Target];
-                        DeferredKind deferred = collection.Wrapper?.Deferred ?? DeferredKind.None;
-                        edges[index].AddRange(collection.Candidates.Select(c => new GraphEdge(index, p, c, deferred)));
-                    }
-                    else if(argument.Kind == ArgumentKind.Wrapper && wrappers[argument.Target] is { Source: ArgumentKind.Resolved } wrapper)
-                    {
-                        edges[index].Add(new GraphEdge(index, p, wrapper.Target, wrapper.Request.Deferred));
-                    }
-                    else if(argument.Kind == ArgumentKind.Keyed)
-                    {
-                        // One edge for each candidate, deferred for Lazy and Func
-                        KeyedCollectionPlan keyed = keyedCollections[argument.Target];
-                        edges[index].AddRange(keyed.Candidates.Select(c => new GraphEdge(index, p, c, keyed.Request.Deferred)));
-                    }
+                    AddEdges(edges[index], index, p, resolved);
                 }
             }
 
@@ -355,6 +382,11 @@ internal static class ContainerAnalysis
             {
                 accessors.Add(new AccessorPlan(accessor, argument));
             }
+        }
+
+        foreach(GraphEdge edge in funcEdges)
+        {
+            edges[edge.From].Add(edge);
         }
 
         CheckGraph(definitions, edges, problems);
@@ -379,11 +411,60 @@ internal static class ContainerAnalysis
             keyedCollections.ToImmutableEquatableArray());
         return new(container.Type, plan, problems.ToImmutableEquatableArray());
 
+        // A required parameter of a plain service type that a valid Func maps, and that has no candidate
+        bool MappedWithoutCandidate(int index, int p)
+        {
+            ClosedDefinition definition = definitions[index];
+            Dependency parameter = definition.Dependencies[p];
+            return mapped.Contains((index, p))
+                && parameter.Optional == OptionalMode.Required
+                && WrapperRequest.Parse(parameter.Type) is { IsPlain: true }
+                && (parameter.KeyIn(definition) is not null || BuiltIn(parameter.Type, container.Type) is null)
+                && !providers.ContainsKey((parameter.Type, KeyRef.CanonicalOf(parameter.KeyIn(definition))));
+        }
+
+        ArgumentPlan? ResolveParameter(int index, int p)
+        {
+            ClosedDefinition definition = definitions[index];
+            Dependency parameter = definition.Dependencies[p];
+            return Resolve(parameter.Type, parameter.KeyIn(definition), parameter.Optional != OptionalMode.Required, KeyNames.Definition(definition), parameter.Name, definition.Implementation, definition.SiteOf(p));
+        }
+
+        // The edges of one argument (Analysis.Model.spec, "Circular dependencies")
+        void AddEdges(List<GraphEdge> list, int index, int p, ArgumentPlan resolved)
+        {
+            // The edge of a pair is the edge of its value
+            ArgumentPlan argument = resolved.Kind == ArgumentKind.Pair ? pairs[resolved.Target].Value : resolved;
+            if(argument.Kind == ArgumentKind.Resolved)
+            {
+                list.Add(new GraphEdge(index, p, argument.Target));
+            }
+            else if(argument.Kind == ArgumentKind.Collection)
+            {
+                // One edge for each candidate, deferred for Lazy and Func
+                CollectionPlan collection = collections[argument.Target];
+                DeferredKind deferred = collection.Wrapper?.Deferred ?? DeferredKind.None;
+                list.AddRange(collection.Candidates.Select(c => new GraphEdge(index, p, c, deferred)));
+            }
+            else if(argument.Kind == ArgumentKind.Wrapper && wrappers[argument.Target] is { Source: ArgumentKind.Resolved } wrapper)
+            {
+                list.Add(new GraphEdge(index, p, wrapper.Target, wrapper.Request.Deferred, wrapper.Mapping));
+            }
+            else if(argument.Kind == ArgumentKind.Keyed)
+            {
+                // One edge for each candidate, deferred for Lazy and Func
+                KeyedCollectionPlan keyed = keyedCollections[argument.Target];
+                list.AddRange(keyed.Candidates.Select(c => new GraphEdge(index, p, c, keyed.Request.Deferred)));
+            }
+        }
+
         // A single dependency (Analysis.Model.spec, "Single service"). A problem is recorded, and the result is null.
         // The dependency site in a message is "{owner} → {member}" (Diagnostics.spec, "Names in messages").
         // With a fallback provider, a missing dependency goes to it, and only a required one is reported (SGIOC501).
         // Without one, a missing optional dependency uses its default value.
-        ArgumentPlan? Resolve(TypeRef type, KeyRef? key, bool optional, string owner, string member)
+        // The implementation type and the site of a closed definition let the output skip a problem that the definite
+        // check already reports. A partial accessor has neither
+        ArgumentPlan? Resolve(TypeRef type, KeyRef? key, bool optional, string owner, string member, NamedTypeRef? implementation = null, SitePosition site = default)
         {
             if(key is null && BuiltIn(type, container.Type) is { } builtIn)
             {
@@ -417,6 +498,11 @@ internal static class ContainerAnalysis
             if(request.IsKeyedCollection)
             {
                 return ResolveKeyed(type, request, key);
+            }
+
+            if(request.IsSingleFuncWithArguments)
+            {
+                return ResolveFunc(type, request, key, implementation, site);
             }
 
             if(request.IsSimpleCollection)
@@ -557,6 +643,80 @@ internal static class ContainerAnalysis
             return new ArgumentPlan(ArgumentKind.Keyed, index, key);
         }
 
+        // Func<A1, ..., An, T> (Analysis.Model.spec, "Mapping of Func<..., T>"): T resolves to one Transient closed
+        // definition, and each argument maps to one constructor parameter of it. Otherwise SGIOC305, also when T is missing
+        // or comes only from the fallback provider. The definite check reports some of these at the same site
+        ArgumentPlan? ResolveFunc(TypeRef type, WrapperRequest request, KeyRef? key, NamedTypeRef? implementation, SitePosition site)
+        {
+            string service = key is null ? TypeNames.Display(request.Core) : $"{TypeNames.Display(request.Core)} (Key: {KeyNames.Display(key)})";
+            string? reason = request.DuplicateArgument();
+            if(reason is null)
+            {
+                if(key is null && BuiltIn(request.Core, container.Type) is not null)
+                {
+                    reason = $"'{service}' is a built-in service";
+                }
+                else if(providers.TryGetValue((request.Core, KeyRef.CanonicalOf(key)), out List<int>? candidates))
+                {
+                    if(candidates.Count > 1)
+                    {
+                        reason = $"'{service}' is ambiguous: {string.Join(", ", candidates.Select(c => KeyNames.Definition(definitions[c])))}";
+                    }
+                    else if(request.Map(definitions[candidates[0]], out ImmutableEquatableArray<int> mapping) is { } invalid)
+                    {
+                        reason = invalid;
+                    }
+                    else
+                    {
+                        return Wrap(type, request, new ArgumentPlan(ArgumentKind.Resolved, candidates[0], key), key, false, mapping: mapping, overrides: Overrides(candidates[0], mapping));
+                    }
+                }
+                else if(ReachesErrorNode(request.Core, key))
+                {
+                    reachesErrorNode = true;
+                    return null;
+                }
+                else
+                {
+                    reason = container.IntegrateServiceProvider ? $"'{service}' is not registered in the container" : $"'{service}' is not registered";
+                }
+            }
+
+            problems.Add(new ContainerProblem(Descriptors.InvalidFuncWithArguments.Id, [TypeNames.Display(type), reason], implementation, site));
+            return null;
+        }
+
+        // The parameters of the target that another Func maps and that this Func does not map: this Func resolves them as
+        // usual. Each one is resolved one time, so its problems are reported one time
+        ImmutableEquatableArray<ArgumentOverride> Overrides(int target, ImmutableEquatableArray<int> mapping)
+        {
+            List<ArgumentOverride> overrides = [];
+            for(int p = 0; p < definitions[target].ConstructorParameters.Length; p++)
+            {
+                if(mapping.Contains(p) || !MappedWithoutCandidate(target, p))
+                {
+                    continue;
+                }
+
+                if(!funcArguments.TryGetValue((target, p), out ArgumentPlan? argument))
+                {
+                    argument = ResolveParameter(target, p);
+                    funcArguments[(target, p)] = argument;
+                    if(argument is not null)
+                    {
+                        AddEdges(funcEdges, target, p, argument);
+                    }
+                }
+
+                if(argument is not null)
+                {
+                    overrides.Add(new ArgumentOverride(p, argument));
+                }
+            }
+
+            return overrides.ToImmutableEquatableArray();
+        }
+
         // The single service rule on the candidates (Analysis.Model.spec, "Single service"). The fallback provider gets
         // fallbackKey: the key of the site, or no key for a KeyValuePair
         ArgumentPlan? Pick(List<int>? candidates, bool errorNode, KeyRef? key, KeyRef? fallbackKey, bool optional, string owner, string member, string requested)
@@ -605,7 +765,7 @@ internal static class ContainerAnalysis
         // The wrapper around T (Container.Output.spec, "Wrapper types"). Its cache follows the lifetime of T. A service of
         // the fallback provider and a built-in service count as Transient. Sites and collections that ask for the same
         // wrapper share it
-        ArgumentPlan Wrap(TypeRef type, WrapperRequest request, ArgumentPlan core, KeyRef? key, bool optional, bool site = true)
+        ArgumentPlan Wrap(TypeRef type, WrapperRequest request, ArgumentPlan core, KeyRef? key, bool optional, bool site = true, ImmutableEquatableArray<int>? mapping = null, ImmutableEquatableArray<ArgumentOverride>? overrides = null)
         {
             Lifetime lifetime = core.Kind == ArgumentKind.Resolved ? definitions[core.Target].Lifetime : Lifetime.Transient;
             WrapperCache cache = lifetime switch
@@ -625,7 +785,7 @@ internal static class ContainerAnalysis
             {
                 index = wrappers.Count;
                 wrapperIndexes[identity] = index;
-                wrappers.Add(new WrapperPlan(type, request, core.Kind, core.Target, key, required, cache, identity, site));
+                wrappers.Add(new WrapperPlan(type, request, core.Kind, core.Target, key, required, cache, identity, site, mapping, overrides));
             }
             else if(site && !wrappers[index].Site)
             {
