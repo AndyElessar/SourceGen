@@ -424,6 +424,13 @@ This section applies to `Func<A1, ..., An, T>` and `Func<A1, ..., An, Task<T>>` 
 
 The caller supplies the arguments for the mapped constructor parameters. The container does not resolve them, and their original key annotation and optional setting have no effect. The container (or scope) that resolves this `Func` supplies the other constructor parameters, the injected members, and the decorator chain as usual.
 
+`T` stays a registered service, and its own resolver (a direct dependency, the lookup table) still needs each constructor parameter. Some required parameters are not missing dependencies there. Each one is a parameter of a plain service type (not a wrapper type) that a valid `Func<..., T>` maps and that the container has no candidate for. The caller of the `Func` usually supplies it, so the container does not report it:
+
+- With a fallback provider, the resolver of `T` resolves it from the fallback provider, without `SGIOC501`.
+- Without a fallback provider, an expression that throws `InvalidOperationException` replaces the argument.
+
+A mapped parameter that has a candidate, that is optional, or that has a wrapper type is resolved as usual. A parameter that another `Func<..., T>` maps, and that this `Func` does not map, is resolved as usual inside this `Func`, with the usual diagnostics. The service collection extension resolves a mapped parameter from `sp` as usual, so MS.DI throws when `T` is resolved directly.
+
 When `T` is asynchronous, the dependency site MUST use `Func<..., Task<T>>` (`SGIOC303`).
 
 ## Checks
@@ -497,6 +504,8 @@ For each edge of each closed definition in the singleton context (deferred edges
 | Singleton | Any | Valid |
 
 An instance registration is Singleton and has no dependencies. Dependencies that are resolved from the fallback provider are not checked.
+
+When a Transient joins the singleton context through `Func<A1, ..., An, T>`, the caller supplies the mapped constructor parameters. The check does not follow the edges of these parameters from that Transient. It follows them when the same Transient is also reached in another way.
 
 #### Warning for a held Transient
 
