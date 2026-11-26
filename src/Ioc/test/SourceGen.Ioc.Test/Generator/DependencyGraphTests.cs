@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace SourceGen.Ioc.Test.Generator;
 
@@ -400,6 +401,40 @@ public class DependencyGraphTests
             """);
 
         await Assert.That(Message(result, "SGIOC302")).IsEqualTo("Singleton 'App.Inner' depends on scoped 'App.Session'");
+    }
+
+    /// <summary>A chain <c>S00000 → S00001 → …</c>; with <paramref name="cycle"/>, the last service depends on the first.</summary>
+    private static string LongChain(int length, bool cycle)
+    {
+        StringBuilder source = new(Usings + "namespace App;\n");
+        for(int i = 0; i < length; i++)
+        {
+            string next = i + 1 < length ? $"S{i + 1:D5} next" : cycle ? "S00000 next" : string.Empty;
+            source.Append(CultureInfo.InvariantCulture, $"[IocRegister(ServiceLifetime.Transient)] public sealed class S{i:D5}({next});\n");
+        }
+
+        return source.ToString();
+    }
+
+    private const int LongChainLength = 20_000;
+
+    [Test]
+    public async Task Graph_LongChain_GeneratesWithoutStackOverflow()
+    {
+        GeneratorTestResult result = await RunAsync(
+            LongChain(LongChainLength, cycle: false) + Container,
+            "[assembly: SourceGen.Ioc.IocServiceCollectionExtensions(Name = \"App\")]");
+
+        await Assert.That(HasSource(result, "AppContainer.g.cs")).IsTrue();
+        await Assert.That(HasSource(result, "ServiceCollectionExtensions")).IsTrue();
+    }
+
+    [Test]
+    public async Task Cycle_LongChain_ReportedWithoutStackOverflow()
+    {
+        GeneratorTestResult result = SourceGeneratorTestHelper.RunGenerator<IocSourceGenerator>([LongChain(LongChainLength, cycle: true)]);
+
+        await Assert.That(result.ReportedDiagnostics.Count(static d => d.Id == "SGIOC301")).IsEqualTo(1);
     }
 
     [Test]

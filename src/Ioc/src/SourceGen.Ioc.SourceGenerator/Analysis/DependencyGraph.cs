@@ -255,7 +255,10 @@ internal static class DependencyGraph
         return null;
     }
 
-    /// <summary>The strongly connected components (Tarjan), ordered by their first closed definition.</summary>
+    /// <summary>
+    /// The strongly connected components (Tarjan), ordered by their first closed definition. The walk keeps its own
+    /// stack, so a long dependency chain does not overflow the call stack.
+    /// </summary>
     private static IEnumerable<List<int>> Components(List<GraphEdge>[] edges)
     {
         int count = edges.Length;
@@ -263,51 +266,67 @@ internal static class DependencyGraph
         int[] low = new int[count];
         bool[] onStack = new bool[count];
         Stack<int> stack = new();
+        Stack<(int Node, int Edge)> walk = new();
         List<List<int>> components = [];
         int next = 1;
         for(int i = 0; i < count; i++)
         {
             if(index[i] == 0)
             {
-                Connect(i);
+                Enter(i);
+            }
+
+            while(walk.Count > 0)
+            {
+                (int node, int edge) = walk.Pop();
+                if(edge < edges[node].Count)
+                {
+                    // Visit the next edge of the node, then come back to the node
+                    walk.Push((node, edge + 1));
+                    int to = edges[node][edge].To;
+                    if(index[to] == 0)
+                    {
+                        Enter(to);
+                    }
+                    else if(onStack[to])
+                    {
+                        low[node] = Math.Min(low[node], index[to]);
+                    }
+
+                    continue;
+                }
+
+                // All edges of the node are done: give its low link to its caller
+                if(walk.Count > 0)
+                {
+                    int caller = walk.Peek().Node;
+                    low[caller] = Math.Min(low[caller], low[node]);
+                }
+
+                if(low[node] == index[node])
+                {
+                    List<int> component = [];
+                    int member;
+                    do
+                    {
+                        member = stack.Pop();
+                        onStack[member] = false;
+                        component.Add(member);
+                    }
+                    while(member != node);
+                    components.Add(component);
+                }
             }
         }
 
         return components.OrderBy(static c => c.Min());
 
-        void Connect(int node)
+        void Enter(int node)
         {
             index[node] = low[node] = next++;
             stack.Push(node);
             onStack[node] = true;
-            foreach(GraphEdge edge in edges[node])
-            {
-                if(index[edge.To] == 0)
-                {
-                    Connect(edge.To);
-                    low[node] = Math.Min(low[node], low[edge.To]);
-                }
-                else if(onStack[edge.To])
-                {
-                    low[node] = Math.Min(low[node], index[edge.To]);
-                }
-            }
-
-            if(low[node] != index[node])
-            {
-                return;
-            }
-
-            List<int> component = [];
-            int member;
-            do
-            {
-                member = stack.Pop();
-                onStack[member] = false;
-                component.Add(member);
-            }
-            while(member != node);
-            components.Add(component);
+            walk.Push((node, 0));
         }
     }
 }

@@ -622,48 +622,69 @@ internal static class ContainerAnalysis
 
     /// <summary>
     /// Each dependency before the definitions that depend on it. Definitions without a relation follow the ordering.
-    /// A cycle (SGIOC301) stops the generation before this walk. Each definition is visited once in any case.
+    /// A cycle (SGIOC301) stops the generation before this walk. Each definition is visited once in any case. The walk
+    /// keeps its own stack, so a long dependency chain does not overflow the call stack.
     /// </summary>
     private static ImmutableEquatableArray<int> TopologicalOrder(List<DefinitionPlan> plans, List<CollectionPlan> collections, List<WrapperPlan> wrappers)
     {
         List<int> order = [];
         bool[] visited = new bool[plans.Count];
-        for(int i = 0; i < plans.Count; i++)
+        Stack<(int Index, bool Done)> walk = new();
+        List<int> dependencies = [];
+        for(int i = plans.Count - 1; i >= 0; i--)
         {
-            Visit(i);
+            walk.Push((i, false));
+        }
+
+        while(walk.Count > 0)
+        {
+            (int index, bool done) = walk.Pop();
+            if(done)
+            {
+                order.Add(index);
+                continue;
+            }
+
+            if(visited[index])
+            {
+                continue;
+            }
+
+            visited[index] = true;
+            walk.Push((index, true));
+
+            // Push in reverse, so the dependencies are visited in the order of the arguments
+            dependencies.Clear();
+            dependencies.AddRange(Dependencies(plans[index]));
+            for(int d = dependencies.Count - 1; d >= 0; d--)
+            {
+                walk.Push((dependencies[d], false));
+            }
         }
 
         return order.ToImmutableEquatableArray();
 
-        void Visit(int index)
+        IEnumerable<int> Dependencies(DefinitionPlan plan)
         {
-            if(visited[index])
-            {
-                return;
-            }
-
-            visited[index] = true;
-            foreach(ArgumentPlan argument in plans[index].Arguments)
+            foreach(ArgumentPlan argument in plan.Arguments)
             {
                 if(argument.Kind == ArgumentKind.Resolved)
                 {
-                    Visit(argument.Target);
+                    yield return argument.Target;
                 }
                 else if(argument.Kind == ArgumentKind.Collection)
                 {
                     foreach(int candidate in collections[argument.Target].Candidates)
                     {
-                        Visit(candidate);
+                        yield return candidate;
                     }
                 }
                 else if(argument.Kind == ArgumentKind.Wrapper && wrappers[argument.Target] is { Source: ArgumentKind.Resolved, Request.Deferred: DeferredKind.None } task)
                 {
                     // Task<T> creates T at once. Lazy and Func create it later
-                    Visit(task.Target);
+                    yield return task.Target;
                 }
             }
-
-            order.Add(index);
         }
     }
 }
