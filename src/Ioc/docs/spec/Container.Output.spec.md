@@ -132,6 +132,8 @@ All service types of one closed definition share the same underlying instance, e
 
 A wrapper type in the table includes a wrapper whose `T` only the fallback provider has. The container creates that wrapper, the same as at the dependency site (see [Behavior for each request](#behavior-for-each-request)). When a required and an optional dependency site ask for the same wrapper type and key, the entry resolves `T` as the required site does.
 
+A `KeyValuePair<TKey, W>` whose value `W` is a wrapper, such as `KeyValuePair<string, Lazy<S>>`, is also a demand for `W` with the key of the dependency site. Thus the table has both the pair and `W` for that key.
+
 A collection whose element is a wrapper, such as `IEnumerable<Lazy<S>>`, is also a demand for the wrapper of the element. Its entry follows the rule of a [single service](Analysis.Model.spec.md#single-service): with one candidate, the entry is the wrapper of that candidate. With more than one candidate, the entry throws `InvalidOperationException` (ambiguity), as the entry of `S` does. The service collection extension registers the wrapper for each candidate, so there MS.DI takes the last one.
 
 For an inaccessible type, the container gets the `Type` from the type entry of the module (see "Type entry and wrapper entry" in [Module output](Module.Output.spec.md#type-entry-and-wrapper-entry)).

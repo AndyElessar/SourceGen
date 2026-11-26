@@ -221,12 +221,14 @@ The result is a wrapper structure plus `(T, key mode)`. The wrapper decides the 
 | Outermost shape | What it asks of `T` |
 | --- | --- |
 | `Deferred` | A single service. The key is the key that the dependency site specifies |
-| `KeyValuePair<TKey, ...>` | A single service. The generator selects it, by the key that the dependency site specifies, from the keyed registrations whose key type is equal to `TKey` |
+| `KeyValuePair<TKey, ...>` | A single service. The generator selects it, by the key that the dependency site specifies, from the keyed registrations whose key type is equal to `TKey`. A dependency site without a key has no candidate: it is a missing dependency |
 | `Collection<Deferred>` | Multiple services. The key is the key that the dependency site specifies (no key or a specified key) |
-| `Collection<KeyValuePair<TKey, ...>>` | All keyed registrations whose key type is equal to `TKey` |
-| `Dictionary<TKey, ...>` | All keyed registrations whose key type is equal to `TKey`, one for each key |
+| `Collection<KeyValuePair<TKey, ...>>` | The keyed registrations whose key type is equal to `TKey`. Without a key or with `KeyedService.AnyKey`: all of them. With a specified key: only the registrations with that key |
+| `Dictionary<TKey, ...>` | The keyed registrations whose key type is equal to `TKey`, one for each key. The key of the dependency site selects them as for `Collection<KeyValuePair<TKey, ...>>` |
 
 "The key type is equal to `TKey`" means: the canonical string of the type of a value key, or of the declared type of a symbol key, is the same as that of `TKey`. When `TKey` is `System.Object`, all keyed registrations match.
+
+A `KeyValuePair` contains only keyed services, so "no key" at a dependency site never selects a registration without a key. For a single `KeyValuePair`, the service collection extension registers each pair with the key of its candidate, so a request without a key finds nothing there either. For a collection of pairs and a dictionary, "no key" and `KeyedService.AnyKey` ask for the same content.
 
 ## Closing
 
@@ -353,7 +355,7 @@ The generator reports ambiguity and missing dependencies only in the full check 
 | Shape | Content | Order |
 | --- | --- | --- |
 | Collection | All candidates. The priority rule does not apply | By the [ordering](#ordering): derived registrations first |
-| `Collection<KeyValuePair<TKey, ...>>` | All candidates whose key type is equal to `TKey`. The priority rule does not apply | The same as above |
+| `Collection<KeyValuePair<TKey, ...>>` | All candidates whose key type is equal to `TKey`, selected by the key of the dependency site (see [Grammar of wrapper types](#grammar-of-wrapper-types)). The priority rule does not apply | The same as above |
 | Dictionary | The candidates are grouped by key. Step 1 of the single service rule applies to each group. If a group still has more than one candidate, the generator reports `SGIOC404` | No meaning |
 
 A Collection or Dictionary without candidates is empty. It is not a missing dependency.
