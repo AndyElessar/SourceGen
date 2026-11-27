@@ -634,6 +634,14 @@ internal static class ContainerEmitter
             {
                 writer.WriteLine("    __DisposeLoser(instance);");
             }
+            else if((definition.Disposal & Disposal.Runtime) != 0)
+            {
+                writer.WriteLine("    if(instance is global::System.IDisposable loser)");
+                writer.WriteLine("    {");
+                writer.WriteLine("        __DisposeLoser(loser);");
+                writer.WriteLine("    }");
+                writer.WriteLine();
+            }
 
             writer.WriteLine("    return winner;");
             writer.WriteLine('}');
@@ -1422,7 +1430,11 @@ internal static class ContainerEmitter
             writer.WriteLine($"if({Interlocked}.Exchange(ref {owner}{Field(definition)}, null) is {{ }} {name})");
             writer.WriteLine('{');
             writer.Indentation++;
-            if(!isAsync && definition.Disposal == Disposal.Async)
+            if((definition.Disposal & Disposal.Runtime) != 0)
+            {
+                WriteRuntimeDisposal(writer, name, isAsync);
+            }
+            else if(!isAsync && definition.Disposal == Disposal.Async)
             {
                 // MS.DI does the same for an object that implements only IAsyncDisposable
                 writer.WriteLine($"(errors ??= new {ExceptionList}()).Add(new {InvalidOperation}(\"'{TypeNames.Display(definition.InstanceType)}' type only implements IAsyncDisposable. Use DisposeAsync to dispose the container.\"));");
@@ -1450,6 +1462,46 @@ internal static class ContainerEmitter
             writer.Indentation--;
             writer.WriteLine('}');
         }
+    }
+
+    /// <summary>
+    /// The disposal of an object whose type does not show at compile time whether it is disposable: the object of a
+    /// factory whose return type is an interface or a class that is not sealed (Container.Output.spec, "Order").
+    /// </summary>
+    private static void WriteRuntimeDisposal(SourceWriter writer, string name, bool isAsync)
+    {
+        writer.WriteLine("try");
+        writer.WriteLine('{');
+        writer.Indentation++;
+        if(isAsync)
+        {
+            writer.WriteLine($"if({name} is global::System.IAsyncDisposable asyncDisposable)");
+            writer.WriteLine('{');
+            writer.WriteLine("    await asyncDisposable.DisposeAsync().ConfigureAwait(false);");
+            writer.WriteLine('}');
+            writer.WriteLine($"else if({name} is global::System.IDisposable disposable)");
+            writer.WriteLine('{');
+            writer.WriteLine("    disposable.Dispose();");
+            writer.WriteLine('}');
+        }
+        else
+        {
+            writer.WriteLine($"if({name} is global::System.IDisposable disposable)");
+            writer.WriteLine('{');
+            writer.WriteLine("    disposable.Dispose();");
+            writer.WriteLine('}');
+            writer.WriteLine($"else if({name} is global::System.IAsyncDisposable)");
+            writer.WriteLine('{');
+            writer.WriteLine($"    throw new {InvalidOperation}($\"'{{{name}.GetType()}}' type only implements IAsyncDisposable. Use DisposeAsync to dispose the container.\");");
+            writer.WriteLine('}');
+        }
+
+        writer.Indentation--;
+        writer.WriteLine('}');
+        writer.WriteLine($"catch({Exception} e)");
+        writer.WriteLine('{');
+        writer.WriteLine($"    (errors ??= new {ExceptionList}()).Add(e);");
+        writer.WriteLine('}');
     }
 
     private static void WriteHelpers(SourceWriter writer, ContainerPlan plan)
@@ -1504,7 +1556,7 @@ internal static class ContainerEmitter
             WriteFallbackHelpers(writer, container);
         }
 
-        if(container.ThreadSafeStrategy is not (StrategyNone or StrategyLock) && stored.Any(static d => (d.Definition.Disposal & Disposal.Sync) != 0))
+        if(container.ThreadSafeStrategy is not (StrategyNone or StrategyLock) && stored.Any(static d => (d.Definition.Disposal & (Disposal.Sync | Disposal.Runtime)) != 0))
         {
             WriteDisposeLoser(writer);
         }

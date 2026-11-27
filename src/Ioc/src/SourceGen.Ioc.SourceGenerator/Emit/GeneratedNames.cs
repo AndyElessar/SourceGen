@@ -63,8 +63,12 @@ internal static class GeneratedNames
         => $"{prefix}{ShortName(keyed.Request.Core)}_{Fnv1a(keyed.Identity):x8}";
 
     /// <summary>The short name of a source: the implementation type, or the containing type and the member.</summary>
+    /// <remarks>
+    /// The name of an explicit interface implementation contains the interface (<c>Ns.IFactory.Create</c>), so only the
+    /// part after the last dot is used.
+    /// </remarks>
     private static string ShortName(DefinitionSource source)
-        => source.Kind == SourceKind.Implementation ? ShortName(source.Type) : $"{ShortName(source.Type)}_{source.Member}";
+        => source.Kind == SourceKind.Implementation ? ShortName(source.Type) : $"{ShortName(source.Type)}_{source.Member[(source.Member.LastIndexOf('.') + 1)..]}";
 
     /// <summary>The short name of a type: the name of a named type without its namespace and arity.</summary>
     private static string ShortName(TypeRef type)

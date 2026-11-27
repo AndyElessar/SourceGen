@@ -9,6 +9,27 @@ namespace SourceGen.Ioc.Emit;
 /// </summary>
 internal static class CreationWriter
 {
+    /// <summary>
+    /// The start of the creation expression, up to the opening parenthesis of the arguments: <c>new Impl(</c>, or the
+    /// call of the factory method.
+    /// </summary>
+    /// <param name="definition">The closed definition.</param>
+    /// <returns>The text.</returns>
+    public static string Head(ClosedDefinition definition) => definition.Source.Kind == SourceKind.Factory
+        ? $"{TypeNames.CSharp(definition.Source.Type)}.{KeyNames.Identifier(definition.Source.Member)}("
+        : $"new {TypeNames.CSharp(definition.InstanceType)}(";
+
+    /// <summary>
+    /// The end of the creation expression after the arguments: the closing parenthesis, and for a factory the check for
+    /// <see langword="null"/> (Container.Output.spec, "Resolution of a closed definition"; ServiceCollection.Output.spec,
+    /// "Creation method").
+    /// </summary>
+    /// <param name="definition">The closed definition.</param>
+    /// <returns>The text.</returns>
+    public static string Close(ClosedDefinition definition) => definition.Source.Kind == SourceKind.Factory
+        ? $") ?? throw new global::System.InvalidOperationException({SymbolDisplay.FormatLiteral($"Factory '{KeyNames.Definition(definition)}' returned null.", quote: true)})"
+        : ")";
+
     /// <summary>Writes the creation into the local <c>instance</c>.</summary>
     /// <param name="writer">The writer.</param>
     /// <param name="definition">The closed definition.</param>
@@ -24,6 +45,8 @@ internal static class CreationWriter
     public static void Write(SourceWriter writer, ClosedDefinition definition, bool declare, Func<int, string> argument, Func<int, string, string?> assignment, bool disposeOnFailure)
     {
         string implementation = TypeNames.CSharp(definition.InstanceType);
+        string head = Head(definition);
+        string close = Close(definition);
         ImmutableEquatableArray<Dependency> parameters = definition.ConstructorParameters;
 
         // A parameter by reference gets a local variable, passed with "in"
@@ -37,14 +60,14 @@ internal static class CreationWriter
 
         InjectedMember[] initializers = [.. definition.Members.Where(static m => m.Kind == MemberKind.Initializer)];
         string end = initializers.Length == 0 ? ";" : string.Empty;
-        string open = parameters.Length == 0 ? ")" : string.Empty;
+        string open = parameters.Length == 0 ? close : string.Empty;
         if(declare)
         {
-            writer.WriteLine($"{implementation} instance = new {implementation}({open}{(parameters.Length == 0 ? end : string.Empty)}");
+            writer.WriteLine($"{implementation} instance = {head}{open}{(parameters.Length == 0 ? end : string.Empty)}");
         }
         else
         {
-            writer.WriteLine($"instance = new {implementation}({open}{(parameters.Length == 0 ? end : string.Empty)}");
+            writer.WriteLine($"instance = {head}{open}{(parameters.Length == 0 ? end : string.Empty)}");
         }
 
         if(parameters.Length > 0)
@@ -55,11 +78,11 @@ internal static class CreationWriter
                 bool last = i == parameters.Length - 1;
                 if(parameters[i].ByReference)
                 {
-                    writer.WriteLine($"in arg{i}{(last ? ")" : ",")}{(last ? end : string.Empty)}");
+                    writer.WriteLine($"in arg{i}{(last ? close : ",")}{(last ? end : string.Empty)}");
                 }
                 else
                 {
-                    writer.WriteLine($"{argument(i)}{(last ? ")" : ",")}{(last ? end : string.Empty)}");
+                    writer.WriteLine($"{argument(i)}{(last ? close : ",")}{(last ? end : string.Empty)}");
                 }
             }
 

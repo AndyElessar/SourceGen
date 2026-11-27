@@ -27,6 +27,18 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                 static (node, _) => node is CompilationUnitSyntax or ClassDeclarationSyntax or RecordDeclarationSyntax,
                 static (ctx, ct) => DeclarationReader.ReadRegisterFor(ctx, ct));
 
+        IncrementalValuesProvider<DeclarationResult> factory = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                DeclarationReader.FactoryAttribute,
+                static (node, _) => node is MethodDeclarationSyntax,
+                static (ctx, ct) => DeclarationReader.ReadFactory(ctx, ct));
+
+        IncrementalValuesProvider<DeclarationResult> factoryFor = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                DeclarationReader.FactoryForAttribute,
+                static (node, _) => node is CompilationUnitSyntax or ClassDeclarationSyntax or RecordDeclarationSyntax,
+                static (ctx, ct) => DeclarationReader.ReadFactoryFor(ctx, ct));
+
         IncrementalValuesProvider<InjectMemberResult> injectMember = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 InjectMemberAttributeReader.Attribute,
@@ -38,10 +50,12 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
         // the diagnostics of IocInjectMemberAttribute join as one more result, with the checks that need the registrations.
         IncrementalValueProvider<ImmutableEquatableArray<DeclarationResult>> results = register.Collect()
             .Combine(registerFor.Collect())
+            .Combine(factory.Collect())
+            .Combine(factoryFor.Collect())
             .Combine(injectMember.Collect())
             .Select(static (input, _) =>
             {
-                DeclarationResult[] declared = [.. input.Left.Left, .. input.Left.Right];
+                DeclarationResult[] declared = [.. input.Left.Left.Left.Left, .. input.Left.Left.Left.Right, .. input.Left.Left.Right, .. input.Left.Right];
                 ImmutableArray<InjectMemberResult> injected = input.Right;
                 if(injected.IsEmpty)
                 {
@@ -66,9 +80,11 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
             .WithTrackingName(TrackingNames.Declarations)
             .Collect()
             .Combine(registerFor.Select(static (r, _) => r.Declarations).WithTrackingName(TrackingNames.Declarations).Collect())
+            .Combine(factory.Select(static (r, _) => r.Declarations).WithTrackingName(TrackingNames.Declarations).Collect())
+            .Combine(factoryFor.Select(static (r, _) => r.Declarations).WithTrackingName(TrackingNames.Declarations).Collect())
             .Combine(injectMember.Select(static (r, _) => r.Declarations).WithTrackingName(TrackingNames.Declarations).Collect())
             .Select(static (input, ct) => InjectMemberAttributeReader.Apply(
-                input.Left.Left.Concat(input.Left.Right).SelectMany(static d => d).ToImmutableEquatableArray(),
+                input.Left.Left.Left.Left.Concat(input.Left.Left.Left.Right).Concat(input.Left.Left.Right).Concat(input.Left.Right).SelectMany(static d => d).ToImmutableEquatableArray(),
                 input.Right.SelectMany(static d => d),
                 ct));
 

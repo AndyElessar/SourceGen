@@ -641,10 +641,12 @@ internal static class ServiceCollectionExtensionEmitter
             return;
         }
 
+        string head = CreationWriter.Head(definition);
+        string close = CreationWriter.Close(definition);
         if(parameters.Length == 0)
         {
             writer.Indentation++;
-            writer.WriteLine($"=> new {implementation}();");
+            writer.WriteLine($"=> {head}{close};");
             writer.Indentation--;
             return;
         }
@@ -663,24 +665,25 @@ internal static class ServiceCollectionExtensionEmitter
                 }
             }
 
-            writer.WriteLine($"return new {implementation}(");
+            writer.WriteLine($"return {head}");
         }
         else
         {
             writer.Indentation++;
-            writer.WriteLine($"=> new {implementation}(");
+            writer.WriteLine($"=> {head}");
         }
 
         writer.Indentation++;
         for(int i = 0; i < parameters.Length; i++)
         {
+            bool last = i == parameters.Length - 1;
             if(parameters[i].ByReference)
             {
-                writer.WriteLine($"in arg{i}{(i < parameters.Length - 1 ? "," : ");")}");
+                writer.WriteLine($"in arg{i}{(last ? close : ",")}{(last ? ";" : string.Empty)}");
             }
             else
             {
-                writer.WriteLine($"{Argument(definition, parameters[i], i, providers)}{(i < parameters.Length - 1 ? "," : ");")}");
+                writer.WriteLine($"{Argument(definition, parameters[i], i, providers)}{(last ? close : ",")}{(last ? ";" : string.Empty)}");
             }
         }
 

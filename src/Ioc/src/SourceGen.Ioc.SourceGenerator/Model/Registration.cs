@@ -13,7 +13,7 @@ internal enum Lifetime
     Transient = 2,
 }
 
-/// <summary>The disposal kind of an implementation type (Analysis.Model.spec, "Disposal kind").</summary>
+/// <summary>The disposal kind of the object that a source gives (Analysis.Model.spec, "Disposal kind").</summary>
 [Flags]
 internal enum Disposal
 {
@@ -25,6 +25,12 @@ internal enum Disposal
 
     /// <summary>The type implements <c>IAsyncDisposable</c>.</summary>
     Async = 2,
+
+    /// <summary>
+    /// The return type of a factory does not show whether the object implements one of the interfaces: the disposal
+    /// tests the type of the object at run time.
+    /// </summary>
+    Runtime = 4,
 }
 
 /// <summary>The kind of the source of an instance definition (Constitution, "Terms").</summary>
@@ -47,9 +53,24 @@ internal enum SourceKind
 /// <param name="Kind">The kind.</param>
 /// <param name="Type">The implementation type, or the type that contains the factory method or the instance member.</param>
 /// <param name="Member">The name of the factory method or of the instance member. Empty for an implementation type.</param>
-/// <param name="Parameters">The parameter types of the factory method. Empty for the other kinds.</param>
-internal sealed record DefinitionSource(SourceKind Kind, NamedTypeRef Type, string Member, ImmutableEquatableArray<TypeRef> Parameters)
+/// <param name="Parameters">The parameters of the factory method. Empty for the other kinds.</param>
+/// <param name="Arity">The number of type parameters of the factory method.</param>
+internal sealed record DefinitionSource(SourceKind Kind, NamedTypeRef Type, string Member, ImmutableEquatableArray<SourceParameter> Parameters, int Arity = 0)
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DefinitionSource"/> class for a <c>with</c> expression. It copies the
+    /// members but not the cached strings: the copy can have other members, so it builds its own.
+    /// </summary>
+    /// <param name="original">The original.</param>
+    private DefinitionSource(DefinitionSource original)
+    {
+        Kind = original.Kind;
+        Type = original.Type;
+        Member = original.Member;
+        Parameters = original.Parameters;
+        Arity = original.Arity;
+    }
+
     /// <summary>Gets the source of an implementation type.</summary>
     /// <param name="implementation">The implementation type.</param>
     /// <returns>The source.</returns>
@@ -60,10 +81,21 @@ internal sealed record DefinitionSource(SourceKind Kind, NamedTypeRef Type, stri
     /// <c>{containing type}.{method name}({parameter type,...})</c> for a factory, <c>{containing type}.{member name}</c>
     /// for an instance.
     /// </summary>
-    public string SortName => Build(withAssembly: false);
+    /// <remarks>The string is built on the first read and cached. The cache is not part of the equality.</remarks>
+    public string SortName => field ??= Build(withAssembly: false);
 
     /// <summary>Gets the sort name written with the full canonical strings, which the ordering compares last.</summary>
-    public string CanonicalString => Build(withAssembly: true);
+    /// <remarks>The string is built on the first read and cached. The cache is not part of the equality.</remarks>
+    public string CanonicalString => field ??= Build(withAssembly: true);
+
+    /// <summary>Compares by value. The cached strings are not part of the equality.</summary>
+    /// <param name="other">The other source.</param>
+    /// <returns>Whether the sources are equal.</returns>
+    public bool Equals(DefinitionSource? other)
+        => other is not null && Kind == other.Kind && Arity == other.Arity && Member == other.Member && Type.Equals(other.Type) && Parameters.Equals(other.Parameters);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((((int)Kind * 397) ^ Type.GetHashCode()) * 397) ^ Member.GetHashCode();
 
     private string Build(bool withAssembly)
     {
@@ -71,11 +103,16 @@ internal sealed record DefinitionSource(SourceKind Kind, NamedTypeRef Type, stri
         return Kind switch
         {
             SourceKind.Implementation => type,
-            SourceKind.Factory => $"{type}.{Member}({string.Join(",", Parameters.Select(p => withAssembly ? p.CanonicalString : p.SortName))})",
+            SourceKind.Factory => $"{type}.{Member}{(Arity > 0 ? $"`{Arity}" : string.Empty)}({string.Join(",", Parameters.Select(p => p.Prefix + (withAssembly ? p.Type.CanonicalString : p.Type.SortName)))})",
             _ => $"{type}.{Member}",
         };
     }
 }
+
+/// <summary>A parameter of a factory method in the identity of its source.</summary>
+/// <param name="Type">The parameter type.</param>
+/// <param name="Prefix">The ref kind: empty, <c>in </c>, <c>ref readonly </c>, <c>ref </c>, or <c>out </c>.</param>
+internal readonly record struct SourceParameter(TypeRef Type, string Prefix);
 
 /// <summary>
 /// A registration declaration (Annotations.spec, "Registration declarations"), with the dependencies of its selected

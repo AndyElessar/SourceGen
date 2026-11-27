@@ -60,5 +60,8 @@ internal static class KeyNames
         _ => $"({text}{suffix})",
     };
 
-    private static string Identifier(string name) => SyntaxFacts.GetKeywordKind(name) == SyntaxKind.None ? name : $"@{name}";
+    /// <summary>A name as a C# identifier: a keyword gets <c>@</c>.</summary>
+    /// <param name="name">The name.</param>
+    /// <returns>The identifier.</returns>
+    internal static string Identifier(string name) => SyntaxFacts.GetKeywordKind(name) == SyntaxKind.None ? name : $"@{name}";
 }

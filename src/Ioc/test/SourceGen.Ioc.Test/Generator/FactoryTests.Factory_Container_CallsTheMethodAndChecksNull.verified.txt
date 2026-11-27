@@ -1,0 +1,151 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IClock __Get_Factories_CreateClock_fc83e011() => __singletons.__f_Factories_CreateClock_fc83e011 ?? __Create_Factories_CreateClock_fc83e011();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IClock __Create_Factories_CreateClock_fc83e011()
+    {
+        __Singletons s = __singletons;
+        global::App.IClock instance;
+        lock(s.__lock_Factories_CreateClock_fc83e011)
+        {
+            if(s.__f_Factories_CreateClock_fc83e011 is { } existing)
+            {
+                return existing;
+            }
+
+            global::App.AppContainer c = s.Root;
+            instance = global::App.Factories.CreateClock(
+                (global::App.Settings)c.__Get_Settings_0620e829()) ?? throw new global::System.InvalidOperationException("Factory 'App.Factories.CreateClock(App.Settings)' returned null.");
+            global::System.Threading.Interlocked.Exchange(ref s.__f_Factories_CreateClock_fc83e011, instance);
+        }
+
+        if(global::System.Threading.Volatile.Read(ref s.Root.__disposed) != 0)
+        {
+            if(global::System.Object.ReferenceEquals(global::System.Threading.Interlocked.CompareExchange(ref s.__f_Factories_CreateClock_fc83e011, null, instance), instance))
+            {
+                __DisposeLost(instance);
+            }
+
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IHandle __Get_Factories_CreateHandle_a0e30be7() => __singletons.__f_Factories_CreateHandle_a0e30be7 ?? __Create_Factories_CreateHandle_a0e30be7();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IHandle __Create_Factories_CreateHandle_a0e30be7()
+    {
+        __Singletons s = __singletons;
+        global::App.IHandle instance;
+        lock(s.__lock_Factories_CreateHandle_a0e30be7)
+        {
+            if(s.__f_Factories_CreateHandle_a0e30be7 is { } existing)
+            {
+                return existing;
+            }
+
+            global::App.AppContainer c = s.Root;
+            instance = global::App.Factories.CreateHandle() ?? throw new global::System.InvalidOperationException("Factory 'App.Factories.CreateHandle()' returned null.");
+            global::System.Threading.Interlocked.Exchange(ref s.__f_Factories_CreateHandle_a0e30be7, instance);
+        }
+
+        if(global::System.Threading.Volatile.Read(ref s.Root.__disposed) != 0)
+        {
+            if(global::System.Object.ReferenceEquals(global::System.Threading.Interlocked.CompareExchange(ref s.__f_Factories_CreateHandle_a0e30be7, null, instance), instance))
+            {
+                __DisposeLost(instance);
+            }
+
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Repo __Get_Factories_CreateRepo_42d5bea8() => __f_Factories_CreateRepo_42d5bea8 ?? __Create_Factories_CreateRepo_42d5bea8();
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.Repo __Create_Factories_CreateRepo_42d5bea8()
+    {
+        if(__isRoot)
+        {
+            throw new global::System.InvalidOperationException("Cannot resolve scoped service 'App.Factories.CreateRepo(System.String,App.IClock) (Key: \"main\")' from the root container.");
+        }
+
+        global::App.Repo instance;
+        lock(__scopedLock)
+        {
+            if(__f_Factories_CreateRepo_42d5bea8 is { } existing)
+            {
+                return existing;
+            }
+
+            global::App.AppContainer c = this;
+            instance = global::App.Factories.CreateRepo(
+                "main",
+                (global::App.IClock)c.__Get_Factories_CreateClock_fc83e011()) ?? throw new global::System.InvalidOperationException("Factory 'App.Factories.CreateRepo(System.String,App.IClock) (Key: \"main\")' returned null.");
+            global::System.Threading.Interlocked.Exchange(ref __f_Factories_CreateRepo_42d5bea8, instance);
+        }
+
+        if(global::System.Threading.Volatile.Read(ref __disposed) != 0)
+        {
+            throw new global::System.ObjectDisposedException("AppContainer");
+        }
+
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::System.Collections.Generic.List<global::System.Exception>? __DisposeInstances()
+    {
+        global::System.Collections.Generic.List<global::System.Exception>? errors = null;
+        if(__isRoot)
+        {
+            __Singletons s = __singletons;
+            if(global::System.Threading.Interlocked.Exchange(ref s.__f_Factories_CreateHandle_a0e30be7, null) is { } i0)
+            {
+                try
+                {
+                    if(i0 is global::System.IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                    }
+                    else if(i0 is global::System.IAsyncDisposable)
+                    {
+                        throw new global::System.InvalidOperationException($"'{i0.GetType()}' type only implements IAsyncDisposable. Use DisposeAsync to dispose the container.");
+                    }
+                }
+                catch(global::System.Exception e)
+                {
+                    (errors ??= new global::System.Collections.Generic.List<global::System.Exception>()).Add(e);
+                }
+            }
+            if(global::System.Threading.Interlocked.Exchange(ref s.__f_Factories_CreateClock_fc83e011, null) is { } i1)
+            {
+                try
+                {
+                    if(i1 is global::System.IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                    }
+                    else if(i1 is global::System.IAsyncDisposable)
+                    {
+                        throw new global::System.InvalidOperationException($"'{i1.GetType()}' type only implements IAsyncDisposable. Use DisposeAsync to dispose the container.");
+                    }
+                }
+                catch(global::System.Exception e)
+                {
+                    (errors ??= new global::System.Collections.Generic.List<global::System.Exception>()).Add(e);
+                }
+            }
+        }
+        else
+        {
+        }
+
+        return errors;
+    }

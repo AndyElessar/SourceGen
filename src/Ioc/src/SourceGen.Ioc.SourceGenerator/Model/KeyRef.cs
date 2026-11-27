@@ -20,6 +20,20 @@ internal enum KeyKind
 /// <param name="Literal">For a value key, the kind of the literal that the generated code writes.</param>
 internal sealed record KeyRef(KeyKind Kind, TypeRef Type, string Text, TypeRef ValueType, KeyLiteral Literal = KeyLiteral.None)
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KeyRef"/> class for a <c>with</c> expression. It copies the members
+    /// but not the cached canonical string: the copy can have other members, so it builds its own.
+    /// </summary>
+    /// <param name="original">The original.</param>
+    private KeyRef(KeyRef original)
+    {
+        Kind = original.Kind;
+        Type = original.Type;
+        Text = original.Text;
+        ValueType = original.ValueType;
+        Literal = original.Literal;
+    }
+
     /// <summary>Gets the canonical string: <c>V|{type}|{text}</c> or <c>S|{declaring type}|{member}</c>.</summary>
     public string Canonical => field ??= $"{(Kind == KeyKind.Value ? 'V' : 'S')}|{Type.CanonicalString}|{Text}";
 

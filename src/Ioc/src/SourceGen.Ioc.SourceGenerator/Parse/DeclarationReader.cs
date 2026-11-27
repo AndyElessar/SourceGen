@@ -53,6 +53,12 @@ internal static class DeclarationReader
     /// <summary>The metadata name of <c>IocRegisterForAttribute</c>.</summary>
     public const string RegisterForAttribute = "SourceGen.Ioc.IocRegisterForAttribute";
 
+    /// <summary>The metadata name of <c>IocFactoryAttribute</c>.</summary>
+    public const string FactoryAttribute = "SourceGen.Ioc.IocFactoryAttribute";
+
+    /// <summary>The metadata name of <c>IocFactoryForAttribute</c>.</summary>
+    public const string FactoryForAttribute = "SourceGen.Ioc.IocFactoryForAttribute";
+
     /// <summary>The metadata name of <c>IocInjectAttribute</c>.</summary>
     internal const string InjectAttribute = "SourceGen.Ioc.IocInjectAttribute";
     private const string ActivatorUtilitiesConstructorAttribute = "Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructorAttribute";
@@ -100,6 +106,52 @@ internal static class DeclarationReader
             else if(attribute.ConstructorArguments is [{ Value: ITypeSymbol implementation }, { Value: int lifetime }])
             {
                 builder.Add(implementation, lifetime, attribute, syntax, ImplementationTypeSyntax(syntax));
+            }
+        }
+
+        return builder.ToResult();
+    }
+
+    /// <summary>Reads each <c>IocFactoryAttribute</c> on a method.</summary>
+    /// <param name="context">The context of the attribute.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The declarations and the diagnostics.</returns>
+    public static DeclarationResult ReadFactory(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
+    {
+        Builder builder = new(context.SemanticModel.Compilation, cancellationToken);
+        foreach(AttributeData attribute in context.Attributes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AttributeSyntax? syntax = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken) as AttributeSyntax;
+            if(attribute.ConstructorArguments is [{ Value: int lifetime }])
+            {
+                builder.AddFactory((IMethodSymbol)context.TargetSymbol, lifetime, attribute, syntax);
+            }
+        }
+
+        return builder.ToResult();
+    }
+
+    /// <summary>Reads each <c>IocFactoryForAttribute</c> on the assembly or on a class.</summary>
+    /// <param name="context">The context of the attribute.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The declarations and the diagnostics.</returns>
+    public static DeclarationResult ReadFactoryFor(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
+    {
+        Builder builder = new(context.SemanticModel.Compilation, cancellationToken);
+        bool onPlainClass = IsPlainClass(context.TargetSymbol);
+        foreach(AttributeData attribute in context.Attributes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AttributeSyntax? syntax = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken) as AttributeSyntax;
+            if(onPlainClass)
+            {
+                builder.Report(Descriptors.AttributeOnPlainClass.Id, syntax, "IocFactoryFor");
+            }
+            else if(attribute.ConstructorArguments is [_, { Value: int lifetime }]
+                && builder.ReadNameof(ArgumentSyntax(syntax, "factory", 0), "Factory", "a method", static s => s is IMethodSymbol) is IMethodSymbol method)
+            {
+                builder.AddFactory(method, lifetime, attribute, syntax);
             }
         }
 
@@ -231,16 +283,172 @@ internal static class DeclarationReader
                 return;
             }
 
-            declarations.Add(new RegistrationDeclaration(source, implementationRef, key.Key, (Lifetime)lifetime, serviceTypes, parameters, members.Members.ToImmutableEquatableArray(), DisposalOf(implementation)));
+            Add(new RegistrationDeclaration(source, implementationRef, key.Key, (Lifetime)lifetime, serviceTypes, parameters, members.Members.ToImmutableEquatableArray(), DisposalOf(implementation)), syntax, constructor.Parameters, members.Sites);
+        }
+
+        /// <summary>
+        /// Binds the operand of a <c>nameof()</c> argument (Annotations.spec, "How the generator reads <c>nameof()</c>").
+        /// An argument that is not a direct <c>nameof()</c>, or that names no member of the right kind, is reported
+        /// (SGIOC011), and so is a method group with more than one method (SGIOC010).
+        /// </summary>
+        /// <param name="argument">The argument.</param>
+        /// <param name="name">The name of the argument in the message.</param>
+        /// <param name="kind">The kind of member in the message.</param>
+        /// <param name="isKind">Whether a symbol has the right kind.</param>
+        /// <returns>The symbol, or <see langword="null"/> when it is reported.</returns>
+        public ISymbol? ReadNameof(AttributeArgumentSyntax? argument, string name, string kind, Func<ISymbol, bool> isKind)
+        {
+            if(argument?.Expression is not InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "nameof" }, ArgumentList.Arguments: [ArgumentSyntax operand] } invocation)
+            {
+                Report(Descriptors.NameofTargetNotFound.Id, argument, name, kind);
+                return null;
+            }
+
+            SemanticModel model = compilation.GetSemanticModel(invocation.SyntaxTree);
+
+            // A method named "nameof" binds to a symbol. The operator does not
+            SymbolInfo info = model.GetSymbolInfo(operand.Expression, cancellationToken);
+            ISymbol[] candidates = info.Symbol is { } symbol ? [symbol] : [.. info.CandidateSymbols];
+            if(model.GetSymbolInfo(invocation, cancellationToken).Symbol is not null || candidates.Length == 0 || !candidates.All(isKind))
+            {
+                Report(Descriptors.NameofTargetNotFound.Id, argument, name, kind);
+                return null;
+            }
+
+            if(candidates.Length > 1)
+            {
+                Report(Descriptors.NameofOverloaded.Id, invocation, $"{candidates[0].ContainingType.ToDisplayString()}.{candidates[0].Name}");
+                return null;
+            }
+
+            return candidates[0];
+        }
+
+        /// <summary>Reads one factory declaration. An invalid one is reported and skipped.</summary>
+        /// <param name="method">The factory method.</param>
+        /// <param name="lifetime">The lifetime value.</param>
+        /// <param name="attribute">The attribute.</param>
+        /// <param name="syntax">The attribute syntax, where the errors of the method are reported.</param>
+        public void AddFactory(IMethodSymbol method, int lifetime, AttributeData attribute, AttributeSyntax? syntax)
+        {
+            // An invalid member (SGIOC026) still gives an error node with the service types that can be read, so that a
+            // dependency on it is not reported again (Diagnostics.spec, "Consequences")
+            // A signature can use a file type only in a file type (CS9051), so the containing type covers the return
+            // type and the parameter types too
+            string? memberError = !method.IsStatic ? "it is not static"
+                : ContainsTypeParameter(method.ContainingType) ? "its containing type is an open generic"
+                : ContainsFileLocal(method.ContainingType) ? "it uses a file type"
+                : null;
+            if(memberError is not null)
+            {
+                Report(Descriptors.InvalidFactoryOrInstance.Id, syntax, method.ToDisplayString(), "factory", memberError);
+            }
+
+            if(lifetime is < 0 or > 2
+                || method.ReturnType.TypeKind == TypeKind.Error
+                || TypeRefFactory.Create(method.ContainingType, compilation) is not NamedTypeRef containing
+                || SourceParameters(method) is not { } sourceParameters)
+            {
+                return;
+            }
+
+            DefinitionSource source = new(SourceKind.Factory, containing, method.Name, sourceParameters, method.Arity);
+            string name = source.SortName;
+            TypedConstant serviceTypesArgument = attribute.NamedArguments.FirstOrDefault(static a => a.Key == "ServiceTypes").Value;
+            bool hasServiceTypes = serviceTypesArgument is { IsNull: false, Kind: TypedConstantKind.Array, Values.Length: > 0 };
+
+            // A generic factory comes with open generics, and Task<T> with asynchronous services. Until then they are
+            // skipped. A generic factory that specifies ServiceTypes is an error already
+            if(method.IsGenericMethod)
+            {
+                if(hasServiceTypes)
+                {
+                    Report(Descriptors.GenericFactoryServiceTypes.Id, (SyntaxNode?)NamedArgumentSyntax(syntax, "ServiceTypes") ?? syntax, name);
+                }
+
+                return;
+            }
+
+            ITypeSymbol returnType = method.ReturnType;
+            if(returnType is INamedTypeSymbol { IsGenericType: true } generic && generic.ConstructedFrom.ToDisplayString() == "System.Threading.Tasks.Task<TResult>")
+            {
+                return;
+            }
+
+            KeyResult key = KeyReader.Read(attribute, syntax, compilation);
+            if(key.ErrorId is { } keyError)
+            {
+                Report(keyError, key.ErrorNode, key.ErrorArguments ?? []);
+            }
+
+            KeyRef? keyRef = key.ErrorId is null ? key.Key : KeyRef.Invalid(containing);
+            (ImmutableEquatableArray<TypeRef> serviceTypes, bool validServiceTypes) = hasServiceTypes ? ReadServiceTypes(null, name, attribute, syntax) : ([], true);
+            TypeRef? returnTypeRef = null;
+            if(ReturnTypeError(returnType) is { } reason)
+            {
+                Report(Descriptors.InvalidServiceType.Id, syntax, returnType.ToDisplayString(), name, reason);
+                validServiceTypes = false;
+            }
+            else if((returnTypeRef = TypeRefFactory.Create(returnType, compilation)) is null)
+            {
+                return;
+            }
+            else if(!hasServiceTypes)
+            {
+                // Without ServiceTypes the return type is the service type, with all the checks of a service type
+                if(ServiceTypeError(returnType) is { } error)
+                {
+                    ReportServiceTypeError(error, syntax, returnType, name);
+                    validServiceTypes = false;
+                }
+                else
+                {
+                    serviceTypes = [returnTypeRef];
+                }
+            }
+
+            if(memberError is not null || !validServiceTypes || key.ErrorId is not null)
+            {
+                AddError(source, containing, keyRef, lifetime, serviceTypes);
+                return;
+            }
+
+            (ImmutableEquatableArray<Dependency>? parameters, bool keyErrors) = ReadParameters(method, syntax);
+            if(keyErrors)
+            {
+                AddError(source, containing, keyRef, lifetime, serviceTypes);
+                return;
+            }
+
+            if(parameters is null)
+            {
+                return;
+            }
+
+            if(keyRef is null && parameters.FirstOrDefault(static p => p is { KeyMode: SiteKeyMode.ServiceKey, Optional: OptionalMode.Required }) is { } serviceKey)
+            {
+                Report(Descriptors.ServiceKeyWithoutKey.Id, syntax, serviceKey.Name, KeyNames.Definition(source, null));
+                AddError(source, containing, keyRef, lifetime, serviceTypes);
+                return;
+            }
+
+            Add(new RegistrationDeclaration(source, returnTypeRef!, keyRef, (Lifetime)lifetime, serviceTypes, parameters, [], FactoryDisposalOf(returnType)), syntax, method.Parameters);
+        }
+
+        /// <summary>Records a valid declaration with its merge site and the sites of its parameters.</summary>
+        private void Add(RegistrationDeclaration declaration, AttributeSyntax? syntax, IEnumerable<IParameterSymbol> parameters, IEnumerable<(SitePosition, SyntaxReference?)>? members = null)
+        {
+            DefinitionSource source = declaration.Source;
+            declarations.Add(declaration);
             if(syntax is not null)
             {
-                sites.Add(new MergeSite(source, key.Key, KeyNames.Definition(source, key.Key), (Lifetime)lifetime, syntax.SyntaxTree.FilePath, syntax.Span));
+                sites.Add(new MergeSite(source, declaration.Key, KeyNames.Definition(source, declaration.Key), declaration.Lifetime, syntax.SyntaxTree.FilePath, syntax.Span));
             }
 
             // A site of another assembly is reported at the attribute, also when a project reference gives its syntax
-            IEnumerable<(SitePosition, SyntaxReference?)> references = constructor.Parameters
+            IEnumerable<(SitePosition, SyntaxReference?)> references = parameters
                 .Select(static (p, i) => (new SitePosition(-1, 0, i), p.DeclaringSyntaxReferences.FirstOrDefault()))
-                .Concat(members.Sites);
+                .Concat(members ?? []);
             foreach((SitePosition position, SyntaxReference? reference) in references)
             {
                 if(reference is not null && compilation.ContainsSyntaxTree(reference.SyntaxTree))
@@ -251,6 +459,74 @@ internal static class DeclarationReader
                 {
                     parameterSites.Add(new ParameterSite(source, position, false, syntax.SyntaxTree.FilePath, syntax.Span));
                 }
+            }
+        }
+
+        /// <summary>The parameters of a factory method for its identity, or <see langword="null"/> for a type that the model cannot represent.</summary>
+        private ImmutableEquatableArray<SourceParameter>? SourceParameters(IMethodSymbol method)
+        {
+            List<SourceParameter> parameters = [];
+            foreach(IParameterSymbol parameter in method.Parameters)
+            {
+                if(TypeRefFactory.Create(parameter.Type, compilation) is not { } type)
+                {
+                    return null;
+                }
+
+                string prefix = parameter.RefKind switch
+                {
+                    RefKind.In => "in ",
+                    RefKind.RefReadOnlyParameter => "ref readonly ",
+                    RefKind.Ref => "ref ",
+                    RefKind.Out => "out ",
+                    _ => string.Empty,
+                };
+                parameters.Add(new SourceParameter(type, prefix));
+            }
+
+            return parameters.ToImmutableEquatableArray();
+        }
+
+        /// <summary>
+        /// The checks of the return type of a factory that apply also when <c>ServiceTypes</c> is set (Annotations.spec,
+        /// "Service types of a factory").
+        /// </summary>
+        private static string? ReturnTypeError(ITypeSymbol type)
+        {
+            if(type is IPointerTypeSymbol or IFunctionPointerTypeSymbol || type.SpecialType == SpecialType.System_Void)
+            {
+                return "it is a pointer or void";
+            }
+
+            string definition = (type.OriginalDefinition as INamedTypeSymbol)?.ToDisplayString() ?? string.Empty;
+            if(definition == "System.Threading.Tasks.Task")
+            {
+                return "it is a Task without a result";
+            }
+
+            if(definition is "System.Threading.Tasks.ValueTask" or "System.Threading.Tasks.ValueTask<TResult>")
+            {
+                return "ValueTask is not supported";
+            }
+
+            // Also KeyValuePair: only the generator creates it (Constitution, "Limits")
+            if(type.IsValueType)
+            {
+                return "it is a value type";
+            }
+
+            return IsContainer(type) ? "it is a container class" : null;
+        }
+
+        private void ReportServiceTypeError((string Id, string? Reason) error, SyntaxNode? node, ITypeSymbol serviceType, string name)
+        {
+            if(error.Id == Descriptors.WrapperServiceType.Id)
+            {
+                Report(error.Id, node, serviceType.ToDisplayString());
+            }
+            else
+            {
+                Report(error.Id, node, serviceType.ToDisplayString(), name, error.Reason!);
             }
         }
 
@@ -290,8 +566,11 @@ internal static class DeclarationReader
         }
 
         /// <summary>Expands and checks the service types (Annotations.spec, "Expansion of service types").</summary>
+        /// <param name="implementation">
+        /// The implementation type, or <see langword="null"/> for a factory: its service types can only be concrete types.
+        /// </param>
         /// <returns>The valid service types, and whether all of them are valid.</returns>
-        private (ImmutableEquatableArray<TypeRef> Types, bool Valid) ReadServiceTypes(INamedTypeSymbol implementation, string name, AttributeData attribute, AttributeSyntax? syntax)
+        private (ImmutableEquatableArray<TypeRef> Types, bool Valid) ReadServiceTypes(INamedTypeSymbol? implementation, string name, AttributeData attribute, AttributeSyntax? syntax)
         {
             TypedConstant argument = attribute.NamedArguments.FirstOrDefault(static a => a.Key == "ServiceTypes").Value;
             if(argument.IsNull || argument.Kind != TypedConstantKind.Array)
@@ -310,8 +589,16 @@ internal static class DeclarationReader
                 }
 
                 SyntaxNode? elementSyntax = (SyntaxNode?)ServiceTypeSyntax(syntax, i) ?? syntax;
-                List<ITypeSymbol> expanded = element is INamedTypeSymbol { IsUnboundGenericType: true } unbound
-                    ? [.. Supertypes(implementation).Where(t => SymbolEqualityComparer.Default.Equals(t.OriginalDefinition, unbound.OriginalDefinition))]
+                bool unboundElement = element is INamedTypeSymbol { IsUnboundGenericType: true };
+                if(unboundElement && implementation is null)
+                {
+                    Report(Descriptors.InvalidServiceType.Id, elementSyntax, element.ToDisplayString(), name, "it is an unbound generic type");
+                    valid = false;
+                    continue;
+                }
+
+                List<ITypeSymbol> expanded = unboundElement
+                    ? [.. Supertypes(implementation!).Where(t => SymbolEqualityComparer.Default.Equals(t.OriginalDefinition, element.OriginalDefinition))]
                     : [element];
                 if(expanded.Count == 0)
                 {
@@ -324,15 +611,7 @@ internal static class DeclarationReader
                 {
                     if(ServiceTypeError(serviceType) is { } error)
                     {
-                        if(error.Id == Descriptors.WrapperServiceType.Id)
-                        {
-                            Report(error.Id, elementSyntax, serviceType.ToDisplayString());
-                        }
-                        else
-                        {
-                            Report(error.Id, elementSyntax, serviceType.ToDisplayString(), name, error.Reason!);
-                        }
-
+                        ReportServiceTypeError(error, elementSyntax, serviceType, name);
                         valid = false;
                     }
                     else if(TypeRefFactory.Create(serviceType, compilation) is { } serviceRef)
@@ -502,6 +781,38 @@ internal static class DeclarationReader
         return (arguments.FirstOrDefault(static a => a.NameColon?.Name.Identifier.ValueText == "implementationType")
             ?? arguments.FirstOrDefault(static a => a.NameColon is null && a.NameEquals is null))?.Expression;
     }
+
+    /// <summary>A constructor argument: by its name, or else the positional argument at <paramref name="position"/>.</summary>
+    private static AttributeArgumentSyntax? ArgumentSyntax(AttributeSyntax? syntax, string name, int position)
+    {
+        SeparatedSyntaxList<AttributeArgumentSyntax> arguments = syntax?.ArgumentList?.Arguments ?? default;
+        return arguments.FirstOrDefault(a => a.NameColon?.Name.Identifier.ValueText == name)
+            ?? arguments.Where(static a => a.NameColon is null && a.NameEquals is null).ElementAtOrDefault(position);
+    }
+
+    /// <summary>A named argument (<c>Name = value</c>), or <see langword="null"/>.</summary>
+    private static AttributeArgumentSyntax? NamedArgumentSyntax(AttributeSyntax? syntax, string name)
+        => syntax?.ArgumentList?.Arguments.FirstOrDefault(a => a.NameEquals?.Name.Identifier.ValueText == name);
+
+    /// <summary>
+    /// The disposal kind of the object that a factory returns, decided from the return type for each interface
+    /// (Analysis.Model.spec, "Disposal kind"): the type implements it, a sealed class does not, and any other type can.
+    /// </summary>
+    private static Disposal FactoryDisposalOf(ITypeSymbol returnType)
+    {
+        Disposal known = returnType is INamedTypeSymbol named ? DisposalOf(named) | DisposalOfInterface(named) : Disposal.None;
+        // Another type (an interface, a class that is not sealed) can implement an interface that it does not show
+        bool sealedClass = returnType is { TypeKind: TypeKind.Class, IsSealed: true };
+        return sealedClass || known == (Disposal.Sync | Disposal.Async) ? known : known | Disposal.Runtime;
+    }
+
+    /// <summary>The disposal kind of the interface itself, when the type is <c>IDisposable</c> or <c>IAsyncDisposable</c>.</summary>
+    private static Disposal DisposalOfInterface(INamedTypeSymbol type) => type.ToDisplayString() switch
+    {
+        "System.IDisposable" => Disposal.Sync,
+        "System.IAsyncDisposable" => Disposal.Async,
+        _ => Disposal.None,
+    };
 
     /// <summary>
     /// The disposal kind of a type that is created with <c>new</c>: its run-time type is known, so the interfaces decide

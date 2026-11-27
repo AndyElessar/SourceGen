@@ -8,6 +8,7 @@ SGIOC003 | SourceGen.Ioc | Error | Invalid implementation type
 SGIOC004 | SourceGen.Ioc | Error | Invalid service type
 SGIOC006 | SourceGen.Ioc | Error | Wrapper type cannot be registered
 SGIOC007 | SourceGen.Ioc | Error | AnyKey cannot be used here
+SGIOC009 | SourceGen.Ioc | Error | Generic factory cannot specify ServiceTypes
 SGIOC010 | SourceGen.Ioc | Error | nameof refers to overloaded members
 SGIOC011 | SourceGen.Ioc | Error | nameof target not found
 SGIOC016 | SourceGen.Ioc | Error | Invalid injection method
@@ -20,6 +21,7 @@ SGIOC022 | SourceGen.Ioc | Error | Unsupported key value
 SGIOC023 | SourceGen.Ioc | Error | ServiceKey on non-keyed registration
 SGIOC024 | SourceGen.Ioc | Error | Member has two injection settings
 SGIOC025 | SourceGen.Ioc | Error | Attribute on a class that is neither module nor container
+SGIOC026 | SourceGen.Ioc | Error | Invalid factory or instance member
 SGIOC107 | SourceGen.Ioc | Error | Unsupported module or container class
 SGIOC108 | SourceGen.Ioc | Error | Invalid Add method name
 SGIOC301 | SourceGen.Ioc | Error | Circular dependency

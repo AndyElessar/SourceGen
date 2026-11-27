@@ -51,6 +51,13 @@ internal static class Descriptors
         "KeyedService.AnyKey cannot be used {0}",
         DiagnosticSeverity.Error);
 
+    /// <summary>SGIOC009: a generic factory specifies <c>ServiceTypes</c>.</summary>
+    public static readonly DiagnosticDescriptor GenericFactoryServiceTypes = Create(
+        "SGIOC009",
+        "Generic factory cannot specify ServiceTypes",
+        "Generic factory '{0}' always registers its return type; remove ServiceTypes",
+        DiagnosticSeverity.Error);
+
     /// <summary>SGIOC010: <c>nameof()</c> or a member name refers to overloaded methods.</summary>
     public static readonly DiagnosticDescriptor NameofOverloaded = Create(
         "SGIOC010",
@@ -133,6 +140,13 @@ internal static class Descriptors
         "SGIOC025",
         "Attribute on a class that is neither module nor container",
         "[{0}] on a class has effect only when the class has [IocModule] or [IocContainer]",
+        DiagnosticSeverity.Error);
+
+    /// <summary>SGIOC026: a factory method or an instance member is not static, or its containing type is an open generic.</summary>
+    public static readonly DiagnosticDescriptor InvalidFactoryOrInstance = Create(
+        "SGIOC026",
+        "Invalid factory or instance member",
+        "'{0}' cannot be a {1}: {2}",
         DiagnosticSeverity.Error);
 
     /// <summary>SGIOC107: the class cannot be a module or a container.</summary>
@@ -245,6 +259,7 @@ internal static class Descriptors
         InvalidServiceType,
         WrapperServiceType,
         AnyKeyRegistration,
+        GenericFactoryServiceTypes,
         NameofOverloaded,
         NameofTargetNotFound,
         InvalidInjectionMethod,
@@ -257,6 +272,7 @@ internal static class Descriptors
         ServiceKeyWithoutKey,
         InjectMemberAlreadyMarked,
         AttributeOnPlainClass,
+        InvalidFactoryOrInstance,
         UnsupportedOutputClass,
         InvalidServiceCollectionExtensionName,
         CircularDependency,

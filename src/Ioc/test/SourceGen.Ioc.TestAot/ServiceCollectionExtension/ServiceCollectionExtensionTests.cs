@@ -341,5 +341,36 @@ public class ServiceCollectionExtensionTests
         await Assert.That(task.Result.Title).IsEqualTo("task");
     }
 
+    [Test]
+    public async Task AddTestAot_Factories_CallTheMethodWithTheKeyAndTheDependencies()
+    {
+        ServiceProvider provider = Build();
+        IServiceScope scope = provider.CreateScope();
+
+        IFactoryHandle handle = provider.GetRequiredService<IFactoryHandle>();
+        IClock clock = provider.GetRequiredService<IClock>();
+        FactoryNote note = scope.ServiceProvider.GetRequiredKeyedService<FactoryNote>(AotFactories.NoteKey);
+        Session session = scope.ServiceProvider.GetRequiredService<Session>();
+        scope.Dispose();
+        provider.Dispose();
+
+        // The holder of the factory object tests its type at run time and disposes it
+        await Assert.That(handle.Clock).IsSameReferenceAs(clock);
+        await Assert.That(note.Key).IsEqualTo(AotFactories.NoteKey);
+        await Assert.That(note.Session).IsSameReferenceAs(session);
+        await Assert.That(handle.IsDisposed).IsTrue();
+    }
+
+    [Test]
+    public async Task AddTestAot_FactoryReturnsNull_Throws()
+    {
+        using ServiceProvider provider = Build();
+
+        Exception? thrown = FactoryTests.Catch(() => provider.GetService<NullProduct>());
+
+        await Assert.That(thrown).IsTypeOf<InvalidOperationException>();
+        await Assert.That(thrown!.Message).IsEqualTo("Factory 'SourceGen.Ioc.TestAot.Container.AotFactories.CreateNull()' returned null.");
+    }
+
     private sealed class Missing : IMissing;
 }

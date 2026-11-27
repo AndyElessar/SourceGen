@@ -244,9 +244,10 @@ public class DisposalTests
             FragileScoped.Fail = false;
         }
 
-        // AsyncResource implements only IAsyncDisposable: its DisposeAsync starts without a wait
+        // AsyncResource implements only IAsyncDisposable: its DisposeAsync starts without a wait. The factory of
+        // FactoryNote comes first in the ordering and depends on Session, so Session is created before AsyncResource
         await Assert.That(thrown).IsTypeOf<InvalidOperationException>();
-        await Assert.That(string.Join(",", journal.Disposed)).IsEqualTo("UnitOfWork,Session,AsyncResource");
+        await Assert.That(string.Join(",", journal.Disposed)).IsEqualTo("UnitOfWork,AsyncResource,Session");
     }
 
     [Test]

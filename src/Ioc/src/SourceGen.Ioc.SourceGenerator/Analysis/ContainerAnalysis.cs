@@ -950,9 +950,10 @@ internal static class ContainerAnalysis
             .Select(static p => new ContainerProblem(p.Id, p.Arguments, p.Source, p.Site)));
 
         // Disposable Transient is only in the full check (Analysis.Model.spec, "Disposable Transient")
-        foreach(ClosedDefinition definition in definitions.Where(static d => d.Lifetime == Lifetime.Transient && d.Disposal != Disposal.None))
+        // Only the kind "dispose": the container does not track a Transient whose type is checked at run time
+        foreach(ClosedDefinition definition in definitions.Where(static d => d.Lifetime == Lifetime.Transient && (d.Disposal & (Disposal.Sync | Disposal.Async)) != 0))
         {
-            string kind = definition.Disposal switch
+            string kind = (definition.Disposal & (Disposal.Sync | Disposal.Async)) switch
             {
                 Disposal.Sync => "IDisposable",
                 Disposal.Async => "IAsyncDisposable",
