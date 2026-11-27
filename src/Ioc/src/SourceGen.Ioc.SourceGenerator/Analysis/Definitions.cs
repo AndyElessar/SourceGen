@@ -14,7 +14,7 @@ internal static class Definitions
     public static ImmutableEquatableArray<ClosedDefinition> Merge(IEnumerable<RegistrationDeclaration> declarations, CancellationToken cancellationToken)
     {
         List<ClosedDefinition> definitions = [];
-        foreach(IGrouping<(NamedTypeRef, KeyRef?), RegistrationDeclaration> group in declarations.GroupBy(static d => (d.Implementation, d.Key)))
+        foreach(IGrouping<(DefinitionSource, KeyRef?), RegistrationDeclaration> group in declarations.GroupBy(static d => (d.Source, d.Key)))
         {
             cancellationToken.ThrowIfCancellationRequested();
             RegistrationDeclaration first = group.First();
@@ -26,20 +26,22 @@ internal static class Definitions
                 continue;
             }
 
+            // An implementation type is always a service type of its own, and it comes first
+            bool implementation = first.Source.Kind == SourceKind.Implementation;
             TypeRef[] others = [.. group
                 .SelectMany(static d => d.ServiceTypes)
-                .Where(t => !t.Equals(first.Implementation))
+                .Where(t => !implementation || !t.Equals(first.InstanceType))
                 .Distinct()
                 .OrderBy(static t => t.SortName, StringComparer.Ordinal)
                 .ThenBy(static t => t.CanonicalString, StringComparer.Ordinal)];
 
-            definitions.Add(new ClosedDefinition(first.Implementation, first.Key, first.Lifetime, [first.Implementation, .. others], first.ConstructorParameters, first.Members, first.Disposal));
+            definitions.Add(new ClosedDefinition(first.Source, first.InstanceType, first.Key, first.Lifetime, implementation ? [first.InstanceType, .. others] : [.. others], first.ConstructorParameters, first.Members, first.Disposal));
         }
 
         return definitions
-            .OrderBy(static d => d.Implementation.SortName, StringComparer.Ordinal)
+            .OrderBy(static d => d.Source.SortName, StringComparer.Ordinal)
             .ThenBy(static d => KeyRef.CanonicalOf(d.Key), StringComparer.Ordinal)
-            .ThenBy(static d => d.Implementation.CanonicalString, StringComparer.Ordinal)
+            .ThenBy(static d => d.Source.CanonicalString, StringComparer.Ordinal)
             .ToImmutableEquatableArray();
     }
 
@@ -48,7 +50,7 @@ internal static class Definitions
     /// <returns>The diagnostics.</returns>
     public static IEnumerable<DiagnosticInfo> CheckMerge(IEnumerable<MergeSite> sites)
     {
-        foreach(IGrouping<(NamedTypeRef, KeyRef?), MergeSite> group in sites.GroupBy(static s => (s.Implementation, s.Key)))
+        foreach(IGrouping<(DefinitionSource, KeyRef?), MergeSite> group in sites.GroupBy(static s => (s.Source, s.Key)))
         {
             Lifetime lifetime = group.First().Lifetime;
             if(group.All(s => s.Lifetime == lifetime))

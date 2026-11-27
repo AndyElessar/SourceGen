@@ -23,7 +23,7 @@ internal static class CreationWriter
     /// </param>
     public static void Write(SourceWriter writer, ClosedDefinition definition, bool declare, Func<int, string> argument, Func<int, string, string?> assignment, bool disposeOnFailure)
     {
-        string implementation = TypeNames.CSharp(definition.Implementation);
+        string implementation = TypeNames.CSharp(definition.InstanceType);
         ImmutableEquatableArray<Dependency> parameters = definition.ConstructorParameters;
 
         // A parameter by reference gets a local variable, passed with "in"

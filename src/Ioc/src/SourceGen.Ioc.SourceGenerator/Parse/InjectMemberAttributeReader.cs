@@ -86,7 +86,7 @@ internal static class InjectMemberAttributeReader
             {
                 for(int i = 0; i < member.Dependencies.Length; i++)
                 {
-                    parameterSites.Add(new ParameterSite(implementation, new SitePosition(member.Depth, member.Index, i), true, syntax.SyntaxTree.FilePath, syntax.Span));
+                    parameterSites.Add(new ParameterSite(DefinitionSource.Of(implementation), new SitePosition(member.Depth, member.Index, i), true, syntax.SyntaxTree.FilePath, syntax.Span));
                 }
             }
         }
@@ -134,7 +134,9 @@ internal static class InjectMemberAttributeReader
         foreach(RegistrationDeclaration declaration in declarations)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if(declaration.IsError || !byType.TryGetValue(declaration.Implementation, out List<InjectedMember>? added))
+            if(declaration.IsError
+                || declaration.Source.Kind != SourceKind.Implementation
+                || !byType.TryGetValue(declaration.Source.Type, out List<InjectedMember>? added))
             {
                 result.Add(declaration);
             }
@@ -161,7 +163,7 @@ internal static class InjectMemberAttributeReader
     public static IEnumerable<DiagnosticInfo> Diagnostics(IEnumerable<InjectMemberSite> sites, IEnumerable<NamedTypeRef> registeredTypes, IEnumerable<RegistrationDeclaration> declarations)
     {
         HashSet<NamedTypeRef> registered = [.. registeredTypes];
-        HashSet<NamedTypeRef> withoutKey = [.. declarations.Where(static d => d.Key is null).Select(static d => d.Implementation)];
+        HashSet<NamedTypeRef> withoutKey = [.. declarations.Where(static d => d is { Key: null, Source.Kind: SourceKind.Implementation }).Select(static d => d.Source.Type)];
         foreach(InjectMemberSite site in sites)
         {
             if(!registered.Contains(site.Implementation))
@@ -255,7 +257,7 @@ internal static class InjectMemberAttributeReader
 
         InjectedMember member = read.Members[0];
         DiagnosticInfo? serviceKeyWithoutKey = RequiresServiceKey(member)
-            ? Create(Descriptors.ServiceKeyWithoutKey.Id, syntax, member.Dependencies.First(static d => d is { KeyMode: SiteKeyMode.ServiceKey, Optional: OptionalMode.Required }).Name, KeyNames.Definition(implementation, null))
+            ? Create(Descriptors.ServiceKeyWithoutKey.Id, syntax, member.Dependencies.First(static d => d is { KeyMode: SiteKeyMode.ServiceKey, Optional: OptionalMode.Required }).Name, KeyNames.Definition(DefinitionSource.Of(implementation), null))
             : null;
         return (member, serviceKeyWithoutKey, memberName);
     }

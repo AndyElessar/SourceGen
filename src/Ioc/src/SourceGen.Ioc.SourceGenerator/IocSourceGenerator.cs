@@ -85,7 +85,7 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
             static (spc, input) =>
             {
                 ImmutableEquatableArray<DeclarationResult> declared = input.Left.Left;
-                Dictionary<(NamedTypeRef, SitePosition), ParameterSite> sites = ParameterSites(declared);
+                Dictionary<(DefinitionSource, SitePosition), ParameterSite> sites = ParameterSites(declared);
                 // One site can belong to more than one declaration (one type with several keys): each diagnostic once
                 IEnumerable<DiagnosticInfo> diagnostics = declared.SelectMany(static r => r.Diagnostics)
                     .Concat(Definitions.CheckMerge(declared.SelectMany(static r => r.Sites)))
@@ -136,17 +136,17 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
     }
 
     /// <summary>The site of each dependency site. A site declared in source wins over the attribute of a declaration.</summary>
-    private static Dictionary<(NamedTypeRef, SitePosition), ParameterSite> ParameterSites(ImmutableEquatableArray<DeclarationResult> results)
+    private static Dictionary<(DefinitionSource, SitePosition), ParameterSite> ParameterSites(ImmutableEquatableArray<DeclarationResult> results)
     {
-        Dictionary<(NamedTypeRef, SitePosition), ParameterSite> sites = [];
+        Dictionary<(DefinitionSource, SitePosition), ParameterSite> sites = [];
         foreach(ParameterSite site in results.SelectMany(static r => r.ParameterSites)
             .OrderBy(static s => s.InSource ? 0 : 1)
             .ThenBy(static s => s.FilePath, StringComparer.Ordinal)
             .ThenBy(static s => s.Span.Start))
         {
-            if(!sites.ContainsKey((site.Implementation, site.Key)))
+            if(!sites.ContainsKey((site.Source, site.Key)))
             {
-                sites[(site.Implementation, site.Key)] = site;
+                sites[(site.Source, site.Key)] = site;
             }
         }
 
@@ -157,14 +157,14 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
     /// The problems of the definite check at their dependency sites. A dependency site from metadata is reported at the
     /// registration attribute (Analysis.Model.spec, "Two levels of checks").
     /// </summary>
-    private static IEnumerable<DiagnosticInfo> DefiniteDiagnostics(ImmutableEquatableArray<GraphProblem> problems, Dictionary<(NamedTypeRef, SitePosition), ParameterSite> sites)
+    private static IEnumerable<DiagnosticInfo> DefiniteDiagnostics(ImmutableEquatableArray<GraphProblem> problems, Dictionary<(DefinitionSource, SitePosition), ParameterSite> sites)
         => Reported(problems, sites).Select(static r => new DiagnosticInfo(r.Problem.Id, r.Problem.Arguments, r.Site.FilePath, r.Site.Span));
 
-    private static IEnumerable<(GraphProblem Problem, ParameterSite Site)> Reported(ImmutableEquatableArray<GraphProblem> problems, Dictionary<(NamedTypeRef, SitePosition), ParameterSite> sites)
+    private static IEnumerable<(GraphProblem Problem, ParameterSite Site)> Reported(ImmutableEquatableArray<GraphProblem> problems, Dictionary<(DefinitionSource, SitePosition), ParameterSite> sites)
     {
         foreach(GraphProblem problem in problems)
         {
-            if(sites.TryGetValue((problem.Implementation, problem.Site), out ParameterSite? site))
+            if(sites.TryGetValue((problem.Source, problem.Site), out ParameterSite? site))
             {
                 yield return (problem, site);
             }
@@ -190,10 +190,10 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
             .Combine(definitions)
             .Select(static (input, _) =>
             {
-                HashSet<(NamedTypeRef, KeyRef?)> generated = [.. input.Right.Select(static d => (d.Implementation, d.Key))];
+                HashSet<(DefinitionSource, KeyRef?)> generated = [.. input.Right.Select(static d => (d.Source, d.Key))];
                 return input.Left
-                    .Where(d => !generated.Contains((d.Implementation, d.Key)))
-                    .SelectMany(static d => d.ServiceTypes.Prepend(d.Implementation).Select(t => new ErrorNode(t, d.Key is { IsInvalid: true } ? ErrorNode.AnyKey : KeyRef.CanonicalOf(d.Key))))
+                    .Where(d => !generated.Contains((d.Source, d.Key)))
+                    .SelectMany(static d => d.AllServiceTypes.Select(t => new ErrorNode(t, d.Key is { IsInvalid: true } ? ErrorNode.AnyKey : KeyRef.CanonicalOf(d.Key))))
                     .Distinct()
                     .OrderBy(static n => n.Type.CanonicalString, StringComparer.Ordinal)
                     .ThenBy(static n => n.Key, StringComparer.Ordinal)
@@ -224,9 +224,9 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
             static (spc, input) =>
             {
                 ImmutableArray<ContainerResult> containerResults = input.Left.Left.Left;
-                Dictionary<(NamedTypeRef, SitePosition), ParameterSite> parameterSites = ParameterSites(input.Left.Right.Left);
-                HashSet<(string, NamedTypeRef, SitePosition, ImmutableEquatableArray<string>)> reportedByDefiniteCheck = [.. Reported(input.Left.Right.Right, parameterSites)
-                    .Select(static r => (r.Problem.Id, r.Problem.Implementation, r.Problem.Site, r.Problem.Arguments))];
+                Dictionary<(DefinitionSource, SitePosition), ParameterSite> parameterSites = ParameterSites(input.Left.Right.Left);
+                HashSet<(string, DefinitionSource, SitePosition, ImmutableEquatableArray<string>)> reportedByDefiniteCheck = [.. Reported(input.Left.Right.Right, parameterSites)
+                    .Select(static r => (r.Problem.Id, r.Problem.Source, r.Problem.Site, r.Problem.Arguments))];
                 List<DiagnosticInfo> diagnostics = [.. containerResults.SelectMany(static r => r.Diagnostics)];
                 Dictionary<NamedTypeRef, ContainerSite> sites = [];
                 foreach(ContainerSite site in containerResults.Select(static r => r.Site).OfType<ContainerSite>())
@@ -245,7 +245,7 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                     // All problems of a container have the same location, so the same message from two sites is reported one time
                     HashSet<(string, ImmutableEquatableArray<string>)> reported = [];
                     diagnostics.AddRange(analysis.Problems
-                        .Where(p => p.Implementation is null || !reportedByDefiniteCheck.Contains((p.Id, p.Implementation, p.Site, p.Arguments)))
+                        .Where(p => p.Source is null || !reportedByDefiniteCheck.Contains((p.Id, p.Source, p.Site, p.Arguments)))
                         .Where(p => reported.Add((p.Id, p.Arguments)))
                         .Select(p => new DiagnosticInfo(p.Id, p.Arguments, site.FilePath, site.Span)));
                 }

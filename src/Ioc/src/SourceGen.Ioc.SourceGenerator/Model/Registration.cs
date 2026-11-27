@@ -27,41 +27,99 @@ internal enum Disposal
     Async = 2,
 }
 
+/// <summary>The kind of the source of an instance definition (Constitution, "Terms").</summary>
+internal enum SourceKind
+{
+    /// <summary>An implementation type, created with <c>new</c>.</summary>
+    Implementation,
+
+    /// <summary>A static factory method.</summary>
+    Factory,
+
+    /// <summary>A static field or property that holds the instance.</summary>
+    Instance,
+}
+
 /// <summary>
-/// A registration declaration of an implementation type (Annotations.spec, "Registration declarations"), with the
-/// dependencies of its selected constructor.
+/// The source of an instance definition. With the key, it is the identity of the instance definition (Analysis.Model.spec,
+/// "Identity").
 /// </summary>
-/// <param name="Implementation">The implementation type: its identity, with the key.</param>
+/// <param name="Kind">The kind.</param>
+/// <param name="Type">The implementation type, or the type that contains the factory method or the instance member.</param>
+/// <param name="Member">The name of the factory method or of the instance member. Empty for an implementation type.</param>
+/// <param name="Parameters">The parameter types of the factory method. Empty for the other kinds.</param>
+internal sealed record DefinitionSource(SourceKind Kind, NamedTypeRef Type, string Member, ImmutableEquatableArray<TypeRef> Parameters)
+{
+    /// <summary>Gets the source of an implementation type.</summary>
+    /// <param name="implementation">The implementation type.</param>
+    /// <returns>The source.</returns>
+    public static DefinitionSource Of(NamedTypeRef implementation) => new(SourceKind.Implementation, implementation, string.Empty, []);
+
+    /// <summary>
+    /// Gets the sort name (Analysis.Model.spec, "Ordering"): the sort name of the implementation type,
+    /// <c>{containing type}.{method name}({parameter type,...})</c> for a factory, <c>{containing type}.{member name}</c>
+    /// for an instance.
+    /// </summary>
+    public string SortName => Build(withAssembly: false);
+
+    /// <summary>Gets the sort name written with the full canonical strings, which the ordering compares last.</summary>
+    public string CanonicalString => Build(withAssembly: true);
+
+    private string Build(bool withAssembly)
+    {
+        string type = withAssembly ? Type.CanonicalString : Type.SortName;
+        return Kind switch
+        {
+            SourceKind.Implementation => type,
+            SourceKind.Factory => $"{type}.{Member}({string.Join(",", Parameters.Select(p => withAssembly ? p.CanonicalString : p.SortName))})",
+            _ => $"{type}.{Member}",
+        };
+    }
+}
+
+/// <summary>
+/// A registration declaration (Annotations.spec, "Registration declarations"), with the dependencies of its selected
+/// constructor.
+/// </summary>
+/// <param name="Source">The source: the identity of the declaration, with the key.</param>
+/// <param name="InstanceType">The type of the object that the source gives: the implementation type.</param>
 /// <param name="Key">The key, or <see langword="null"/> for no key.</param>
 /// <param name="Lifetime">The lifetime.</param>
 /// <param name="ServiceTypes">The service types that the attribute gives. The implementation type itself is not in the list.</param>
 /// <param name="ConstructorParameters">The parameters of the selected constructor, in order.</param>
 /// <param name="Members">The injected members, in the order of the steps (Annotations.spec, "Order").</param>
-/// <param name="Disposal">The disposal kind of the implementation type.</param>
+/// <param name="Disposal">The disposal kind of the object that the source gives.</param>
 /// <param name="IsError">
 /// Whether the declaration is invalid. It keeps only the valid service types and has no parameters. It makes the complete instance
 /// definition an error node.
 /// </param>
 internal sealed record RegistrationDeclaration(
-    NamedTypeRef Implementation,
+    DefinitionSource Source,
+    TypeRef InstanceType,
     KeyRef? Key,
     Lifetime Lifetime,
     ImmutableEquatableArray<TypeRef> ServiceTypes,
     ImmutableEquatableArray<Dependency> ConstructorParameters,
     ImmutableEquatableArray<InjectedMember> Members,
     Disposal Disposal = Disposal.None,
-    bool IsError = false);
+    bool IsError = false)
+{
+    /// <summary>Gets all service types: the implementation type itself first, then <see cref="ServiceTypes"/>.</summary>
+    public IEnumerable<TypeRef> AllServiceTypes => Source.Kind == SourceKind.Implementation ? ServiceTypes.Prepend(InstanceType) : ServiceTypes;
+}
 
 /// <summary>A closed definition after merging: the input of the analysis and of the generated code.</summary>
-/// <param name="Implementation">The implementation type.</param>
+/// <param name="Source">The source: the identity, with the key.</param>
+/// <param name="InstanceType">The type of the object that the source gives: the implementation type.</param>
 /// <param name="Key">The key, or <see langword="null"/> for no key.</param>
 /// <param name="Lifetime">The lifetime.</param>
 /// <param name="ServiceTypes">The service types: the implementation type first, then the others by sort name.</param>
 /// <param name="ConstructorParameters">The constructor parameters, in order.</param>
 /// <param name="Members">The injected members, in the order of the steps.</param>
-/// <param name="Disposal">The disposal kind of the implementation type.</param>
+/// <param name="Disposal">The disposal kind of the object that the source gives.</param>
 internal sealed record ClosedDefinition(
-    NamedTypeRef Implementation,
+    DefinitionSource Source,
+    TypeRef InstanceType,
     KeyRef? Key,
     Lifetime Lifetime,
     ImmutableEquatableArray<TypeRef> ServiceTypes,

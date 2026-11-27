@@ -6,24 +6,24 @@ using SourceGen.Ioc.Model;
 namespace SourceGen.Ioc.Parse;
 
 /// <summary>Where a declaration is written, for the check of merged declarations (SGIOC001).</summary>
-/// <param name="Implementation">The implementation type: the identity of the declaration, with the key.</param>
+/// <param name="Source">The source: the identity of the declaration, with the key.</param>
 /// <param name="Key">The key, or <see langword="null"/>.</param>
 /// <param name="Name">The name of the instance definition, for the message.</param>
 /// <param name="Lifetime">The lifetime.</param>
 /// <param name="FilePath">The path of the syntax tree of the attribute.</param>
 /// <param name="Span">The span of the attribute.</param>
-internal sealed record MergeSite(NamedTypeRef Implementation, KeyRef? Key, string Name, Lifetime Lifetime, string FilePath, TextSpan Span);
+internal sealed record MergeSite(DefinitionSource Source, KeyRef? Key, string Name, Lifetime Lifetime, string FilePath, TextSpan Span);
 
 /// <summary>
 /// Where a dependency site is written, for the definite check (Analysis.Model.spec, "Two levels of checks"). A
 /// parameter of a type from metadata has no syntax, so its site is the attribute of the declaration.
 /// </summary>
-/// <param name="Implementation">The implementation type that owns the dependency site.</param>
+/// <param name="Source">The source that owns the dependency site.</param>
 /// <param name="Key">The dependency site.</param>
 /// <param name="InSource">Whether the site is declared in this assembly (and the span is the parameter or member).</param>
 /// <param name="FilePath">The path of the syntax tree.</param>
 /// <param name="Span">The span of the parameter, or of the attribute when <paramref name="InSource"/> is false.</param>
-internal sealed record ParameterSite(NamedTypeRef Implementation, SitePosition Key, bool InSource, string FilePath, TextSpan Span);
+internal sealed record ParameterSite(DefinitionSource Source, SitePosition Key, bool InSource, string FilePath, TextSpan Span);
 
 /// <summary>
 /// What one attribute target gives. The generation pipeline uses only <see cref="Declarations"/>, so a change of
@@ -164,6 +164,8 @@ internal static class DeclarationReader
                 return;
             }
 
+            DefinitionSource source = DefinitionSource.Of(implementationRef);
+
             // The service types first: an invalid declaration still records the valid ones, so that a dependency on
             // them finds the error node and causes no other diagnostic
             (ImmutableEquatableArray<TypeRef> serviceTypes, bool validServiceTypes) = ReadServiceTypes(implementation, name, attribute, syntax);
@@ -181,7 +183,7 @@ internal static class DeclarationReader
 
             if(constructor is null || !validServiceTypes || key.ErrorId is not null)
             {
-                AddError(implementationRef, key.ErrorId is null ? key.Key : KeyRef.Invalid(implementationRef), lifetime, serviceTypes);
+                AddError(source, implementationRef, key.ErrorId is null ? key.Key : KeyRef.Invalid(implementationRef), lifetime, serviceTypes);
                 return;
             }
 
@@ -190,14 +192,14 @@ internal static class DeclarationReader
             if(SiteKeyReader.CheckMember(constructor.GetAttributes(), "constructor", syntax, cancellationToken) is { } memberError)
             {
                 diagnostics.Add(memberError);
-                AddError(implementationRef, key.Key, lifetime, serviceTypes);
+                AddError(source, implementationRef, key.Key, lifetime, serviceTypes);
                 return;
             }
 
             (ImmutableEquatableArray<Dependency>? parameters, bool keyErrors) = ReadParameters(constructor, syntax);
             if(keyErrors)
             {
-                AddError(implementationRef, key.Key, lifetime, serviceTypes);
+                AddError(source, implementationRef, key.Key, lifetime, serviceTypes);
                 return;
             }
 
@@ -217,22 +219,22 @@ internal static class DeclarationReader
             if(members.Errors.Count > 0)
             {
                 diagnostics.AddRange(members.Errors);
-                AddError(implementationRef, key.Key, lifetime, serviceTypes);
+                AddError(source, implementationRef, key.Key, lifetime, serviceTypes);
                 return;
             }
 
             if(key.Key is null
                 && parameters.Concat(members.Members.SelectMany(static m => m.Dependencies)).FirstOrDefault(static p => p is { KeyMode: SiteKeyMode.ServiceKey, Optional: OptionalMode.Required }) is { } serviceKey)
             {
-                Report(Descriptors.ServiceKeyWithoutKey.Id, syntax, serviceKey.Name, KeyNames.Definition(implementationRef, null));
-                AddError(implementationRef, key.Key, lifetime, serviceTypes);
+                Report(Descriptors.ServiceKeyWithoutKey.Id, syntax, serviceKey.Name, KeyNames.Definition(source, null));
+                AddError(source, implementationRef, key.Key, lifetime, serviceTypes);
                 return;
             }
 
-            declarations.Add(new RegistrationDeclaration(implementationRef, key.Key, (Lifetime)lifetime, serviceTypes, parameters, members.Members.ToImmutableEquatableArray(), DisposalOf(implementation)));
+            declarations.Add(new RegistrationDeclaration(source, implementationRef, key.Key, (Lifetime)lifetime, serviceTypes, parameters, members.Members.ToImmutableEquatableArray(), DisposalOf(implementation)));
             if(syntax is not null)
             {
-                sites.Add(new MergeSite(implementationRef, key.Key, KeyNames.Definition(implementationRef, key.Key), (Lifetime)lifetime, syntax.SyntaxTree.FilePath, syntax.Span));
+                sites.Add(new MergeSite(source, key.Key, KeyNames.Definition(source, key.Key), (Lifetime)lifetime, syntax.SyntaxTree.FilePath, syntax.Span));
             }
 
             // A site of another assembly is reported at the attribute, also when a project reference gives its syntax
@@ -243,11 +245,11 @@ internal static class DeclarationReader
             {
                 if(reference is not null && compilation.ContainsSyntaxTree(reference.SyntaxTree))
                 {
-                    parameterSites.Add(new ParameterSite(implementationRef, position, true, reference.SyntaxTree.FilePath, reference.Span));
+                    parameterSites.Add(new ParameterSite(source, position, true, reference.SyntaxTree.FilePath, reference.Span));
                 }
                 else if(syntax is not null)
                 {
-                    parameterSites.Add(new ParameterSite(implementationRef, position, false, syntax.SyntaxTree.FilePath, syntax.Span));
+                    parameterSites.Add(new ParameterSite(source, position, false, syntax.SyntaxTree.FilePath, syntax.Span));
                 }
             }
         }
@@ -256,8 +258,8 @@ internal static class DeclarationReader
         /// Records an invalid declaration. It skips the complete instance definition, also its valid declarations
         /// (Diagnostics.spec, "Consequences").
         /// </summary>
-        private void AddError(NamedTypeRef implementation, KeyRef? key, int lifetime, ImmutableEquatableArray<TypeRef> validServiceTypes)
-            => declarations.Add(new RegistrationDeclaration(implementation, key, (Lifetime)lifetime, validServiceTypes, [], [], IsError: true));
+        private void AddError(DefinitionSource source, TypeRef instanceType, KeyRef? key, int lifetime, ImmutableEquatableArray<TypeRef> validServiceTypes)
+            => declarations.Add(new RegistrationDeclaration(source, instanceType, key, (Lifetime)lifetime, validServiceTypes, [], [], IsError: true));
 
         /// <summary>The checks of the implementation type (Annotations.spec, "Checks of the implementation type").</summary>
         private static string? ImplementationError(ITypeSymbol type)

@@ -254,12 +254,12 @@ internal sealed record ContainerPlan(
 /// <summary>A problem that the full check finds. The position is added from the site of the container.</summary>
 /// <param name="Id">The diagnostic ID.</param>
 /// <param name="Arguments">The message arguments.</param>
-/// <param name="Implementation">
-/// For a problem that the definite check also finds, the implementation type of the dependency site. The full check
-/// does not report it again when the definite check reports it (Analysis.Model.spec, "Two levels of checks").
+/// <param name="Source">
+/// For a problem that the definite check also finds, the source that owns the dependency site. The full check does not
+/// report it again when the definite check reports it (Analysis.Model.spec, "Two levels of checks").
 /// </param>
 /// <param name="Site">That dependency site.</param>
-internal sealed record ContainerProblem(string Id, ImmutableEquatableArray<string> Arguments, NamedTypeRef? Implementation = null, SitePosition Site = default);
+internal sealed record ContainerProblem(string Id, ImmutableEquatableArray<string> Arguments, DefinitionSource? Source = null, SitePosition Site = default);
 
 /// <summary>The result of the analysis of one container.</summary>
 /// <param name="Type">The container class.</param>
@@ -427,7 +427,7 @@ internal static class ContainerAnalysis
         {
             ClosedDefinition definition = definitions[index];
             Dependency parameter = definition.Dependencies[p];
-            return Resolve(parameter.Type, parameter.KeyIn(definition), parameter.Optional != OptionalMode.Required, KeyNames.Definition(definition), parameter.Name, definition.Implementation, definition.SiteOf(p));
+            return Resolve(parameter.Type, parameter.KeyIn(definition), parameter.Optional != OptionalMode.Required, KeyNames.Definition(definition), parameter.Name, definition.Source, definition.SiteOf(p));
         }
 
         // The edges of one argument (Analysis.Model.spec, "Circular dependencies")
@@ -462,9 +462,9 @@ internal static class ContainerAnalysis
         // The dependency site in a message is "{owner} → {member}" (Diagnostics.spec, "Names in messages").
         // With a fallback provider, a missing dependency goes to it, and only a required one is reported (SGIOC501).
         // Without one, a missing optional dependency uses its default value.
-        // The implementation type and the site of a closed definition let the output skip a problem that the definite
+        // The source and the site of a closed definition let the output skip a problem that the definite
         // check already reports. A partial accessor has neither
-        ArgumentPlan? Resolve(TypeRef type, KeyRef? key, bool optional, string owner, string member, NamedTypeRef? implementation = null, SitePosition site = default)
+        ArgumentPlan? Resolve(TypeRef type, KeyRef? key, bool optional, string owner, string member, DefinitionSource? source = null, SitePosition site = default)
         {
             if(key is null && BuiltIn(type, container.Type) is { } builtIn)
             {
@@ -502,7 +502,7 @@ internal static class ContainerAnalysis
 
             if(request.IsSingleFuncWithArguments)
             {
-                return ResolveFunc(type, request, key, implementation, site);
+                return ResolveFunc(type, request, key, source, site);
             }
 
             if(request.IsSimpleCollection)
@@ -564,7 +564,7 @@ internal static class ContainerAnalysis
 
             WrapperRequest value = request.PairValue;
             ArgumentPlan argument = value.IsPlain ? core : Wrap(((NamedTypeRef)type).Arguments![1], value, core, key, optional);
-            string identity = $"{type.CanonicalString}|{key!.Canonical}|{definitions[core.Target].Implementation.CanonicalString}";
+            string identity = $"{type.CanonicalString}|{key!.Canonical}|{definitions[core.Target].Source.CanonicalString}";
             if(!pairIndexes.TryGetValue(identity, out int index))
             {
                 index = pairs.Count;
@@ -646,7 +646,7 @@ internal static class ContainerAnalysis
         // Func<A1, ..., An, T> (Analysis.Model.spec, "Mapping of Func<..., T>"): T resolves to one Transient closed
         // definition, and each argument maps to one constructor parameter of it. Otherwise SGIOC305, also when T is missing
         // or comes only from the fallback provider. The definite check reports some of these at the same site
-        ArgumentPlan? ResolveFunc(TypeRef type, WrapperRequest request, KeyRef? key, NamedTypeRef? implementation, SitePosition site)
+        ArgumentPlan? ResolveFunc(TypeRef type, WrapperRequest request, KeyRef? key, DefinitionSource? source, SitePosition site)
         {
             string service = key is null ? TypeNames.Display(request.Core) : $"{TypeNames.Display(request.Core)} (Key: {KeyNames.Display(key)})";
             string? reason = request.DuplicateArgument();
@@ -682,7 +682,7 @@ internal static class ContainerAnalysis
                 }
             }
 
-            problems.Add(new ContainerProblem(Descriptors.InvalidFuncWithArguments.Id, [TypeNames.Display(type), reason], implementation, site));
+            problems.Add(new ContainerProblem(Descriptors.InvalidFuncWithArguments.Id, [TypeNames.Display(type), reason], source, site));
             return null;
         }
 
@@ -777,7 +777,7 @@ internal static class ContainerAnalysis
             bool required = core.Kind != ArgumentKind.Fallback || !optional;
             string identity = core.Kind switch
             {
-                ArgumentKind.Resolved => $"{type.CanonicalString}|{definitions[core.Target].Implementation.CanonicalString}|{KeyRef.CanonicalOf(definitions[core.Target].Key)}",
+                ArgumentKind.Resolved => $"{type.CanonicalString}|{definitions[core.Target].Source.CanonicalString}|{KeyRef.CanonicalOf(definitions[core.Target].Key)}",
                 ArgumentKind.Fallback => $"{type.CanonicalString}|fallback|{KeyRef.CanonicalOf(key)}|{(required ? "required" : "optional")}",
                 _ => $"{type.CanonicalString}|{core.Kind}",
             };
@@ -947,7 +947,7 @@ internal static class ContainerAnalysis
             .Concat(DependencyGraph.Cycles(definitions, edges))
             .Concat(DependencyGraph.Captives(definitions, edges))
             .Concat(DependencyGraph.HeldTransients(definitions, edges))
-            .Select(static p => new ContainerProblem(p.Id, p.Arguments, p.Implementation, p.Site)));
+            .Select(static p => new ContainerProblem(p.Id, p.Arguments, p.Source, p.Site)));
 
         // Disposable Transient is only in the full check (Analysis.Model.spec, "Disposable Transient")
         foreach(ClosedDefinition definition in definitions.Where(static d => d.Lifetime == Lifetime.Transient && d.Disposal != Disposal.None))

@@ -242,7 +242,7 @@ internal static class ContainerEmitter
         int[] mapping = [.. wrapper.Mapping!];
         writer.WriteLine();
         writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-        writer.WriteLine($"private {TypeNames.CSharp(definition.Definition.Implementation)} {CreateWith(plan, wrapper)}({string.Join(", ", arguments.Select(static (a, i) => $"{TypeNames.CSharp(a)} a{i}"))})");
+        writer.WriteLine($"private {TypeNames.CSharp(definition.Definition.InstanceType)} {CreateWith(plan, wrapper)}({string.Join(", ", arguments.Select(static (a, i) => $"{TypeNames.CSharp(a)} a{i}"))})");
         writer.WriteLine('{');
         writer.Indentation++;
         writer.WriteLine($"{self} c = this;");
@@ -371,7 +371,7 @@ internal static class ContainerEmitter
                 writer.WriteLine($"public readonly {Lock} {LockField(definition.Definition)} = new {Lock}();");
             }
 
-            writer.WriteLine($"public {TypeNames.CSharp(definition.Definition.Implementation)}? {Field(definition.Definition)};");
+            writer.WriteLine($"public {TypeNames.CSharp(definition.Definition.InstanceType)}? {Field(definition.Definition)};");
         }
 
         foreach(CollectionPlan collection in plan.Collections.Where(static c => c.Cache == CollectionCache.Root))
@@ -413,7 +413,7 @@ internal static class ContainerEmitter
         foreach(DefinitionPlan definition in plan.Definitions.Where(static d => d.Definition.Lifetime == Lifetime.Scoped))
         {
             writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
-            writer.WriteLine($"private {TypeNames.CSharp(definition.Definition.Implementation)}? {Field(definition.Definition)};");
+            writer.WriteLine($"private {TypeNames.CSharp(definition.Definition.InstanceType)}? {Field(definition.Definition)};");
         }
 
         foreach(CollectionPlan collection in plan.Collections.Where(static c => c.Cache == CollectionCache.Scope))
@@ -552,7 +552,7 @@ internal static class ContainerEmitter
     private static void WriteResolver(SourceWriter writer, ContainerPlan plan, int index, string self)
     {
         ClosedDefinition definition = plan.Definitions[index].Definition;
-        string implementation = TypeNames.CSharp(definition.Implementation);
+        string implementation = TypeNames.CSharp(definition.InstanceType);
         writer.WriteLine();
         if(definition.Lifetime == Lifetime.Transient)
         {
@@ -1425,7 +1425,7 @@ internal static class ContainerEmitter
             if(!isAsync && definition.Disposal == Disposal.Async)
             {
                 // MS.DI does the same for an object that implements only IAsyncDisposable
-                writer.WriteLine($"(errors ??= new {ExceptionList}()).Add(new {InvalidOperation}(\"'{TypeNames.Display(definition.Implementation)}' type only implements IAsyncDisposable. Use DisposeAsync to dispose the container.\"));");
+                writer.WriteLine($"(errors ??= new {ExceptionList}()).Add(new {InvalidOperation}(\"'{TypeNames.Display(definition.InstanceType)}' type only implements IAsyncDisposable. Use DisposeAsync to dispose the container.\"));");
             }
             else
             {

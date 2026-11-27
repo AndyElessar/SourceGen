@@ -21,9 +21,9 @@ internal readonly record struct GraphEdge(int From, int Parameter, int To, Defer
 /// <summary>A problem of the dependency graph. The definite check reports it at the dependency site.</summary>
 /// <param name="Id">The diagnostic ID.</param>
 /// <param name="Arguments">The message arguments.</param>
-/// <param name="Implementation">The implementation type that owns the dependency site.</param>
+/// <param name="Source">The source that owns the dependency site.</param>
 /// <param name="Site">The dependency site.</param>
-internal sealed record GraphProblem(string Id, ImmutableEquatableArray<string> Arguments, NamedTypeRef Implementation, SitePosition Site);
+internal sealed record GraphProblem(string Id, ImmutableEquatableArray<string> Arguments, DefinitionSource Source, SitePosition Site);
 
 /// <summary>
 /// The checks of the dependency graph (Analysis.Model.spec, "Circular dependencies", "Lifetime checks", "Warning for a
@@ -266,7 +266,7 @@ internal static class DependencyGraph
     }
 
     private static GraphProblem Problem(string id, ImmutableEquatableArray<string> arguments, ImmutableEquatableArray<ClosedDefinition> definitions, GraphEdge site)
-        => new(id, arguments, definitions[site.From].Implementation, definitions[site.From].SiteOf(site.Parameter));
+        => new(id, arguments, definitions[site.From].Source, definitions[site.From].SiteOf(site.Parameter));
 
     /// <summary>The edges from <paramref name="start"/> to <paramref name="node"/>, from the breadth-first walk.</summary>
     private static List<GraphEdge> PathTo(int node, int start, Dictionary<int, GraphEdge> previous)

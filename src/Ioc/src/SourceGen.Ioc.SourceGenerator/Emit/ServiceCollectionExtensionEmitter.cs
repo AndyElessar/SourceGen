@@ -115,7 +115,7 @@ internal static class ServiceCollectionExtensionEmitter
 
     private static void WriteRegistrations(SourceWriter writer, ClosedDefinition definition)
     {
-        string implementation = TypeNames.CSharp(definition.Implementation);
+        string implementation = TypeNames.CSharp(definition.InstanceType);
         string lifetime = definition.Lifetime.ToString();
         writer.WriteLine();
         if(HasHolder(definition))
@@ -128,7 +128,7 @@ internal static class ServiceCollectionExtensionEmitter
         foreach(TypeRef serviceType in definition.ServiceTypes)
         {
             string service = TypeNames.CSharp(serviceType);
-            string cast = serviceType.Equals(definition.Implementation) ? string.Empty : $"({service})";
+            string cast = serviceType.Equals(definition.InstanceType) ? string.Empty : $"({service})";
             if(definition.Key is { } key)
             {
                 writer.WriteLine($"{Services}.AddKeyed{lifetime}<{service}>(services, {KeyNames.Expression(key)}, static (sp, _) => {cast}{source}(sp));");
@@ -604,7 +604,7 @@ internal static class ServiceCollectionExtensionEmitter
     private static void WriteCreateWith(SourceWriter writer, ClosedDefinition definition, ImmutableEquatableArray<TypeRef> arguments, ImmutableEquatableArray<int> mapping, Dictionary<(TypeRef Type, string Key), List<int>> providers)
     {
         int[] map = [.. mapping];
-        writer.WriteLine($"private static {TypeNames.CSharp(definition.Implementation)} {GeneratedNames.For("__CreateWith_", definition, arguments)}(global::System.IServiceProvider sp, {string.Join(", ", arguments.Select(static (a, i) => $"{TypeNames.CSharp(a)} a{i}"))})");
+        writer.WriteLine($"private static {TypeNames.CSharp(definition.InstanceType)} {GeneratedNames.For("__CreateWith_", definition, arguments)}(global::System.IServiceProvider sp, {string.Join(", ", arguments.Select(static (a, i) => $"{TypeNames.CSharp(a)} a{i}"))})");
         writer.WriteLine('{');
         writer.Indentation++;
         CreationWriter.Write(
@@ -621,7 +621,7 @@ internal static class ServiceCollectionExtensionEmitter
 
     private static void WriteCreate(SourceWriter writer, ClosedDefinition definition, Dictionary<(TypeRef Type, string Key), List<int>> providers)
     {
-        string implementation = TypeNames.CSharp(definition.Implementation);
+        string implementation = TypeNames.CSharp(definition.InstanceType);
         writer.WriteLine($"private static {implementation} {GeneratedNames.For("__Create_", definition)}(global::System.IServiceProvider sp)");
         ImmutableEquatableArray<Dependency> parameters = definition.ConstructorParameters;
         if(definition.Members.Length > 0)
@@ -773,7 +773,7 @@ internal static class ServiceCollectionExtensionEmitter
 
     private static void WriteGet(SourceWriter writer, ClosedDefinition definition)
     {
-        string implementation = TypeNames.CSharp(definition.Implementation);
+        string implementation = TypeNames.CSharp(definition.InstanceType);
         writer.WriteLine();
         writer.WriteLine($"private static {implementation} {GeneratedNames.For("__Get_", definition)}(global::System.IServiceProvider sp)");
         writer.Indentation++;

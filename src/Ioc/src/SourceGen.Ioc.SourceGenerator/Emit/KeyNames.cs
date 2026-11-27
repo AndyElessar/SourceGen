@@ -41,16 +41,16 @@ internal static class KeyNames
     /// The name of a closed definition in a message: the sort name, then <c> (Key: {Key})</c> when it has a key
     /// (Diagnostics.spec, "Names in messages").
     /// </summary>
-    /// <param name="implementation">The implementation type.</param>
+    /// <param name="source">The source.</param>
     /// <param name="key">The key, or <see langword="null"/>.</param>
     /// <returns>The name.</returns>
-    public static string Definition(NamedTypeRef implementation, KeyRef? key)
-        => key is null ? implementation.SortName : $"{implementation.SortName} (Key: {Display(key)})";
+    public static string Definition(DefinitionSource source, KeyRef? key)
+        => key is null ? source.SortName : $"{source.SortName} (Key: {Display(key)})";
 
     /// <summary>The name of a closed definition in a message.</summary>
     /// <param name="definition">The closed definition.</param>
     /// <returns>The name.</returns>
-    public static string Definition(ClosedDefinition definition) => Definition(definition.Implementation, definition.Key);
+    public static string Definition(ClosedDefinition definition) => Definition(definition.Source, definition.Key);
 
     private static string Floating(string text, string type, string suffix) => text switch
     {

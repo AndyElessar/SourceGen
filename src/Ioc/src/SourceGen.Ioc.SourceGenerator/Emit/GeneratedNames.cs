@@ -15,9 +15,9 @@ internal static class GeneratedNames
     /// <returns>The member name.</returns>
     public static string For(string prefix, ClosedDefinition definition)
     {
-        NamedTypeRef type = definition.Implementation;
-        string identity = definition.Key is { } key ? $"{type.CanonicalString}|{key.Canonical}" : type.CanonicalString;
-        return $"{prefix}{ShortName(type)}_{Fnv1a(identity):x8}";
+        string source = definition.Source.CanonicalString;
+        string identity = definition.Key is { } key ? $"{source}|{key.Canonical}" : source;
+        return $"{prefix}{ShortName(definition.Source)}_{Fnv1a(identity):x8}";
     }
 
     /// <summary>Gets the name of a member that belongs to a collection.</summary>
@@ -44,9 +44,8 @@ internal static class GeneratedNames
     /// <returns>The member name.</returns>
     public static string For(string prefix, ClosedDefinition definition, ImmutableEquatableArray<TypeRef> arguments)
     {
-        NamedTypeRef type = definition.Implementation;
-        string identity = $"{type.CanonicalString}|{KeyRef.CanonicalOf(definition.Key)}|{string.Join(",", arguments.Select(static a => a.CanonicalString))}";
-        return $"{prefix}{ShortName(type)}_{Fnv1a(identity):x8}";
+        string identity = $"{definition.Source.CanonicalString}|{KeyRef.CanonicalOf(definition.Key)}|{string.Join(",", arguments.Select(static a => a.CanonicalString))}";
+        return $"{prefix}{ShortName(definition.Source)}_{Fnv1a(identity):x8}";
     }
 
     /// <summary>Gets the name of a member that belongs to a <c>KeyValuePair</c>.</summary>
@@ -62,6 +61,10 @@ internal static class GeneratedNames
     /// <returns>The member name.</returns>
     public static string For(string prefix, KeyedCollectionPlan keyed)
         => $"{prefix}{ShortName(keyed.Request.Core)}_{Fnv1a(keyed.Identity):x8}";
+
+    /// <summary>The short name of a source: the implementation type, or the containing type and the member.</summary>
+    private static string ShortName(DefinitionSource source)
+        => source.Kind == SourceKind.Implementation ? ShortName(source.Type) : $"{ShortName(source.Type)}_{source.Member}";
 
     /// <summary>The short name of a type: the name of a named type without its namespace and arity.</summary>
     private static string ShortName(TypeRef type)
