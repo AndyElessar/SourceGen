@@ -89,7 +89,7 @@ Each closed definition has one internal resolver in the container. Its behavior 
 | Singleton | The shared state object | Created one time for the whole root |
 | Scoped | The scope instance | Created one time for each scope |
 | Transient | None | Created for each request |
-| Instance registration | None | Each request reads the static member (through an entry, if the registration is imported) |
+| Instance registration | None | Each request reads the static member (through an entry, if the registration is imported). A wrapper, collection or dictionary that contains it follows the cache rules of a Singleton, and keeps the object that it read first, as MS.DI keeps the object of `Add{Name}` |
 
 - The creation steps follow the construction plan (see "Construction plan" in [Analysis model](Analysis.Model.spec.md#construction-plan)). The container always resolves a dependency on the current instance (root or scope). It resolves the dependencies of a Singleton on the root.
 - The fast path of a Singleton or Scoped service (the instance exists) MUST be one field read and one null check. It MUST NOT take a lock and MUST NOT allocate memory. The creation path and the fast path are two separate methods, so that the fast path can be inlined.

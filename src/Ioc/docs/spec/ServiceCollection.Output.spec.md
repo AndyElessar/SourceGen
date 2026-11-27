@@ -135,6 +135,8 @@ Each dependency is always resolved from `sp` (see [Dependency resolution](#depen
 
 The creation method of a factory calls the static method. When the method returns `null`, the creation method throws `InvalidOperationException`, the same as the [container](Container.Output.spec.md#resolution-of-a-closed-definition) (Container output, section "Resolution of a closed definition"). A holder never holds `null`, and a registration of a service type never returns `null` for a factory. MS.DI accepts `null` from a factory delegate, so this is a [documented difference](../Constitution.md#8-documented-differences-from-msdi) (see [ADR IocRewrite/0021](../adr/0001_IocRewrite/0021_NullFromFactoryThrows.md)).
 
+The creation method of an instance registration reads the static member, with the same check for `null`. Only a wrapper type, a collection, a `KeyValuePair` and a dictionary use it, because each of them is an object of its own that holds the instance. The registration of each service type does not use it (see [Registration for each lifetime](#registration-for-each-lifetime)). It reads the static member one time, when `Add{Name}` runs, and passes the object to MS.DI. When the member is `null`, MS.DI throws `ArgumentNullException` at that call.
+
 An `in` or `ref readonly` parameter gets its value through a local variable of the creation method, and the call passes the variable with `in`. A value that is passed directly to a `ref readonly` parameter gives warning CS9193. The generated code MUST NOT have warnings. A `ref` or `out` parameter cannot take a resolved value. The compiler reports that error in the generated code. The generator reports no diagnostic (see the [constitution](../Constitution.md)).
 
 ### Holder

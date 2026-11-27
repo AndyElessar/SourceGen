@@ -281,7 +281,7 @@ When `Factory` or `Instance` binds to a symbol of the right kind, the generator 
 
 When the operand binds to a method group that has more than one method, the generator reports `SGIOC010` (skip the declaration). An `IocFactoryAttribute` that is directly on a method does not use a name, so it does not have this problem.
 
-An inaccessible member (private, for example) is not an IoC semantic error. The generator generates code as usual, and the compiler reports the error.
+An inaccessible member (private, for example) is not an IoC semantic error. The generator generates code as usual, and the compiler reports the error. The same applies to an instance property without a `get` accessor.
 
 ## Keys
 
@@ -409,7 +409,9 @@ The generator checks each element of `ServiceTypes` of a factory with the table 
 
 ### Service types of an instance
 
-When `ServiceTypes` is not set, the service type is the type of the field or property. When `ServiceTypes` is set, the service types are the specified types, and they can only be concrete types. When the type is a value type, the generator reports `SGIOC004`. The generator checks each service type of an instance with the table in [Expansion of service types](#expansion-of-service-types).
+When `ServiceTypes` is not set, the service type is the type of the field or property. When `ServiceTypes` is set, the service types are the specified types, and they can only be concrete types (`it is an unbound generic type` for an unbound generic).
+
+The type of the field or property gets the same checks as the return type of a factory (see the table in [Service types of a factory](#service-types-of-a-factory)), also when `ServiceTypes` is set. For example, a value type causes `SGIOC004` (`it is a value type`). The generator reports them at the registration attribute. When `ServiceTypes` is not set, the table in [Expansion of service types](#expansion-of-service-types) applies to the type too. The generator checks each element of `ServiceTypes` with that table.
 
 ### Checks of a factory or instance member
 
