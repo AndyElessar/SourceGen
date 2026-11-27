@@ -20,8 +20,9 @@ dotnet run --project src/Ioc/test/SourceGen.Ioc.Cli.Test/SourceGen.Ioc.Cli.Test.
 
 # AOT tests (publish first, then run the native executable for the current RID).
 # A failed publish leaves the previous executable in place: check the exit code (or the executable's timestamp) before running it.
+# dotnet run and dotnet test add --fail-on-unobserved-task-exceptions by themselves; pass it to the native executable yourself.
 dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release -f net10.0
-./src/Ioc/test/SourceGen.Ioc.TestAot/bin/Release/net10.0/<rid>/publish/SourceGen.Ioc.TestAot   # e.g. linux-x64; add .exe on win-x64
+./src/Ioc/test/SourceGen.Ioc.TestAot/bin/Release/net10.0/<rid>/publish/SourceGen.Ioc.TestAot --fail-on-unobserved-task-exceptions   # e.g. linux-x64; add .exe on win-x64
 ```
 
 ## Design documents

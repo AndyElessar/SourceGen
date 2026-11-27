@@ -6,6 +6,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <UseCurrentRuntimeIdentifier>true</UseCurrentRuntimeIdentifier>
+    <!-- A task that faults and that nothing observes fails the test run: RunArguments for dotnet run, TestingPlatformCommandLineArguments for dotnet test -->
+    <RunArguments>--fail-on-unobserved-task-exceptions</RunArguments>
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --fail-on-unobserved-task-exceptions</TestingPlatformCommandLineArguments>
   </PropertyGroup>
 
   <ItemGroup>

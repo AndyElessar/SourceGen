@@ -9,6 +9,9 @@
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <!-- StoreAliasConsumer tests a key that is equal to a registered key only at run time, which SGIOC505 reports -->
     <NoWarn>$(NoWarn);SGIOC505</NoWarn>
+    <!-- A task that faults and that nothing observes fails the test run on the JIT; pass the same flag to the native executable yourself -->
+    <RunArguments>--fail-on-unobserved-task-exceptions</RunArguments>
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --fail-on-unobserved-task-exceptions</TestingPlatformCommandLineArguments>
   </PropertyGroup>
 
   <ItemGroup>

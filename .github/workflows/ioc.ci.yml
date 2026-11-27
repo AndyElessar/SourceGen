@@ -99,4 +99,4 @@ jobs:
         run: dotnet publish src/Ioc/test/SourceGen.Ioc.TestAot/SourceGen.Ioc.TestAot.csproj -c Release -f ${{ matrix.framework }} -o ./publish-aot
 
       - name: Run AOT tests
-        run: ./publish-aot/SourceGen.Ioc.TestAot
+        run: ./publish-aot/SourceGen.Ioc.TestAot --fail-on-unobserved-task-exceptions
