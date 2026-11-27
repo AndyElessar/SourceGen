@@ -86,7 +86,7 @@ A canonical string is valid only inside one compilation. Types that go from one 
 | Kind | Identity |
 | --- | --- |
 | Implementation type | The type reference of the implementation type + the key |
-| Factory | The method (containing type, name, list of parameter types) + the key |
+| Factory | The method (containing type, name, number of type parameters, list of parameter types with their ref kinds) + the key |
 | Instance | The member (containing type, name) + the key |
 
 ### Merging
@@ -114,7 +114,7 @@ Every place that needs an order uses the same total order. These places are the 
 1. Derived registrations come first, and concrete registrations come after them.
 2. Then by **sort name** (ordinal comparison):
    - For an implementation type, the sort name is its canonical string without all `[{Assembly}]` parts.
-   - For a factory, the sort name is `{containing type}.{method name}({parameter type,...})`.
+   - For a factory, the sort name is `{containing type}.{method name}({parameter type,...})`. The method name of a generic method ends with `` `n ``, where `n` is the number of its type parameters. A parameter that is passed by reference starts with `in `, `ref readonly `, `ref `, or `out `. Thus two overloads always have different sort names.
    - For an instance, the sort name is `{containing type}.{member name}`.
    - The containing type and each parameter type are canonical strings without all `[{Assembly}]` parts, as for an implementation type.
 3. Then by the canonical form of the key (ordinal comparison). No key is the empty string, which comes first.

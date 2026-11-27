@@ -97,7 +97,7 @@ Each closed definition has one internal resolver in the container. Its behavior 
   - The container stores the layers of a decorator chain only after the whole chain is built. Otherwise a layer is disposed one time at the failure and one more time when the container is disposed. The container stores the implementation instance before it builds the chain. The failure handling of the chain does not dispose the implementation instance.
   - A Transient path does not have this handling. The generator generates it only when the object is disposable, and the container does not support a disposable Transient (`SGIOC403`).
   - After a failed creation, the field is empty, the lock is released, a retry succeeds, and a concurrent first resolution does not leak an object or dispose an object two times (tested, see the ADRs).
-- When a factory method returns `null`, the container throws `InvalidOperationException`. A service type is a reference type, and `null` is not a valid instance. Without explicit handling, the check for "already created" makes the container call the factory again and again.
+- When a factory method returns `null`, the container throws `InvalidOperationException`. A service type is a reference type, and `null` is not a valid instance. Without explicit handling, the check for "already created" makes the container call the factory again and again. The same applies to an instance registration: when the static member is `null`, the request throws `InvalidOperationException`. This is a [documented difference](../Constitution.md#8-documented-differences-from-msdi) (see [ADR IocRewrite/0021](../adr/0001_IocRewrite/0021_NullFromFactoryThrows.md)).
 
 ### Service types
 

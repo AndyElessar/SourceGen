@@ -253,7 +253,7 @@ Forms of `id`:
 | `kind` | `id` |
 | --- | --- |
 | `implementation` | The implementation type. For an open registration it is an unbound generic (no `arguments`). |
-| `factory` | `{ "type": containing type, "member": method name, "parameters": [parameter types], "arguments": [type arguments] }`. `type` and `member` are required. The default of `parameters` is `[]`, and it is omitted when the method has no parameters. `arguments` appears only on a derived registration. |
+| `factory` | `{ "type": containing type, "member": method name, "arity": number of type parameters, "parameters": [parameter types], "refKinds": [ref kinds], "arguments": [type arguments] }`. `type` and `member` are required. The default of `arity` is `0`, and it is omitted for a non-generic method. The default of `parameters` is `[]`, and it is omitted when the method has no parameters. `refKinds` has one string for each parameter: `"none"`, `"in"`, `"refReadonly"`, `"ref"`, or `"out"`. It is omitted when all parameters are `"none"`. With these, the `id` has all parts of the identity (see [Identity](Analysis.Model.spec.md#identity) in the analysis model). `arguments` appears only on a derived registration. |
 | `instance` | `{ "type": containing type, "member": member name }`. Both are required. |
 
 In an open registration, the types in `serviceTypes`, `instanceType`, and `dependencies` point to `typeParameters` with `{"parameter": n}`.

@@ -210,6 +210,7 @@ Diagnostic reporting MUST NOT break incremental caching.
 | 22 | When a service throws during disposal, the container continues to dispose the other services and throws at the end. MS.DI stops, and the other services are not disposed. | Container |
 | 23 | Without a fallback provider, a request by `Type` for an `IEnumerable<T>` that the container does not know returns `null`, so `sp.GetServices<T>()` throws. MS.DI returns an empty collection. Calls that are visible at compile time and the strongly typed `GetServices<T>()` of the container are not affected. | Container |
 | 24 | A resolve call in code asks for `Lazy<T>` or `Func<T>`, and `T` has no registration in the assembly view (for example a service of the framework). The container creates the wrapper and resolves `T` inside it. The service collection extension registers no wrapper, so the call gets `null`. A dependency site is not affected: it creates the wrapper itself. | Service collection extension |
+| 25 | A factory that returns `null` throws `InvalidOperationException` when the service is created. In the container, an instance registration whose static member is `null` throws the same way. MS.DI gives `null` to `GetService`, to a required dependency, and to `GetServices`, and it can call a Singleton factory that returns `null` more than one time. See [ADR IocRewrite/0021](adr/0001_IocRewrite/0021_NullFromFactoryThrows.md). | Both |
 
 ## 9. Testing and benchmarks
 

@@ -133,6 +133,8 @@ private static global::Mod.Service __Create_Service(global::System.IServiceProvi
 
 Each dependency is always resolved from `sp` (see [Dependency resolution](#dependency-resolution)). The target is not decided at compile time.
 
+The creation method of a factory calls the static method. When the method returns `null`, the creation method throws `InvalidOperationException`, the same as the [container](Container.Output.spec.md#resolution-of-a-closed-definition) (Container output, section "Resolution of a closed definition"). A holder never holds `null`, and a registration of a service type never returns `null` for a factory. MS.DI accepts `null` from a factory delegate, so this is a [documented difference](../Constitution.md#8-documented-differences-from-msdi) (see [ADR IocRewrite/0021](../adr/0001_IocRewrite/0021_NullFromFactoryThrows.md)).
+
 An `in` or `ref readonly` parameter gets its value through a local variable of the creation method, and the call passes the variable with `in`. A value that is passed directly to a `ref readonly` parameter gives warning CS9193. The generated code MUST NOT have warnings. A `ref` or `out` parameter cannot take a resolved value. The compiler reports that error in the generated code. The generator reports no diagnostic (see the [constitution](../Constitution.md)).
 
 ### Holder

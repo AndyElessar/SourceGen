@@ -389,13 +389,23 @@ The generator then checks each service type that the expansion gives:
 | Case | Service types |
 | --- | --- |
 | Non-generic method, `ServiceTypes` not set | The return type |
-| Non-generic method, `ServiceTypes` set | The specified types. They can only be concrete types. For an unbound generic, the generator reports `SGIOC004`. The return type itself is not added automatically. |
+| Non-generic method, `ServiceTypes` set | The specified types. They can only be concrete types. For an unbound generic, the generator reports `SGIOC004` (`it is an unbound generic type`). The return type itself is not added automatically. |
 | Generic method | The return type, written in terms of the type parameters of the method. When `ServiceTypes` is set, the generator reports `SGIOC009`. The return type MUST mention each type parameter. If not, the generator reports `SGIOC004`. |
 | Returns `Task<T>` | Apply the three rows above with `T` in place of the return type. This is an asynchronous factory. |
 
-When the method returns `void`, `Task` (non-generic), `ValueTask`, `ValueTask<T>`, or a value type, the generator reports `SGIOC004`. A factory has no type of its own: the method is not a service type.
+When the method returns `void`, `Task` (non-generic), `ValueTask`, `ValueTask<T>`, a value type, or a container class, the generator reports `SGIOC004` at the registration attribute, also when `ServiceTypes` is set. The method has no syntax of its own in the attribute, and it can come from another assembly. A factory has no type of its own: the method is not a service type.
 
-The generator checks each service type of a factory with the table in [Expansion of service types](#expansion-of-service-types). For example, a factory that returns a container class causes `SGIOC004`.
+| Return type | Reason in the message of `SGIOC004` |
+| --- | --- |
+| `void` | `it is a pointer or void` |
+| `Task` (non-generic) | `it is a Task without a result` |
+| `ValueTask`, `ValueTask<T>` | `ValueTask is not supported` |
+| Another value type | `it is a value type` |
+| A container class | `it is a container class` |
+
+When `ServiceTypes` is not set, the return type is the service type, and the table in [Expansion of service types](#expansion-of-service-types) applies to it too. For example, a factory that returns `IServiceProvider` causes `SGIOC004` (`it is a built-in service`), and a factory that returns `Lazy<T>` causes `SGIOC006`.
+
+The generator checks each element of `ServiceTypes` of a factory with the table in [Expansion of service types](#expansion-of-service-types).
 
 ### Service types of an instance
 
@@ -409,6 +419,7 @@ These checks apply to the factory method and to the instance member. They apply 
 | --- | --- |
 | The method, field, or property is not static | The composition root has no object on which to call an instance member |
 | The type that contains the member is an open generic: it, or one of its outer types, has type parameters without type arguments (`Factories<T>.Create` with the attribute on the member, `nameof(Factories<>.Create)`) | The generator cannot know the type arguments of the containing type. Use a generic factory method in a non-generic type. A closed containing type (`nameof(Factories<int>.Create)`) is valid |
+| The type that contains the member, one of its outer types, or one of its type arguments is a `file` type (`nameof(Clocks<Local>.Create)` with a `file` class `Local`) | The generated code is in a separate file and cannot name the member, the same as for an implementation type (see [Checks of the implementation type](#checks-of-the-implementation-type)). A member signature can use a `file` type only in a `file` type (CS9051), so with the type arguments this check covers the return type, the parameter types, and the type of an instance member too |
 
 ```csharp
 #region Define:

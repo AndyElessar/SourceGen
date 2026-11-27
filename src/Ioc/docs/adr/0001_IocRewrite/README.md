@@ -65,6 +65,7 @@ The [constitution](../../Constitution.md) holds the principles, the scope and li
 | [0018](0018_NoAnyKeyRegistration.md) | A registration cannot use `KeyedService.AnyKey` as its key. A documented difference of the constitution. |
 | [0019](0019_KeyMatchesOnlyAtRunTime.md) | A key of a dependency site that can be equal to a registered key only at run time is a warning (`SGIOC505`). The container keeps the match by compile-time identity. |
 | [0020](0020_DisposalDoesNotObserveCreationFailure.md) | Disposal does not observe the exception of a failed asynchronous creation. The caller that got the task awaits it. |
+| [0021](0021_NullFromFactoryThrows.md) | A factory that returns `null`, or an instance member that is `null`, throws. A documented difference of the constitution. |
 
 ### Consequences
 
