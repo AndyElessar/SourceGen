@@ -59,6 +59,12 @@ internal static class DeclarationReader
     /// <summary>The metadata name of <c>IocFactoryForAttribute</c>.</summary>
     public const string FactoryForAttribute = "SourceGen.Ioc.IocFactoryForAttribute";
 
+    /// <summary>The metadata name of <c>IocInstanceAttribute</c>.</summary>
+    public const string InstanceAttribute = "SourceGen.Ioc.IocInstanceAttribute";
+
+    /// <summary>The metadata name of <c>IocInstanceForAttribute</c>.</summary>
+    public const string InstanceForAttribute = "SourceGen.Ioc.IocInstanceForAttribute";
+
     /// <summary>The metadata name of <c>IocInjectAttribute</c>.</summary>
     internal const string InjectAttribute = "SourceGen.Ioc.IocInjectAttribute";
     private const string ActivatorUtilitiesConstructorAttribute = "Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructorAttribute";
@@ -152,6 +158,48 @@ internal static class DeclarationReader
                 && builder.ReadNameof(ArgumentSyntax(syntax, "factory", 0), "Factory", "a method", static s => s is IMethodSymbol) is IMethodSymbol method)
             {
                 builder.AddFactory(method, lifetime, attribute, syntax);
+            }
+        }
+
+        return builder.ToResult();
+    }
+
+    /// <summary>Reads each <c>IocInstanceAttribute</c> on a field or a property.</summary>
+    /// <param name="context">The context of the attribute.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The declarations and the diagnostics.</returns>
+    public static DeclarationResult ReadInstance(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
+    {
+        Builder builder = new(context.SemanticModel.Compilation, cancellationToken);
+        foreach(AttributeData attribute in context.Attributes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            builder.AddInstance(context.TargetSymbol, attribute, attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken) as AttributeSyntax);
+        }
+
+        return builder.ToResult();
+    }
+
+    /// <summary>Reads each <c>IocInstanceForAttribute</c> on the assembly or on a class.</summary>
+    /// <param name="context">The context of the attribute.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The declarations and the diagnostics.</returns>
+    public static DeclarationResult ReadInstanceFor(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
+    {
+        Builder builder = new(context.SemanticModel.Compilation, cancellationToken);
+        bool onPlainClass = IsPlainClass(context.TargetSymbol);
+        foreach(AttributeData attribute in context.Attributes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AttributeSyntax? syntax = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken) as AttributeSyntax;
+            if(onPlainClass)
+            {
+                builder.Report(Descriptors.AttributeOnPlainClass.Id, syntax, "IocInstanceFor");
+            }
+            else if(attribute.ConstructorArguments is [_]
+                && builder.ReadNameof(ArgumentSyntax(syntax, "instance", 0), "Instance", "a field or property", static s => s is IFieldSymbol or IPropertySymbol { IsIndexer: false }) is { } member)
+            {
+                builder.AddInstance(member, attribute, syntax);
             }
         }
 
@@ -331,19 +379,7 @@ internal static class DeclarationReader
         /// <param name="syntax">The attribute syntax, where the errors of the method are reported.</param>
         public void AddFactory(IMethodSymbol method, int lifetime, AttributeData attribute, AttributeSyntax? syntax)
         {
-            // An invalid member (SGIOC026) still gives an error node with the service types that can be read, so that a
-            // dependency on it is not reported again (Diagnostics.spec, "Consequences")
-            // A signature can use a file type only in a file type (CS9051), so the containing type covers the return
-            // type and the parameter types too
-            string? memberError = !method.IsStatic ? "it is not static"
-                : ContainsTypeParameter(method.ContainingType) ? "its containing type is an open generic"
-                : ContainsFileLocal(method.ContainingType) ? "it uses a file type"
-                : null;
-            if(memberError is not null)
-            {
-                Report(Descriptors.InvalidFactoryOrInstance.Id, syntax, method.ToDisplayString(), "factory", memberError);
-            }
-
+            string? memberError = CheckMember(method, "a factory", syntax);
             if(lifetime is < 0 or > 2
                 || method.ReturnType.TypeKind == TypeKind.Error
                 || TypeRefFactory.Create(method.ContainingType, compilation) is not NamedTypeRef containing
@@ -354,8 +390,7 @@ internal static class DeclarationReader
 
             DefinitionSource source = new(SourceKind.Factory, containing, method.Name, sourceParameters, method.Arity);
             string name = source.SortName;
-            TypedConstant serviceTypesArgument = attribute.NamedArguments.FirstOrDefault(static a => a.Key == "ServiceTypes").Value;
-            bool hasServiceTypes = serviceTypesArgument is { IsNull: false, Kind: TypedConstantKind.Array, Values.Length: > 0 };
+            bool hasServiceTypes = HasServiceTypes(attribute);
 
             // A generic factory comes with open generics, and Task<T> with asynchronous services. Until then they are
             // skipped. A generic factory that specifies ServiceTypes is an error already
@@ -382,29 +417,9 @@ internal static class DeclarationReader
             }
 
             KeyRef? keyRef = key.ErrorId is null ? key.Key : KeyRef.Invalid(containing);
-            (ImmutableEquatableArray<TypeRef> serviceTypes, bool validServiceTypes) = hasServiceTypes ? ReadServiceTypes(null, name, attribute, syntax) : ([], true);
-            TypeRef? returnTypeRef = null;
-            if(ReturnTypeError(returnType) is { } reason)
-            {
-                Report(Descriptors.InvalidServiceType.Id, syntax, returnType.ToDisplayString(), name, reason);
-                validServiceTypes = false;
-            }
-            else if((returnTypeRef = TypeRefFactory.Create(returnType, compilation)) is null)
+            if(ReadSourceType(returnType, name, attribute, syntax) is not ({ } serviceTypes, bool validServiceTypes, var returnTypeRef))
             {
                 return;
-            }
-            else if(!hasServiceTypes)
-            {
-                // Without ServiceTypes the return type is the service type, with all the checks of a service type
-                if(ServiceTypeError(returnType) is { } error)
-                {
-                    ReportServiceTypeError(error, syntax, returnType, name);
-                    validServiceTypes = false;
-                }
-                else
-                {
-                    serviceTypes = [returnTypeRef];
-                }
             }
 
             if(memberError is not null || !validServiceTypes || key.ErrorId is not null)
@@ -434,6 +449,109 @@ internal static class DeclarationReader
 
             Add(new RegistrationDeclaration(source, returnTypeRef!, keyRef, (Lifetime)lifetime, serviceTypes, parameters, [], FactoryDisposalOf(returnType)), syntax, method.Parameters);
         }
+
+        /// <summary>Reads one instance declaration. An invalid one is reported and skipped. An instance is always a Singleton.</summary>
+        /// <param name="member">The static field or property.</param>
+        /// <param name="attribute">The attribute.</param>
+        /// <param name="syntax">The attribute syntax, where the errors of the member are reported.</param>
+        public void AddInstance(ISymbol member, AttributeData attribute, AttributeSyntax? syntax)
+        {
+            ITypeSymbol? type = member switch
+            {
+                IFieldSymbol field => field.Type,
+                IPropertySymbol property => property.Type,
+                _ => null,
+            };
+            string? memberError = CheckMember(member, "an instance", syntax);
+            if(type is null || type.TypeKind == TypeKind.Error || TypeRefFactory.Create(member.ContainingType, compilation) is not NamedTypeRef containing)
+            {
+                return;
+            }
+
+            DefinitionSource source = new(SourceKind.Instance, containing, member.Name, []);
+            KeyResult key = KeyReader.Read(attribute, syntax, compilation);
+            if(key.ErrorId is { } keyError)
+            {
+                Report(keyError, key.ErrorNode, key.ErrorArguments ?? []);
+            }
+
+            KeyRef? keyRef = key.ErrorId is null ? key.Key : KeyRef.Invalid(containing);
+            if(ReadSourceType(type, source.SortName, attribute, syntax) is not ({ } serviceTypes, bool validServiceTypes, var typeRef))
+            {
+                return;
+            }
+
+            if(memberError is not null || !validServiceTypes || key.ErrorId is not null)
+            {
+                AddError(source, containing, keyRef, (int)Lifetime.Singleton, serviceTypes);
+                return;
+            }
+
+            // Neither output disposes the static object (Analysis.Model.spec, "Disposal kind")
+            Add(new RegistrationDeclaration(source, typeRef!, keyRef, Lifetime.Singleton, serviceTypes, [], []), syntax, []);
+        }
+
+        /// <summary>
+        /// The checks of a factory or instance member (Annotations.spec, "Checks of a factory or instance member"). An
+        /// invalid member (SGIOC026) still gives an error node with the service types that can be read, so that a
+        /// dependency on it is not reported again (Diagnostics.spec, "Consequences"). A signature can use a file type only
+        /// in a file type (CS9051), so the containing type also covers the types of the member.
+        /// </summary>
+        /// <returns>The reason of SGIOC026, which is already reported, or <see langword="null"/>.</returns>
+        private string? CheckMember(ISymbol member, string kind, AttributeSyntax? syntax)
+        {
+            string? error = !member.IsStatic ? "it is not static"
+                : ContainsTypeParameter(member.ContainingType) ? "its containing type is an open generic"
+                : ContainsFileLocal(member.ContainingType) ? "it uses a file type"
+                : null;
+            if(error is not null)
+            {
+                Report(Descriptors.InvalidFactoryOrInstance.Id, syntax, member.ToDisplayString(), kind, error);
+            }
+
+            return error;
+        }
+
+        /// <summary>
+        /// Reads the service types of a factory or an instance from the type that the source gives (Annotations.spec,
+        /// "Service types of a factory", "Service types of an instance"). The checks of that type apply also with
+        /// <c>ServiceTypes</c>. Without <c>ServiceTypes</c> the type is the service type, with all the checks of a service type.
+        /// </summary>
+        /// <returns>
+        /// The valid service types, whether all are valid, and the model of the type; or <see langword="null"/> for a type
+        /// that the model cannot represent.
+        /// </returns>
+        private (ImmutableEquatableArray<TypeRef> ServiceTypes, bool Valid, TypeRef? Type)? ReadSourceType(ITypeSymbol type, string name, AttributeData attribute, AttributeSyntax? syntax)
+        {
+            bool hasServiceTypes = HasServiceTypes(attribute);
+            (ImmutableEquatableArray<TypeRef> serviceTypes, bool valid) = hasServiceTypes ? ReadServiceTypes(null, name, attribute, syntax) : ([], true);
+            if(ReturnTypeError(type) is { } reason)
+            {
+                Report(Descriptors.InvalidServiceType.Id, syntax, type.ToDisplayString(), name, reason);
+                return (serviceTypes, false, null);
+            }
+
+            if(TypeRefFactory.Create(type, compilation) is not { } typeRef)
+            {
+                return null;
+            }
+
+            if(hasServiceTypes)
+            {
+                return (serviceTypes, valid, typeRef);
+            }
+
+            if(ServiceTypeError(type) is { } error)
+            {
+                ReportServiceTypeError(error, syntax, type, name);
+                return (serviceTypes, false, typeRef);
+            }
+
+            return ([typeRef], valid, typeRef);
+        }
+
+        private static bool HasServiceTypes(AttributeData attribute)
+            => attribute.NamedArguments.FirstOrDefault(static a => a.Key == "ServiceTypes").Value is { IsNull: false, Kind: TypedConstantKind.Array, Values.Length: > 0 };
 
         /// <summary>Records a valid declaration with its merge site and the sites of its parameters.</summary>
         private void Add(RegistrationDeclaration declaration, AttributeSyntax? syntax, IEnumerable<IParameterSymbol> parameters, IEnumerable<(SitePosition, SyntaxReference?)>? members = null)

@@ -146,7 +146,7 @@ internal static class Descriptors
     public static readonly DiagnosticDescriptor InvalidFactoryOrInstance = Create(
         "SGIOC026",
         "Invalid factory or instance member",
-        "'{0}' cannot be a {1}: {2}",
+        "'{0}' cannot be {1}: {2}",
         DiagnosticSeverity.Error);
 
     /// <summary>SGIOC107: the class cannot be a module or a container.</summary>

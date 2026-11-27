@@ -74,7 +74,8 @@ internal static class ServiceCollectionExtensionEmitter
         return writer.ToString();
     }
 
-    private static bool HasHolder(ClosedDefinition definition) => definition.Lifetime != Lifetime.Transient;
+    /// <summary>A Singleton or Scoped has a holder. An instance registration gives the static object to MS.DI directly.</summary>
+    private static bool HasHolder(ClosedDefinition definition) => definition.Lifetime != Lifetime.Transient && definition.Source.Kind != SourceKind.Instance;
 
     private static void WriteMethod(SourceWriter writer, ServiceCollectionExtensionModel model, Dictionary<string, List<WrapperDemand>> wrappers)
     {
@@ -129,7 +130,20 @@ internal static class ServiceCollectionExtensionEmitter
         {
             string service = TypeNames.CSharp(serviceType);
             string cast = serviceType.Equals(definition.InstanceType) ? string.Empty : $"({service})";
-            if(definition.Key is { } key)
+            if(definition.Source.Kind == SourceKind.Instance)
+            {
+                // The overload that takes the instance: with a factory delegate, MS.DI would dispose the static object
+                string instance = CreationWriter.Member(definition.Source);
+                if(definition.Key is { } instanceKey)
+                {
+                    writer.WriteLine($"{Services}.AddKeyedSingleton<{service}>(services, {KeyNames.Expression(instanceKey)}, {cast}{instance});");
+                }
+                else
+                {
+                    writer.WriteLine($"{Services}.AddSingleton<{service}>(services, {cast}{instance});");
+                }
+            }
+            else if(definition.Key is { } key)
             {
                 writer.WriteLine($"{Services}.AddKeyed{lifetime}<{service}>(services, {KeyNames.Expression(key)}, static (sp, _) => {cast}{source}(sp));");
             }

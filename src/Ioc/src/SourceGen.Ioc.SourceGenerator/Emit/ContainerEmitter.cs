@@ -364,7 +364,7 @@ internal static class ContainerEmitter
             writer.WriteLine("public bool OwnsFallback;");
         }
 
-        foreach(DefinitionPlan definition in plan.Definitions.Where(static d => d.Definition.Lifetime == Lifetime.Singleton))
+        foreach(DefinitionPlan definition in plan.Definitions.Where(static d => IsStored(d.Definition, Lifetime.Singleton)))
         {
             if(locks)
             {
@@ -410,7 +410,7 @@ internal static class ContainerEmitter
             writer.WriteLine($"private readonly {Lock} __scopedLock = new {Lock}();");
         }
 
-        foreach(DefinitionPlan definition in plan.Definitions.Where(static d => d.Definition.Lifetime == Lifetime.Scoped))
+        foreach(DefinitionPlan definition in plan.Definitions.Where(static d => IsStored(d.Definition, Lifetime.Scoped)))
         {
             writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
             writer.WriteLine($"private {TypeNames.CSharp(definition.Definition.InstanceType)}? {Field(definition.Definition)};");
@@ -509,7 +509,7 @@ internal static class ContainerEmitter
     {
         ClosedDefinition[] definitions = [.. plan.TopologicalOrder
             .Select(i => plan.Definitions[i].Definition)
-            .Where(d => d.Lifetime == lifetime)];
+            .Where(d => IsStored(d, lifetime))];
         if(definitions.Length == 0)
         {
             return;
@@ -549,13 +549,22 @@ internal static class ContainerEmitter
         writer.WriteLine('}');
     }
 
+    /// <summary>
+    /// Whether the container stores the instance of <paramref name="definition"/> in a field of <paramref name="lifetime"/>:
+    /// a Singleton or a Scoped, but not an instance registration, which reads the static member on each request
+    /// (Container.Output.spec, "Resolution of a closed definition").
+    /// </summary>
+    private static bool IsStored(ClosedDefinition definition, Lifetime lifetime)
+        => definition.Lifetime == lifetime && lifetime != Lifetime.Transient && definition.Source.Kind != SourceKind.Instance;
+
     private static void WriteResolver(SourceWriter writer, ContainerPlan plan, int index, string self)
     {
         ClosedDefinition definition = plan.Definitions[index].Definition;
         string implementation = TypeNames.CSharp(definition.InstanceType);
         writer.WriteLine();
-        if(definition.Lifetime == Lifetime.Transient)
+        if(!IsStored(definition, definition.Lifetime))
         {
+            // A Transient creates, and an instance reads the static member, on each request
             writer.WriteLine(GeneratedFile.GeneratedCodeAttribute);
             writer.WriteLine($"private {implementation} {Get(definition)}()");
             writer.WriteLine('{');
@@ -1507,7 +1516,7 @@ internal static class ContainerEmitter
     private static void WriteHelpers(SourceWriter writer, ContainerPlan plan)
     {
         ContainerModel container = plan.Container;
-        DefinitionPlan[] stored = [.. plan.Definitions.Where(static d => d.Definition.Lifetime != Lifetime.Transient)];
+        DefinitionPlan[] stored = [.. plan.Definitions.Where(static d => IsStored(d.Definition, d.Definition.Lifetime))];
 
         // A scope also stops after the disposal of the root starts: the root disposes the Singletons, and a scope
         // would otherwise create one again that nothing disposes

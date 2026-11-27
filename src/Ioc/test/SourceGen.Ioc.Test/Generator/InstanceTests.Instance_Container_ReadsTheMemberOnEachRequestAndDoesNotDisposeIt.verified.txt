@@ -1,0 +1,23 @@
+﻿    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IClock __Get_Clocks_Backup_d8ffc67f()
+    {
+        global::App.AppContainer c = this;
+        global::App.IClock instance = global::App.Clocks.Backup ?? throw new global::System.InvalidOperationException("Instance 'App.Clocks.Backup (Key: \"backup\")' is null.");
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.IClock __Get_Clocks_Local_d3300e8c()
+    {
+        global::App.AppContainer c = this;
+        global::App.IClock instance = global::App.Clocks.Local ?? throw new global::System.InvalidOperationException("Instance 'App.Clocks.Local' is null.");
+        return instance;
+    }
+
+    [global::System.CodeDom.Compiler.GeneratedCode("SourceGen.Ioc", "{version}")]
+    private global::App.SystemClock __Get_Clocks_Utc_338df26b()
+    {
+        global::App.AppContainer c = this;
+        global::App.SystemClock instance = global::App.Clocks.Utc ?? throw new global::System.InvalidOperationException("Instance 'App.Clocks.Utc' is null.");
+        return instance;
+    }

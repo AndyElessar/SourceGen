@@ -372,5 +372,38 @@ public class ServiceCollectionExtensionTests
         await Assert.That(thrown!.Message).IsEqualTo("Factory 'SourceGen.Ioc.TestAot.Container.AotFactories.CreateNull()' returned null.");
     }
 
+    [Test]
+    public async Task AddTestAot_Instance_RegistersTheObjectAndMsDiDoesNotDisposeIt()
+    {
+        ServiceProvider provider = Build();
+        IServiceScope scope = provider.CreateScope();
+
+        StaticResource resource = scope.ServiceProvider.GetRequiredService<StaticResource>();
+        Marker marker = provider.GetRequiredKeyedService<Marker>(AotInstances.MarkerKey);
+        scope.Dispose();
+        provider.Dispose();
+
+        await Assert.That(ReferenceEquals(resource, AotInstances.Resource)).IsTrue();
+        await Assert.That(ReferenceEquals(marker, AotInstances.Current)).IsTrue();
+        await Assert.That(resource.IsDisposed).IsFalse();
+    }
+
+    [Test]
+    public async Task AddTestAot_InstanceIsNull_MsDiThrowsWhenItIsRegistered()
+    {
+        AotInstances.ReturnNull = true;
+        Exception? thrown;
+        try
+        {
+            thrown = FactoryTests.Catch(static () => new ServiceCollection().AddTestAot());
+        }
+        finally
+        {
+            AotInstances.ReturnNull = false;
+        }
+
+        await Assert.That(thrown).IsTypeOf<ArgumentNullException>();
+    }
+
     private sealed class Missing : IMissing;
 }

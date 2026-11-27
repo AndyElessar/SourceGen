@@ -11,24 +11,35 @@ internal static class CreationWriter
 {
     /// <summary>
     /// The start of the creation expression, up to the opening parenthesis of the arguments: <c>new Impl(</c>, or the
-    /// call of the factory method.
+    /// call of the factory method. For an instance, the read of the static member: it has no arguments.
     /// </summary>
     /// <param name="definition">The closed definition.</param>
     /// <returns>The text.</returns>
-    public static string Head(ClosedDefinition definition) => definition.Source.Kind == SourceKind.Factory
-        ? $"{TypeNames.CSharp(definition.Source.Type)}.{KeyNames.Identifier(definition.Source.Member)}("
-        : $"new {TypeNames.CSharp(definition.InstanceType)}(";
+    public static string Head(ClosedDefinition definition) => definition.Source.Kind switch
+    {
+        SourceKind.Factory => $"{Member(definition.Source)}(",
+        SourceKind.Instance => Member(definition.Source),
+        _ => $"new {TypeNames.CSharp(definition.InstanceType)}(",
+    };
 
     /// <summary>
-    /// The end of the creation expression after the arguments: the closing parenthesis, and for a factory the check for
-    /// <see langword="null"/> (Container.Output.spec, "Resolution of a closed definition"; ServiceCollection.Output.spec,
-    /// "Creation method").
+    /// The end of the creation expression after the arguments: the closing parenthesis, and for a factory or an instance
+    /// the check for <see langword="null"/> (Container.Output.spec, "Resolution of a closed definition";
+    /// ServiceCollection.Output.spec, "Creation method"; ADR IocRewrite/0021).
     /// </summary>
     /// <param name="definition">The closed definition.</param>
     /// <returns>The text.</returns>
-    public static string Close(ClosedDefinition definition) => definition.Source.Kind == SourceKind.Factory
-        ? $") ?? throw new global::System.InvalidOperationException({SymbolDisplay.FormatLiteral($"Factory '{KeyNames.Definition(definition)}' returned null.", quote: true)})"
-        : ")";
+    public static string Close(ClosedDefinition definition) => definition.Source.Kind switch
+    {
+        SourceKind.Factory => $") ?? throw new global::System.InvalidOperationException({SymbolDisplay.FormatLiteral($"Factory '{KeyNames.Definition(definition)}' returned null.", quote: true)})",
+        SourceKind.Instance => $" ?? throw new global::System.InvalidOperationException({SymbolDisplay.FormatLiteral($"Instance '{KeyNames.Definition(definition)}' is null.", quote: true)})",
+        _ => ")",
+    };
+
+    /// <summary>The static member of a factory or an instance: the containing type and the name.</summary>
+    /// <param name="source">The source.</param>
+    /// <returns>The member access.</returns>
+    public static string Member(DefinitionSource source) => $"{TypeNames.CSharp(source.Type)}.{KeyNames.Identifier(source.Member)}";
 
     /// <summary>Writes the creation into the local <c>instance</c>.</summary>
     /// <param name="writer">The writer.</param>

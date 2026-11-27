@@ -39,27 +39,39 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                 static (node, _) => node is CompilationUnitSyntax or ClassDeclarationSyntax or RecordDeclarationSyntax,
                 static (ctx, ct) => DeclarationReader.ReadFactoryFor(ctx, ct));
 
+        IncrementalValuesProvider<DeclarationResult> instance = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                DeclarationReader.InstanceAttribute,
+                static (node, _) => node is VariableDeclaratorSyntax or PropertyDeclarationSyntax,
+                static (ctx, ct) => DeclarationReader.ReadInstance(ctx, ct));
+
+        IncrementalValuesProvider<DeclarationResult> instanceFor = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                DeclarationReader.InstanceForAttribute,
+                static (node, _) => node is CompilationUnitSyntax or ClassDeclarationSyntax or RecordDeclarationSyntax,
+                static (ctx, ct) => DeclarationReader.ReadInstanceFor(ctx, ct));
+
         IncrementalValuesProvider<InjectMemberResult> injectMember = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 InjectMemberAttributeReader.Attribute,
                 static (node, _) => node is CompilationUnitSyntax or ClassDeclarationSyntax or RecordDeclarationSyntax,
                 static (ctx, ct) => InjectMemberAttributeReader.Read(ctx, ct));
 
+        // All registration attributes give the same result
+        IncrementalValuesProvider<DeclarationResult>[] readers = [register, registerFor, factory, factoryFor, instance, instanceFor];
+
         // The generation pipeline takes only the declarations. The sites and the diagnostics carry positions, and a
         // change of position alone must not run the analysis again (Diagnostics.spec, "Two pipelines"). The sites and
         // the diagnostics of IocInjectMemberAttribute join as one more result, with the checks that need the registrations.
-        IncrementalValueProvider<ImmutableEquatableArray<DeclarationResult>> results = register.Collect()
-            .Combine(registerFor.Collect())
-            .Combine(factory.Collect())
-            .Combine(factoryFor.Collect())
+        IncrementalValueProvider<ImmutableEquatableArray<DeclarationResult>> results = CollectAll(readers, static r => r)
             .Combine(injectMember.Collect())
             .Select(static (input, _) =>
             {
-                DeclarationResult[] declared = [.. input.Left.Left.Left.Left, .. input.Left.Left.Left.Right, .. input.Left.Left.Right, .. input.Left.Right];
+                ImmutableEquatableArray<DeclarationResult> declared = input.Left;
                 ImmutableArray<InjectMemberResult> injected = input.Right;
                 if(injected.IsEmpty)
                 {
-                    return declared.ToImmutableEquatableArray();
+                    return declared;
                 }
 
                 IEnumerable<DiagnosticInfo> checks = InjectMemberAttributeReader.Diagnostics(
@@ -75,16 +87,13 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
                 return declared.Append(members).ToImmutableEquatableArray();
             });
 
-        IncrementalValueProvider<ImmutableEquatableArray<RegistrationDeclaration>> declarations = register
-            .Select(static (r, _) => r.Declarations)
-            .WithTrackingName(TrackingNames.Declarations)
-            .Collect()
-            .Combine(registerFor.Select(static (r, _) => r.Declarations).WithTrackingName(TrackingNames.Declarations).Collect())
-            .Combine(factory.Select(static (r, _) => r.Declarations).WithTrackingName(TrackingNames.Declarations).Collect())
-            .Combine(factoryFor.Select(static (r, _) => r.Declarations).WithTrackingName(TrackingNames.Declarations).Collect())
+        // Each reader selects its declarations before the collection, so that a change of position alone stops there
+        IncrementalValueProvider<ImmutableEquatableArray<RegistrationDeclaration>> declarations = CollectAll(
+                readers,
+                static r => r.Select(static (d, _) => d.Declarations).WithTrackingName(TrackingNames.Declarations))
             .Combine(injectMember.Select(static (r, _) => r.Declarations).WithTrackingName(TrackingNames.Declarations).Collect())
             .Select(static (input, ct) => InjectMemberAttributeReader.Apply(
-                input.Left.Left.Left.Left.Concat(input.Left.Left.Left.Right).Concat(input.Left.Left.Right).Concat(input.Left.Right).SelectMany(static d => d).ToImmutableEquatableArray(),
+                input.Left.SelectMany(static d => d).ToImmutableEquatableArray(),
                 input.Right.SelectMany(static d => d),
                 ct));
 
@@ -149,6 +158,27 @@ public sealed class IocSourceGenerator : IIncrementalGenerator
             });
 
         InitializeContainers(context, results, declarations, definitions, definiteProblems);
+    }
+
+    /// <summary>Collects the values of each provider and joins them in the order of <paramref name="providers"/>.</summary>
+    /// <typeparam name="TValue">The value of each provider after <paramref name="select"/>.</typeparam>
+    /// <param name="providers">The providers.</param>
+    /// <param name="select">The step that each provider runs before its collection.</param>
+    /// <returns>All values.</returns>
+    private static IncrementalValueProvider<ImmutableEquatableArray<TValue>> CollectAll<TValue>(
+        IncrementalValuesProvider<DeclarationResult>[] providers,
+        Func<IncrementalValuesProvider<DeclarationResult>, IncrementalValuesProvider<TValue>> select)
+        where TValue : IEquatable<TValue>
+    {
+        IncrementalValueProvider<ImmutableEquatableArray<TValue>> all = select(providers[0]).Collect()
+            .Select(static (values, _) => values.ToImmutableEquatableArray());
+        foreach(IncrementalValuesProvider<DeclarationResult> provider in providers.Skip(1))
+        {
+            all = all.Combine(select(provider).Collect())
+                .Select(static (input, _) => input.Left.Concat(input.Right).ToImmutableEquatableArray());
+        }
+
+        return all;
     }
 
     /// <summary>The site of each dependency site. A site declared in source wins over the attribute of a declaration.</summary>
