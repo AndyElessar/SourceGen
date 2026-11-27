@@ -144,6 +144,7 @@ internal static class DependencyGraph
                     continue;
                 }
 
+                // Condition 4 does not depend on the candidates, so it comes first (Diagnostics.spec, SGIOC305)
                 string? reason = request.DuplicateArgument();
                 if(reason is null
                     && providers.TryGetValue((request.Core, KeyRef.CanonicalOf(dependencies[p].KeyIn(definitions[i]))), out List<int>? candidates)

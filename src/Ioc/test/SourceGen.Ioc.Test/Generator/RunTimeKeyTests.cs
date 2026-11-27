@@ -76,6 +76,43 @@ public class RunTimeKeyTests
     }
 
     [Test]
+    public async Task SGIOC505_FuncWithArguments_ReportedWithTheInvalidFunc()
+    {
+        // T of the Func is not registered with this key, so SGIOC305 also comes
+        GeneratorTestResult result = await RunAsync(Usings + """
+            [IocRegister(ServiceLifetime.Transient, ServiceTypes = [typeof(IStore)], Key = "a")]
+            public sealed class Store : IStore;
+
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer([IocInject(KeyType = KeyType.Csharp, Key = nameof(Keys.A))] Func<string, IStore> stores);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class {|SGIOC305,SGIOC505:AppContainer|};
+            """);
+
+        await Assert.That(Messages(result).Single()).StartsWith(
+            "'App.Consumer → stores' requires 'System.Func<System.String, App.IStore> (Key: App.Keys.A)', and no registration has this key at compile time;");
+    }
+
+    [Test]
+    public async Task FuncWithArguments_SameKeyIdentity_NotReported()
+    {
+        // Near SGIOC505: the site key and the registered key are the same member
+        GeneratorTestResult result = await RunAsync(Usings + """
+            [IocRegister(ServiceLifetime.Transient, ServiceTypes = [typeof(IStore)], KeyType = KeyType.Csharp, Key = nameof(Keys.A))]
+            public sealed class Store(string name) : IStore;
+
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer([IocInject(KeyType = KeyType.Csharp, Key = nameof(Keys.A))] Func<string, IStore> stores);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class AppContainer;
+            """);
+
+        await result.VerifyCompilableAsync();
+    }
+
+    [Test]
     public async Task SGIOC505_ValueSiteKeyAndSymbolRegistration_ReportedWithTheFallback()
     {
         GeneratorTestResult result = await RunAsync(Usings + """

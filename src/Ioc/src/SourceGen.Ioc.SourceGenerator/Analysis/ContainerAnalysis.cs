@@ -481,7 +481,7 @@ internal static class ContainerAnalysis
             string requested = key is null ? TypeNames.Display(type) : $"{TypeNames.Display(type)} (Key: {KeyNames.Display(key)})";
             // An error node with this key already has its own error
             if(key is { IsAnyKey: false }
-                && (request.IsPlain || request.IsSimpleCollection || request.IsSingleWrapper || request.IsSinglePair || request.IsKeyedCollection)
+                && (request.IsPlain || request.IsSimpleCollection || request.IsSingleWrapper || request.IsSinglePair || request.IsKeyedCollection || request.IsSingleFuncWithArguments)
                 && !providers.ContainsKey((request.Core, canonical))
                 && !skipped.Contains((request.Core, canonical))
                 && !skipped.Contains((request.Core, ErrorNode.AnyKey)))
@@ -643,8 +643,8 @@ internal static class ContainerAnalysis
             return new ArgumentPlan(ArgumentKind.Keyed, index, key);
         }
 
-        // Func<A1, ..., An, T> (Analysis.Model.spec, "Mapping of Func<..., T>"): T resolves to one Transient closed
-        // definition, and each argument maps to one constructor parameter of it. Otherwise SGIOC305, also when T is missing
+        // Func<A1, ..., An, T> (Analysis.Model.spec, "Mapping of Func<..., T>"): T resolves to one Transient registration
+        // of an implementation type, and each argument maps to one constructor parameter of it. Otherwise SGIOC305, also when T is missing
         // or comes only from the fallback provider. The definite check reports some of these at the same site
         ArgumentPlan? ResolveFunc(TypeRef type, WrapperRequest request, KeyRef? key, DefinitionSource? source, SitePosition site)
         {

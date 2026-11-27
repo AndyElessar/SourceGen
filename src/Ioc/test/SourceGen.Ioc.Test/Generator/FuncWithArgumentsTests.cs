@@ -165,6 +165,101 @@ public class FuncWithArgumentsTests
     }
 
     [Test]
+    public async Task SGIOC305_TargetIsAFactory_ReportedAtTheSite()
+    {
+        // Condition 2: a factory method has no constructor to map to, also when it is Transient
+        GeneratorTestResult result = await RunAsync(Usings + """
+            public interface IJob;
+            public sealed class Job(string name) : IJob;
+
+            public static class Jobs
+            {
+                [IocFactory(ServiceLifetime.Transient)]
+                public static IJob Create(string name) => new Job(name);
+            }
+
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer({|SGIOC305:Func<string, IJob> jobs|});
+            """);
+
+        await Assert.That(Message(result, "SGIOC305"))
+            .IsEqualTo("'System.Func<System.String, App.IJob>' cannot be generated: 'App.Jobs.Create(System.String)' is not a registration of an implementation type");
+    }
+
+    [Test]
+    public async Task SGIOC305_TargetIsAFactoryWithContainer_ReportedOneTimeAtEachSite()
+    {
+        // The definite check and the full check report the same problem at the consumer only one time
+        await RunAsync(Usings + """
+            public interface IJob;
+            public sealed class Job : IJob;
+
+            [IocRegister(ServiceLifetime.Singleton)]
+            public sealed class Clock;
+
+            public static class Jobs
+            {
+                [IocFactory(ServiceLifetime.Transient)]
+                public static IJob Create(Clock clock) => new Job();
+            }
+
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer({|SGIOC305:Func<Clock, IJob> jobs|});
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class {|SGIOC305:AppContainer|}
+            {
+                public partial Func<Clock, IJob> Jobs { get; }
+            }
+            """);
+    }
+
+    [Test]
+    public async Task Func_WithoutArgumentsOfAFactory_IsValid()
+    {
+        // Near SGIOC305: condition 2 applies only to a Func with arguments
+        GeneratorTestResult result = await RunAsync(Usings + """
+            public interface IJob;
+            public sealed class Job : IJob;
+
+            public static class Jobs
+            {
+                [IocFactory(ServiceLifetime.Transient)]
+                public static IJob Create() => new Job();
+            }
+
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer(Func<IJob> jobs);
+
+            [IocContainer(IntegrateServiceProvider = false)]
+            public partial class AppContainer;
+            """);
+
+        await result.VerifyCompilableAsync();
+    }
+
+    [Test]
+    public async Task SGIOC305_TargetIsAnInstance_ReportedAtTheSite()
+    {
+        GeneratorTestResult result = await RunAsync(Usings + """
+            public interface IJob;
+            public sealed class Job(string name) : IJob;
+
+            public static class Jobs
+            {
+                [IocInstance]
+                public static readonly IJob Default = new Job("");
+            }
+
+            [IocRegister(ServiceLifetime.Transient)]
+            public sealed class Consumer({|SGIOC305:Func<string, IJob> jobs|});
+            """);
+
+        await Assert.That(Message(result, "SGIOC305"))
+            .IsEqualTo("'System.Func<System.String, App.IJob>' cannot be generated: 'App.Jobs.Default' is not a registration of an implementation type");
+    }
+
+    [Test]
     public async Task SGIOC305_TargetIsNotTransient_ReportedAtTheSite()
     {
         GeneratorTestResult result = await RunAsync(Usings + """

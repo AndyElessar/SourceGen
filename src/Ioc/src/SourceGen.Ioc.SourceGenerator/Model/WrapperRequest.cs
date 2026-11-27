@@ -111,7 +111,7 @@ internal sealed record WrapperRequest(
 
     /// <summary>
     /// The constructor parameter of <paramref name="target"/> that each argument maps to (Analysis.Model.spec, "Mapping
-    /// of <c>Func&lt;..., T&gt;</c>", conditions 3 and 5), or the reason that <c>SGIOC305</c> reports. A parameter with
+    /// of <c>Func&lt;..., T&gt;</c>", conditions 2, 3 and 5), or the reason that <c>SGIOC305</c> reports. A parameter with
     /// <c>[ServiceKey]</c> takes no part.
     /// </summary>
     /// <param name="target">The closed definition that <c>T</c> resolves to.</param>
@@ -120,6 +120,12 @@ internal sealed record WrapperRequest(
     public string? Map(ClosedDefinition target, out ImmutableEquatableArray<int> mapping)
     {
         mapping = [];
+        if(target.Source.Kind != SourceKind.Implementation)
+        {
+            // A factory or an instance has no constructor to map the arguments to
+            return $"'{Emit.KeyNames.Definition(target)}' is not a registration of an implementation type";
+        }
+
         if(target.Lifetime != Lifetime.Transient)
         {
             return $"'{Emit.KeyNames.Definition(target)}' is {target.Lifetime}; it must be Transient";
